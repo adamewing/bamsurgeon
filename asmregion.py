@@ -163,7 +163,12 @@ def asm(chr, start, end, bamfile, matefile, reffile, kmersize, noref=False):
 def main(args):
     bamfile  = pysam.Samfile(args.bamFileName,'rb')
     matefile = pysam.Samfile(args.bamFileName,'rb')
-    reffile  = pysam.Fastafile(args.refFasta)
+    reffile  = None
+
+    if not args.noref:
+        if not args.refFasta:
+            raise ValueError("no reference given and --noref not set")
+        reffile  = pysam.Fastafile(args.refFasta)
 
     (chr,coords) = args.regionString.split(':')
     (start,end) = coords.split('-')
@@ -177,7 +182,7 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='parse the output of pickreads.py')
-    parser.add_argument('-f', '--fastaref', dest='refFasta', required=True,
+    parser.add_argument('-f', '--fastaref', dest='refFasta', required=False,
                         help='indexed reference fo ref-directed assembly')
     parser.add_argument('-r', '--region', dest='regionString', required=True,
                         help='format: chrN:startbasenum-endbasenum')
