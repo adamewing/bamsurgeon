@@ -68,7 +68,8 @@ def runVelvet(reads,refseqname,refseq,kmer,isPaired=True,long=False, inputContig
         for readpair in reads.values():
             readsFasta.write(readpair.fasta())
 
-    refseqFasta.write(">%s\n%s\n" % (refseqname,refseq))
+    if refseq:
+        refseqFasta.write(">%s\n%s\n" % (refseqname,refseq))
 
     readsFasta.flush()
     refseqFasta.flush()
@@ -135,28 +136,31 @@ class ReadPair:
         output = " ".join(("read1:", self.read1.qname, self.read1.seq, r1map, "read2:", self.read2.qname, self.read2.seq, r2map))
         return output
 
-def asm(chr, start, end, bamfile, matefile, reffile, kmersize, noref=False):
+def asm(chr, start, end, bamfile, matefile, reffile, kmersize, noref=False, recycle=False):
     readpairs = {}
     for read in bamfile.fetch(chr,start,end):
         if not read.mate_is_unmapped and read.is_paired:
             mate = matefile.mate(read)
             readpairs[read.qname] = ReadPair(read,mate)
 
-    refseq = reffile.fetch(chr,start,end)
+    refseq = None
+    if reffile:
+        refseq = reffile.fetch(chr,start,end)
 
     region = chr + ":" + str(start) + "-" + str(end)
 
     contigs = runVelvet(readpairs, region, refseq, int(args.kmersize), cov_cutoff=True, noref=noref)
     newcontigs = None
 
-    for contig in contigs:
-        print contig
+#    for contig in contigs:
+#        print contig
 
-    if len(contigs) > 1:
-        newcontigs = runVelvet(contigs, region, refseq, int(args.kmersize), long=True, inputContigs=True, noref=noref)
+    if recycle:
+        if len(contigs) > 1:
+            newcontigs = runVelvet(contigs, region, refseq, int(args.kmersize), long=True, inputContigs=True, noref=noref)
 
-    if newcontigs and n50(newcontigs) > n50(contigs):
-        contigs = newcontigs
+        if newcontigs and n50(newcontigs) > n50(contigs):
+            contigs = newcontigs
 
     return contigs
 
@@ -175,7 +179,7 @@ def main(args):
     start = int(start)
     end = int(end)
 
-    contigs = asm(chr, start, end, bamfile, matefile, reffile, int(args.kmersize), args.noref)
+    contigs = asm(chr, start, end, bamfile, matefile, reffile, int(args.kmersize), args.noref, args.recycle)
 
     for contig in contigs:
         print contig
@@ -191,5 +195,6 @@ if __name__ == '__main__':
     parser.add_argument('-k', '--kmersize', dest='kmersize', default=31,
                         help='kmer size for velvet, default=31')
     parser.add_argument('--noref', action="store_true")
+    parser.add_argument('--recycle', action="store_true")
     args = parser.parse_args()
     main(args)
