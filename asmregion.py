@@ -93,9 +93,9 @@ def runVelvet(reads,refseqname,refseq,kmer,isPaired=True,long=False, inputContig
             argsvelveth = ['velveth', tmpdir, str(kmer), '-reference', refseqFN, '-shortPaired', readsFN]
 
     if cov_cutoff:
-        argsvelvetg = ['velvetg', tmpdir, '-exp_cov', 'auto', '-cov_cutoff', 'auto']
+        argsvelvetg = ['velvetg', tmpdir, '-exp_cov', 'auto', '-cov_cutoff', 'auto', '-unused_reads', 'yes', '-read_trkg', 'yes', '-amos_file', 'yes']
     else:
-        argsvelvetg = ['velvetg', tmpdir]
+        argsvelvetg = ['velvetg', tmpdir, '-unused_reads', 'yes', '-read_trkg', 'yes', '-amos_file', 'yes']
         
     subprocess.call(argsvelveth)
     subprocess.call(argsvelvetg)
@@ -136,7 +136,10 @@ class ReadPair:
         output = " ".join(("read1:", self.read1.qname, self.read1.seq, r1map, "read2:", self.read2.qname, self.read2.seq, r2map))
         return output
 
-def asm(chr, start, end, bamfile, matefile, reffile, kmersize, noref=False, recycle=False):
+def asm(chr, start, end, bamfilename, matefile, reffile, kmersize, noref=False, recycle=False):
+    bamfile  = pysam.Samfile(bamfilename,'rb')
+    matefile = pysam.Samfile(bamfilename,'rb')
+
     readpairs = {}
     for read in bamfile.fetch(chr,start,end):
         if not read.mate_is_unmapped and read.is_paired:
@@ -152,9 +155,6 @@ def asm(chr, start, end, bamfile, matefile, reffile, kmersize, noref=False, recy
     contigs = runVelvet(readpairs, region, refseq, int(args.kmersize), cov_cutoff=True, noref=noref)
     newcontigs = None
 
-#    for contig in contigs:
-#        print contig
-
     if recycle:
         if len(contigs) > 1:
             newcontigs = runVelvet(contigs, region, refseq, int(args.kmersize), long=True, inputContigs=True, noref=noref)
@@ -165,8 +165,6 @@ def asm(chr, start, end, bamfile, matefile, reffile, kmersize, noref=False, recy
     return contigs
 
 def main(args):
-    bamfile  = pysam.Samfile(args.bamFileName,'rb')
-    matefile = pysam.Samfile(args.bamFileName,'rb')
     reffile  = None
 
     if not args.noref:
@@ -176,10 +174,12 @@ def main(args):
 
     (chr,coords) = args.regionString.split(':')
     (start,end) = coords.split('-')
+    start = re.sub(',','',start)
+    end   = re.sub(',','',end)
     start = int(start)
-    end = int(end)
+    end   = int(end)
 
-    contigs = asm(chr, start, end, bamfile, matefile, reffile, int(args.kmersize), args.noref, args.recycle)
+    contigs = asm(chr, start, end, args.bamFileName, reffile, int(args.kmersize), args.noref, args.recycle)
 
     for contig in contigs:
         print contig
