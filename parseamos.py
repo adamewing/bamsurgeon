@@ -39,6 +39,8 @@ class InputSeqs:
                 self.srcread[src] = read
             else:
                 seq += line.strip()
+        self.srcread[src] = read
+        self.readseq[read] = seq
 
     def __str__(self):
         output = ""
@@ -98,6 +100,9 @@ def contigreadmap(amosfile,seqs):
     return contigs
 
 if __name__ == '__main__':
+    '''
+    This is here for testing/debugging
+    '''
     amosfile = sys.argv[1].strip() + "/velvet_asm.afg"
     seqfile  = sys.argv[1].strip() + "/Sequences"
     inputseqs = InputSeqs(seqfile)

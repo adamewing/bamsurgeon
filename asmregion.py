@@ -5,16 +5,18 @@ try to do ref-directed assembly for paired reads in a region of a .bam file
 """
 
 import pysam,tempfile,argparse,subprocess,sys,shutil,os,re
+import parseamos
 
-def fastaContigs(fastaFile):
-    fh = open(fastaFile, 'r')
+def velvetContigs(dir):
+    assert os.path.exists(dir)
+    fh = open(dir + "/contigs.fa", 'r')
     contigs = []
     name = None
     seq  = None 
     for line in fh:
         if re.search("^>", line):
             if name and seq:
-                contigs.append(Contig(name,seq))
+                contigs.append(Contig(name,seq,dir))
             name = line.lstrip('>').strip()
             seq = ''
         else:
@@ -23,14 +25,24 @@ def fastaContigs(fastaFile):
             else:
                 raise ValueError("invalid fasta format: " + fastaFile)
     if name and seq:
-        contigs.append(Contig(name,seq))
+        contigs.append(Contig(name,seq,dir))
     return contigs
 
 class Contig:
-    def __init__(self,name,seq):
+    def __init__(self,name,seq,dir):
         self.name = name
-        self.seq  = seq
-        self.len  = len(seq)
+        self.seq = seq
+        self.len = len(seq)
+
+        amosfile = dir + "/velvet_asm.afg"
+        seqfile = dir + "/Sequences"
+        inseq = parseamos.InputSeqs(seqfile)
+        contigreadmap = parseamos.contigreadmap(amosfile,inseq)
+
+        namefields = name.split('_')
+        self.iid = namefields[1]
+
+        self.reads = contigreadmap[self.iid] 
         assert self.name
         assert self.seq
         assert self.len
@@ -100,7 +112,7 @@ def runVelvet(reads,refseqname,refseq,kmer,isPaired=True,long=False, inputContig
     subprocess.call(argsvelveth)
     subprocess.call(argsvelvetg)
 
-    return fastaContigs(tmpdir + "/contigs.fa")
+    return velvetContigs(tmpdir)
 
     # cleanup
     shutil.rmtree(tmpdir)
@@ -136,16 +148,19 @@ class ReadPair:
         output = " ".join(("read1:", self.read1.qname, self.read1.seq, r1map, "read2:", self.read2.qname, self.read2.seq, r2map))
         return output
 
-def asm(chr, start, end, bamfilename, matefile, reffile, kmersize, noref=False, recycle=False):
+def asm(chr, start, end, bamfilename, reffile, kmersize, noref=False, recycle=False):
     bamfile  = pysam.Samfile(bamfilename,'rb')
     matefile = pysam.Samfile(bamfilename,'rb')
 
     readpairs = {}
+    nreads = 0
     for read in bamfile.fetch(chr,start,end):
         if not read.mate_is_unmapped and read.is_paired:
             mate = matefile.mate(read)
             readpairs[read.qname] = ReadPair(read,mate)
+            nreads += 1
 
+    sys.stderr.write("found " + str(nreads) + " reads in region.\n")
     refseq = None
     if reffile:
         refseq = reffile.fetch(chr,start,end)
@@ -165,6 +180,9 @@ def asm(chr, start, end, bamfilename, matefile, reffile, kmersize, noref=False, 
     return contigs
 
 def main(args):
+    '''
+    this is here for testing/debugging
+    '''
     reffile  = None
 
     if not args.noref:
@@ -181,8 +199,18 @@ def main(args):
 
     contigs = asm(chr, start, end, args.bamFileName, reffile, int(args.kmersize), args.noref, args.recycle)
 
+    maxlen = 0
+    maxiid = None
     for contig in contigs:
         print contig
+        if contig.len > maxlen:
+            maxlen = contig.len
+            maxiid = contig.iid
+
+    print "read names in longest contig (" + str(maxiid) + "):"
+    for contig in contigs:
+        if contig.iid == maxiid:
+            contig.reads.infodump()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='parse the output of pickreads.py')
