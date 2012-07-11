@@ -81,8 +81,51 @@ def runwgsim(contig,newseq):
     print args
     subprocess.call(args)
 
-    #os.remove(fasta)
+    os.remove(fasta)
 
+    fqReplaceList(fq1,pairednames)
+    fqReplaceList(fq2,pairednames)
+
+def fqReplaceList(fqfile,names):
+    '''
+    Replace seq names in paired fastq files from a list until the list runs out
+    (then stick with original names). fqfile = fastq file, names = list
+    '''
+
+    fqin = open(fqfile,'r')
+
+    ln = 0
+    namenum = 0
+    newnames = []
+    seqs = []
+    quals = []
+    for fqline in fqin:
+        if ln == 0:
+            if len(names) > namenum:
+                newnames.append(names[namenum])
+            else:
+                newnames.append(fqline.strip().lstrip('@').rstrip('/1').rstrip('/2'))
+            namenum += 1
+            ln += 1
+        elif ln == 1:
+            seqs.append(fqline.strip())
+            ln += 1
+        elif ln == 2:
+            ln += 1
+        elif ln == 3:
+            quals.append(fqline.strip())
+            ln = 0
+        else:
+            raise ValueError("fastq iteration problem")
+
+    fqin.close()
+    os.remove(fqfile)
+
+    fqout = open(fqfile,'w')
+    for i in range(namenum):
+        fqout.write("@" + newnames[i] + "\n")
+        fqout.write(seqs[i] + "\n+\n" + quals[i] + "\n")
+    fqout.close()
 
 def singleseqfa(file):
     print file
