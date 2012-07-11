@@ -36,7 +36,7 @@ class Contig:
 
         amosfile = dir + "/velvet_asm.afg"
         seqfile = dir + "/Sequences"
-        inseq = parseamos.InputSeqs(seqfile)
+        inseq = parseamos.InputSeqs(seqfile)  # contains ALL input seqs...
         contigreadmap = parseamos.contigreadmap(amosfile,inseq)
 
         namefields = name.split('_')
@@ -70,8 +70,8 @@ def runVelvet(reads,refseqname,refseq,kmer,isPaired=True,long=False, inputContig
     reads is either a dictionary of ReadPair objects, (if inputContigs=False) or a list of 
     Contig objects (if inputContigs=True), refseq is a single sequence, kmer is an odd int
     """
-    readsFasta  = tempfile.NamedTemporaryFile(delete=False)
-    refseqFasta = tempfile.NamedTemporaryFile(delete=False)
+    readsFasta  = tempfile.NamedTemporaryFile(delete=False,dir='.')
+    refseqFasta = tempfile.NamedTemporaryFile(delete=False,dir='.')
 
     if inputContigs:
         for contig in reads:
@@ -89,7 +89,7 @@ def runVelvet(reads,refseqname,refseq,kmer,isPaired=True,long=False, inputContig
     readsFN  = readsFasta.name
     refseqFN = refseqFasta.name
 
-    tmpdir = tempfile.mkdtemp()
+    tmpdir = tempfile.mkdtemp(dir='.')
 
     print tmpdir
 
@@ -112,12 +112,15 @@ def runVelvet(reads,refseqname,refseq,kmer,isPaired=True,long=False, inputContig
     subprocess.call(argsvelveth)
     subprocess.call(argsvelvetg)
 
-    return velvetContigs(tmpdir)
+    vcontigs = velvetContigs(tmpdir)
 
     # cleanup
     shutil.rmtree(tmpdir)
     os.unlink(readsFN)
     os.unlink(refseqFN)
+
+    return vcontigs
+
 
 class ReadPair:
     def __init__(self,read,mate):
@@ -167,12 +170,12 @@ def asm(chr, start, end, bamfilename, reffile, kmersize, noref=False, recycle=Fa
 
     region = chr + ":" + str(start) + "-" + str(end)
 
-    contigs = runVelvet(readpairs, region, refseq, int(args.kmersize), cov_cutoff=True, noref=noref)
+    contigs = runVelvet(readpairs, region, refseq, kmersize, cov_cutoff=True, noref=noref)
     newcontigs = None
 
     if recycle:
         if len(contigs) > 1:
-            newcontigs = runVelvet(contigs, region, refseq, int(args.kmersize), long=True, inputContigs=True, noref=noref)
+            newcontigs = runVelvet(contigs, region, refseq, kmersize, long=True, inputContigs=True, noref=noref)
 
         if newcontigs and n50(newcontigs) > n50(contigs):
             contigs = newcontigs

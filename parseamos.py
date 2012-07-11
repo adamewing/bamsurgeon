@@ -5,24 +5,23 @@ import sys,re
 class ContigReads:
     def __init__(self, iid):
         self.iid = iid 
-        self.srcdict = {} # TLEsrc --> read 
-        self.reads   = {} # read --> TLEsrc
+        self.srcs = [] # read numbers from velvet
+        self.reads = [] # read names
     def addsrc(self,src):
-        self.srcdict[src] = 1
+        self.srcs.append(src)
     def getReadNames(self,seqs):
-        for src in self.srcdict.keys():
+        for src in self.srcs:
             read = seqs.srcread[src]
-            self.srcdict[src] = read
-            self.reads[read]  = src
+            self.reads.append(read)
     def infodump(self):
-        for srcdict, read in self.srcdict.iteritems():
-            print self.iid,srcdict,read
-
+        for i in range(len(self.srcs)):
+            print self.srcs[i],self.reads[i]
 
 class InputSeqs:
     def __init__(self,seqfile):
         self.srcread = {}  # read number --> read name
-        self.readseq = {}  # read name --> read seq
+        self.readnames = []  # read names
+        self.readseqs = []
 
         f = open(seqfile,'r')
         read = None
@@ -32,20 +31,21 @@ class InputSeqs:
             if re.search('^>',line):
                 if read:
                     assert seq != ""
-                    self.readseq[read] = seq
+                    self.readseqs.append(seq)
                     seq = ""
                 (read,src,n) = re.sub('^>','',line).strip().split()
                 assert read and src
                 self.srcread[src] = read
+                self.readnames.append(read)
             else:
                 seq += line.strip()
         self.srcread[src] = read
-        self.readseq[read] = seq
+        self.readseqs.append(seq)
 
     def __str__(self):
         output = ""
-        for read,seq in self.readseq.iteritems():
-            output += ">" + read + "\n" + seq + "\n"
+        for i in range(len(self.readnames)):
+            output += ">" + self.readnames[i] + "\n" + self.readseqs[i] + "\n"
         return output
 
 def contigreadmap(amosfile,seqs):
