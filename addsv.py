@@ -8,7 +8,7 @@ import mutableseq
 import argparse
 import pysam
 
-def remap(fq1, fq2, threads, bwaref):
+def remap(fq1, fq2, threads, bwaref, outbam):
 
     basefn = "bwatmp" + str(random.random())
     sai1fn = basefn + ".1.sai"
@@ -19,7 +19,7 @@ def remap(fq1, fq2, threads, bwaref):
     sai1args = ['bwa', 'aln', bwaref, '-q', '5', '-l', '32', '-k', '2', '-t', str(threads), '-o', '1', '-f', sai1fn, fq1]
     sai2args = ['bwa', 'aln', bwaref, '-q', '5', '-l', '32', '-k', '2', '-t', str(threads), '-o', '1', '-f', sai2fn, fq2]
     samargs  = ['bwa', 'sampe', '-P', '-f', samfn, bwaref, sai1fn, sai2fn, fq1, fq2]
-    bamargs  = ['samtools', 'view', '-bt', refidx, '-o', bamfn, samfn]
+    bamargs  = ['samtools', 'view', '-bt', refidx, '-o', outbam, samfn]
 
     print "mapping 1st end, cmd: " + " ".join(sai1args)
     subprocess.call(sai1args)
@@ -86,6 +86,8 @@ def runwgsim(contig,newseq):
     fqReplaceList(fq1,pairednames)
     fqReplaceList(fq2,pairednames)
 
+    return (fq1,fq2)
+
 def fqReplaceList(fqfile,names):
     '''
     Replace seq names in paired fastq files from a list until the list runs out
@@ -142,7 +144,6 @@ def main(args):
     bamfile = pysam.Samfile(args.bamFileName, 'rb')
     bammate = pysam.Samfile(args.bamFileName, 'rb') # use for mates to avoid iterator problems
     reffile = pysam.Fastafile(args.refFasta)
-    outbam  = pysam.Samfile(args.outBamFile, 'wb', template=bamfile)
 
     svfrac = float(args.svfrac)
 
@@ -191,16 +192,14 @@ def main(args):
         print "AFTER:",mutseq
 
         # simulate reads
-        runwgsim(maxcontig,mutseq.seq)
-
-        # rename reads
+        (fq1,fq2) = runwgsim(maxcontig,mutseq.seq)
 
         # remap reads
+        remap(fq1,fq2,4,args.refFasta,args.outBamFile)
 
     varfile.close()
     bamfile.close()
     bammate.close()
-    outbam.close()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='adds SNVs to reads, outputs modified reads as .bam along with mates')
