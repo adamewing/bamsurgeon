@@ -1,6 +1,6 @@
 #!/bin/env python
 
-import re, sys, random
+import re, os, sys, random
 import subprocess
 import collections
 import asmregion
@@ -44,6 +44,14 @@ def runwgsim(contig,newseq):
     wrapper function for wgsim
     '''
     namecount = collections.Counter(contig.reads.reads)
+    basefn = "wgsimtmp" + str(random.random())
+    fasta = basefn + ".fasta"
+    fq1 = basefn + ".1.fq"
+    fq2 = basefn + ".2.fq"
+
+    fout = open(fasta,'w')
+    fout.write(">target\n" + newseq + "\n")
+    fout.close()
 
     totalreads = len(contig.reads.reads)
     paired = 0
@@ -66,7 +74,15 @@ def runwgsim(contig,newseq):
                      "discard: " + str(discard) + "\n" +
                      "total  : " + str(totalreads) + "\n")
 
-    args = []
+    # number of paried reads to simulate
+    nsimreads = paired + (single/2)
+
+    args = ['wgsim','-e','0','-N',str(nsimreads),'-1','100','-2','100','-r','0','-R','0',fasta,fq1,fq2]
+    print args
+    subprocess.call(args)
+
+    #os.remove(fasta)
+
 
 def singleseqfa(file):
     print file
@@ -76,6 +92,7 @@ def singleseqfa(file):
         if not re.search ('^>',line):
             seq += line.strip()
     return seq
+
 
 def main(args):
     varfile = open(args.varFileName, 'r')
