@@ -30,20 +30,19 @@ def remap(fq1, fq2, threads, bwaref, outbam):
     print "sam --> bam, cmd: " + " ".join(bamargs)
     subprocess.call(bamargs)
 
-    '''
     # cleanup
     os.remove(sai1fn)
     os.remove(sai2fn)
     os.remove(samfn)
     os.remove(fq1)
     os.remove(fq2)
-    '''
 
 def runwgsim(contig,newseq):
     '''
     wrapper function for wgsim
     '''
     namecount = collections.Counter(contig.reads.reads)
+
     basefn = "wgsimtmp" + str(random.random())
     fasta = basefn + ".fasta"
     fq1 = basefn + ".1.fq"
@@ -60,7 +59,7 @@ def runwgsim(contig,newseq):
     pairednames = []
     # names with count 2 had both pairs in the contig
     for name,count in namecount.items():
-        print name,count
+        #print name,count
         if count == 1:
             single += 1
         elif count == 2:
@@ -77,18 +76,24 @@ def runwgsim(contig,newseq):
     # number of paried reads to simulate
     nsimreads = paired + (single/2)
 
-    args = ['wgsim','-e','0','-N',str(nsimreads),'-1','100','-2','100','-r','0','-R','0',fasta,fq1,fq2]
+    # length of quality score comes from original read, used here to set length of read
+    maxqlen = 0
+    for qual in (contig.rquals + contig.mquals):
+        if len(qual) > maxqlen:
+            maxqlen = len(qual)
+
+    args = ['wgsim','-e','0','-N',str(nsimreads),'-1',str(maxqlen),'-2','100','-r','0','-R','0',fasta,fq1,fq2]
     print args
     subprocess.call(args)
 
     os.remove(fasta)
 
-    fqReplaceList(fq1,pairednames)
-    fqReplaceList(fq2,pairednames)
+    fqReplaceList(fq1,pairednames,contig.rquals)
+    fqReplaceList(fq2,pairednames,contig.mquals)
 
     return (fq1,fq2)
 
-def fqReplaceList(fqfile,names):
+def fqReplaceList(fqfile,names,quals):
     '''
     Replace seq names in paired fastq files from a list until the list runs out
     (then stick with original names). fqfile = fastq file, names = list
@@ -100,7 +105,6 @@ def fqReplaceList(fqfile,names):
     namenum = 0
     newnames = []
     seqs = []
-    quals = []
     for fqline in fqin:
         if ln == 0:
             if len(names) > namenum:
@@ -114,8 +118,7 @@ def fqReplaceList(fqfile,names):
             ln += 1
         elif ln == 2:
             ln += 1
-        elif ln == 3:
-            quals.append(fqline.strip())
+        elif ln == 3: # quals are passed as a list
             ln = 0
         else:
             raise ValueError("fastq iteration problem")

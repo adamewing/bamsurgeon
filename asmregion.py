@@ -43,6 +43,9 @@ class Contig:
         self.iid = namefields[1]
 
         self.reads = contigreadmap[self.iid] 
+        self.rquals = [] # meaningless, used for filler later rather than have uniform quality
+        self.mquals = [] # meaningless, used for filler later rather than have uniform quality
+
         assert self.name
         assert self.seq
         assert self.len
@@ -157,11 +160,27 @@ def asm(chr, start, end, bamfilename, reffile, kmersize, noref=False, recycle=Fa
 
     readpairs = {}
     nreads = 0
+    rquals = []
+    mquals = []
     for read in bamfile.fetch(chr,start,end):
         if not read.mate_is_unmapped and read.is_paired:
             mate = matefile.mate(read)
             readpairs[read.qname] = ReadPair(read,mate)
             nreads += 1
+            if read.is_read1:
+                if read.is_reverse:
+                    rquals.append(read.qual[::-1])
+                    mquals.append(mate.qual)
+                else:
+                    rquals.append(read.qual)
+                    mquals.append(mate.qual[::-1])
+            else:
+                if read.is_reverse:
+                    rquals.append(mate.qual)
+                    mquals.append(read.qual[::-1])
+                else:
+                    rquals.append(mate.qual[::-1])
+                    mquals.append(read.qual)
 
     sys.stderr.write("found " + str(nreads) + " reads in region.\n")
     refseq = None
@@ -180,6 +199,9 @@ def asm(chr, start, end, bamfilename, reffile, kmersize, noref=False, recycle=Fa
         if newcontigs and n50(newcontigs) > n50(contigs):
             contigs = newcontigs
 
+    for contig in contigs:
+        contig.rquals = rquals
+        contig.mquals = mquals
     return contigs
 
 def main(args):
