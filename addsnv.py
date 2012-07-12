@@ -118,7 +118,7 @@ def main(args):
             if read.seq != mutreads[extqname]:
                 #print read.seq
                 #print mutreads[extqname]
-                mutprob = random.uniform(0,1)
+                mutprob = random.uniform(0,1) # choose reads to mutate at random
                 if not args.nomut and mutprob < float(args.mutfrac):
                     read.seq = mutreads[extqname] # make mutation
             if not hasSNP:
