@@ -40,11 +40,11 @@ def main(args):
         else:
             outputbam.write(read)
 
-        # dump the unused reads from the donor if requested with --all
-        if args.all:
-            for extqname in rdict.keys():
-                if extqname not in used:
-                    outputbam.write(rdict[extqname])
+    # dump the unused reads from the donor if requested with --all
+    if args.all:
+        for extqname in rdict.keys():
+            if extqname not in used:
+                outputbam.write(rdict[extqname])
 
     targetbam.close()
     donorbam.close()

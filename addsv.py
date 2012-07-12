@@ -184,29 +184,42 @@ def main(args):
                 maxlen = contig.len
                 maxcontig = contig
 
-        # make mutation in the largest contig
-        mutseq = mutableseq.MutableSeq(maxcontig.seq)
+        # is there anough room to make mutations?
+        if maxlen > 3*int(args.maxlibsize):
+            # make mutation in the largest contig
+            mutseq = mutableseq.MutableSeq(maxcontig.seq)
 
-        print "BEFORE:",mutseq
+            print "BEFORE:",mutseq
 
-        if action == 'INS':
-            mutseq.insertion(mutseq.length()/2,singleseqfa(insseqfile),tsdlen)
-        elif action == 'INV':
-            pass
-        elif action == 'DEL':
-            pass
-        elif action == 'DUP':
-            pass
+            if action == 'INS':
+                mutseq.insertion(mutseq.length()/2,singleseqfa(insseqfile),tsdlen)
+            elif action == 'INV':
+                invstart = int(args.maxlibsize)
+                invend = mutseq.length() - invstart
+                mutseq.inversion(invstart,invend)
+                pass
+            elif action == 'DEL':
+                delstart = int(args.maxlibsize)
+                delend = mutseq.length() - delstart
+                mutseq.deletion(delstart,delend)
+                pass
+            elif action == 'DUP':
+                dupstart = int(args.maxlibsize)
+                dupend = mutseq.length() - dupstart
+                mutseq.duplication(dupstart,dupend)
+                pass
+            else:
+                raise ValueError(bedline.strip() + ": mutation not one of: INS,INV,DEL,DUP")
+
+            print "AFTER:",mutseq
+
+            # simulate reads
+            (fq1,fq2) = runwgsim(maxcontig,mutseq.seq,svfrac)
+
+            # remap reads
+            remap(fq1,fq2,4,args.refFasta,args.outBamFile)
         else:
-            raise ValueError(bedline.strip() + ": mutation not one of: INS,INV,DEL,DUP")
-
-        print "AFTER:",mutseq
-
-        # simulate reads
-        (fq1,fq2) = runwgsim(maxcontig,mutseq.seq,svfrac)
-
-        # remap reads
-        remap(fq1,fq2,4,args.refFasta,args.outBamFile)
+            print "best contig too short to make mutation: ",bedline.strip()
 
     varfile.close()
     bamfile.close()
@@ -222,8 +235,9 @@ if __name__ == '__main__':
                         help='reference genome, fasta indexed with bwa index -a stdsw _and_ samtools faidx')
     parser.add_argument('-o', '--outbam', dest='outBamFile', required=True,
                         help='.bam file name for output')
+    parser.add_argument('-l', '--maxlibsize', dest='maxlibsize', default=600)
     parser.add_argument('-k', '--kmer', dest='kmersize', default=31)
-    parser.add_argument('-s', '--svfrac', dest='svfrac', default=0.25)
+    parser.add_argument('-s', '--svfrac', dest='svfrac', default=1)
     parser.add_argument('--nomut', action='store_true', default=False)
     parser.add_argument('--noremap', action='store_true', default=False)
     parser.add_argument('--noref', action='store_true', default=False)
