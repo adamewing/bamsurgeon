@@ -23,6 +23,9 @@ def main(args):
         nr += 1
 
     sys.stderr.write("loaded " + str(nr) + " reads, reading " + args.targetbam + "...\n")
+
+
+    used = {}
     for read in targetbam.fetch(until_eof=True):
         pairname = 'F' # read is first in pair
         if read.is_read2:
@@ -33,8 +36,15 @@ def main(args):
         extqname = ','.join((read.qname,pairname))
         if extqname in rdict: 
             outputbam.write(rdict[extqname])
+            used[extqname] = True
         else:
             outputbam.write(read)
+
+        # dump the unused reads from the donor if requested with --all
+        if args.all:
+            for extqname in rdict.keys():
+                if extqname not in used:
+                    outputbam.write(rdict[extqname])
 
     targetbam.close()
     donorbam.close()
@@ -47,5 +57,6 @@ if __name__=='__main__':
     parser.add_argument('-r', '--replacebam', dest='donorbam', required=True,
                         help='.bam with reads to replace original bam')
     parser.add_argument('-o', '--outputbam', dest='outputbam', required=True)
+    parser.add_argument('--all', action='store_true', default=False, help="append reads that don't match target .bam")
     args = parser.parse_args()
     main(args)
