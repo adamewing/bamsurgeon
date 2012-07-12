@@ -37,7 +37,7 @@ def remap(fq1, fq2, threads, bwaref, outbam):
     os.remove(fq1)
     os.remove(fq2)
 
-def runwgsim(contig,newseq):
+def runwgsim(contig,newseq,svfrac):
     '''
     wrapper function for wgsim
     '''
@@ -74,7 +74,7 @@ def runwgsim(contig,newseq):
                      "total  : " + str(totalreads) + "\n")
 
     # number of paried reads to simulate
-    nsimreads = paired + (single/2)
+    nsimreads = (paired + (single/2)) * svfrac
 
     # length of quality score comes from original read, used here to set length of read
     maxqlen = 0
@@ -131,8 +131,8 @@ def fqReplaceList(fqfile,names,quals):
         i = random.randint(0,len(quals))
         quals.append(quals[i])
 
-    print "SEQS:",str(len(seqs))
-    print "QUALS:",str(len(quals))
+    # print "SEQS:",str(len(seqs))
+    # print "QUALS:",str(len(quals))
 
     fqout = open(fqfile,'w')
     for i in range(namenum):
@@ -203,7 +203,7 @@ def main(args):
         print "AFTER:",mutseq
 
         # simulate reads
-        (fq1,fq2) = runwgsim(maxcontig,mutseq.seq)
+        (fq1,fq2) = runwgsim(maxcontig,mutseq.seq,svfrac)
 
         # remap reads
         remap(fq1,fq2,4,args.refFasta,args.outBamFile)
@@ -224,7 +224,6 @@ if __name__ == '__main__':
                         help='.bam file name for output')
     parser.add_argument('-k', '--kmer', dest='kmersize', default=31)
     parser.add_argument('-s', '--svfrac', dest='svfrac', default=0.25)
-    parser.add_argument('-m', '--mutfrac', dest='mutfrac', default=0.5)
     parser.add_argument('--nomut', action='store_true', default=False)
     parser.add_argument('--noremap', action='store_true', default=False)
     parser.add_argument('--noref', action='store_true', default=False)
