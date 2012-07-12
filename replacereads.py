@@ -1,6 +1,6 @@
 #!/bin/env python
 
-import sys,pysam, argparse
+import sys,pysam,argparse
 
 def main(args):
     targetbam = pysam.Samfile(args.targetbam, 'rb')
@@ -18,7 +18,7 @@ def main(args):
         if not read.is_paired:
             pairname = 'U' # read is unpaired
 
-        extqname = ','.join((read.qname,str(read.pos),pairname))
+        extqname = ','.join((read.qname,pairname))
         rdict[extqname] = read
         nr += 1
 
@@ -30,8 +30,8 @@ def main(args):
         if not read.is_paired:
             pairname = 'U' # read is unpaired
 
-        extqname = ','.join((read.qname,str(read.pos),pairname))
-        if extqname in rdict: # experiment with try/except
+        extqname = ','.join((read.qname,pairname))
+        if extqname in rdict: 
             outputbam.write(rdict[extqname])
         else:
             outputbam.write(read)

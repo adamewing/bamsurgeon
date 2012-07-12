@@ -126,6 +126,14 @@ def fqReplaceList(fqfile,names,quals):
     fqin.close()
     os.remove(fqfile)
 
+    # make sure there's enough (bogus) quality scores
+    while len(seqs) > len(quals):
+        i = random.randint(0,len(quals))
+        quals.append(quals[i])
+
+    print "SEQS:",str(len(seqs))
+    print "QUALS:",str(len(quals))
+
     fqout = open(fqfile,'w')
     for i in range(namenum):
         fqout.write("@" + newnames[i] + "\n")

@@ -3,8 +3,8 @@
 import sys,re
 
 class ContigReads:
-    def __init__(self, iid):
-        self.iid = iid 
+    def __init__(self, eid):
+        self.eid = eid 
         self.srcs = [] # read numbers from velvet
         self.reads = [] # read names
     def addsrc(self,src):
@@ -55,7 +55,7 @@ def contigreadmap(amosfile,seqs):
     f = open(amosfile, 'r')
     inCTGblock = False
     inTLEblock = False
-    CTGiid = None
+    CTGeid = None
     TLEsrc = None
     contig = None
     contigs = {} 
@@ -64,16 +64,16 @@ def contigreadmap(amosfile,seqs):
         line = line.strip()
         if inCTGblock:
             if not inTLEblock:
-                if re.search('^iid:',line):
-                    CTGiid = re.sub('iid:','',line)
-                    contig = ContigReads(CTGiid)
-                    #print "debug: CTGiid =",CTGiid
+                if re.search('^eid:',line):
+                    CTGeid = re.sub('eid:','',line).rstrip('-0')
+                    contig = ContigReads(CTGeid)
+                    #print "debug: CTGeid =",CTGeid
 
                 if re.search('}', line):
                     contig.getReadNames(seqs)
-                    contigs[CTGiid] = contig
+                    contigs[CTGeid] = contig
                     inCTGblock = False
-                    CTGiid = None
+                    CTGeid = None
                     contig = None
                     #print "debug: left CTG block"
 
@@ -107,5 +107,5 @@ if __name__ == '__main__':
     seqfile  = sys.argv[1].strip() + "/Sequences"
     inputseqs = InputSeqs(seqfile)
     contigmap = contigreadmap(amosfile,inputseqs)
-    for iid,contig in contigmap.iteritems():
+    for eid,contig in contigmap.iteritems():
         contig.infodump()

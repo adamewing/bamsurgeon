@@ -40,9 +40,9 @@ class Contig:
         contigreadmap = parseamos.contigreadmap(amosfile,inseq)
 
         namefields = name.split('_')
-        self.iid = namefields[1]
+        self.eid = namefields[1]
 
-        self.reads = contigreadmap[self.iid] 
+        self.reads = contigreadmap[self.eid] 
         self.rquals = [] # meaningless, used for filler later rather than have uniform quality
         self.mquals = [] # meaningless, used for filler later rather than have uniform quality
 
@@ -225,17 +225,17 @@ def main(args):
     contigs = asm(chr, start, end, args.bamFileName, reffile, int(args.kmersize), args.noref, args.recycle)
 
     maxlen = 0
-    maxiid = None
+    maxeid = None
     for contig in contigs:
         print contig
         if contig.len > maxlen:
             maxlen = contig.len
-            maxiid = contig.iid
+            maxeid = contig.eid
 
-    print "read names in longest contig (" + str(maxiid) + "):"
-    for contig in contigs:
-        if contig.iid == maxiid:
-            contig.reads.infodump()
+    #print "read names in longest contig (" + str(maxeid) + "):"
+    #for contig in contigs:
+    #    if contig.eid == maxeid:
+    #        contig.reads.infodump()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='parse the output of pickreads.py')
