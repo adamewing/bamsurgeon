@@ -63,7 +63,7 @@ def runwgsim(contig,newseq,svfrac):
         if count == 1:
             single += 1
         elif count == 2:
-            paired += 2
+            paired += 1 
             pairednames.append(name) 
         else:
             discard += 1
