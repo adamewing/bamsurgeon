@@ -143,7 +143,7 @@ if __name__ == '__main__':
                         help='reference genome, fasta indexed with bwa index -a stdsw _and_ samtools faidx')
     parser.add_argument('-o', '--outbam', dest='outBamFile', required=True,
                         help='.bam file name for output')
-    parser.add_argument('-s', '--snpfrac', dest='snpfrac', default=0.25)
+    parser.add_argument('-s', '--snpfrac', dest='snpfrac', default=1)
     parser.add_argument('-m', '--mutfrac', dest='mutfrac', default=0.5)
     parser.add_argument('--nomut', action='store_true', default=False)
     parser.add_argument('--noremap', action='store_true', default=False)
