@@ -65,7 +65,8 @@ def contigreadmap(amosfile,seqs):
         if inCTGblock:
             if not inTLEblock:
                 if re.search('^eid:',line):
-                    CTGeid = re.sub('eid:','',line).rstrip('-0')
+                    CTGeid = re.sub('eid:','',line)
+                    CTGeid = re.sub('-0$', '', CTGeid)
                     contig = ContigReads(CTGeid)
                     #print "debug: CTGeid =",CTGeid
 

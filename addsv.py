@@ -15,11 +15,14 @@ def remap(fq1, fq2, threads, bwaref, outbam):
     sai2fn = basefn + ".2.sai"
     samfn  = basefn + ".sam"
     refidx = bwaref + ".fai"
+    tmpbam = basefn + ".bam"
+    tmpsrt = basefn + ".sort"
 
     sai1args = ['bwa', 'aln', bwaref, '-q', '5', '-l', '32', '-k', '2', '-t', str(threads), '-o', '1', '-f', sai1fn, fq1]
     sai2args = ['bwa', 'aln', bwaref, '-q', '5', '-l', '32', '-k', '2', '-t', str(threads), '-o', '1', '-f', sai2fn, fq2]
     samargs  = ['bwa', 'sampe', '-P', '-f', samfn, bwaref, sai1fn, sai2fn, fq1, fq2]
-    bamargs  = ['samtools', 'view', '-bt', refidx, '-o', outbam, samfn]
+    bamargs  = ['samtools', 'view', '-bt', refidx, '-o', tmpbam, samfn]
+    sortargs = ['samtools', 'sort', tmpbam, tmpsrt]
 
     print "mapping 1st end, cmd: " + " ".join(sai1args)
     subprocess.call(sai1args)
@@ -29,6 +32,24 @@ def remap(fq1, fq2, threads, bwaref, outbam):
     subprocess.call(samargs)
     print "sam --> bam, cmd: " + " ".join(bamargs)
     subprocess.call(bamargs)
+    print "sorting, cmd: " + " ".join(sortargs)
+    subprocess.call(sortargs)
+    print "rename " + tmpsrt + ".bam --> " + tmpbam
+    os.remove(tmpbam)
+    os.rename(tmpsrt + ".bam", tmpbam)
+
+    if os.path.isfile(outbam + ".bam"):
+        tmpmerge  = basefn + ".merge.bam"
+        mergeargs = ['samtools','merge',tmpmerge,tmpbam,outbam]
+        print outbam + " exists, merging: " + " ".join(mergeargs)
+        subprocess.call(mergeargs)
+        os.remove(outbam)
+        os.remove(tmpbam)
+        print "rename " + tmpmerge + " --> " + outbam
+        os.rename(tmpmerge, outbam)
+    else:
+        print "rename " + tmpbam + " --> " + outbam
+        os.rename(tmpbam, outbam)
 
     # cleanup
     os.remove(sai1fn)
@@ -157,6 +178,9 @@ def main(args):
     reffile = pysam.Fastafile(args.refFasta)
 
     svfrac = float(args.svfrac)
+
+    if os.path.isfile(args.outBamFile):
+        raise ValueError(args.outBamFile + " exists, delete or rename before running.\n")
 
     for bedline in varfile:
         if re.search('^#',bedline):
