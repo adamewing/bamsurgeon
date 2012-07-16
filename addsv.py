@@ -38,7 +38,7 @@ def remap(fq1, fq2, threads, bwaref, outbam):
     os.remove(tmpbam)
     os.rename(tmpsrt + ".bam", tmpbam)
 
-    if os.path.isfile(outbam + ".bam"):
+    if os.path.isfile(outbam):
         tmpmerge  = basefn + ".merge.bam"
         mergeargs = ['samtools','merge',tmpmerge,tmpbam,outbam]
         print outbam + " exists, merging: " + " ".join(mergeargs)
