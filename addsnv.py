@@ -114,6 +114,15 @@ def main(args):
                     hasSNP = True
                 print " ".join((refbase,basepile,str(pcol.pos),str(majb),str(minb),str(hasSNP),str(frac))) #debug
 
+        '''
+        # pick reads to change
+        readlist = []
+        for extqname,read in outreads.iteritems():
+            if read.seq != mutreads[extqname]:
+                readlist.append(
+        '''
+
+        # change reads from .bam to mutated sequences
         for extqname,read in outreads.iteritems():
             if read.seq != mutreads[extqname]:
                 #print read.seq
