@@ -161,7 +161,6 @@ def main(args):
                 outlog = " ".join((refbase,basepile,str(pcol.pos),str(majb),str(minb),str(hasSNP),str(frac))) #debug
                 log.write(outlog + "\n")
 
-        '''
         # pick reads to change
         readlist = []
         for extqname,read in outreads.iteritems():
@@ -172,15 +171,15 @@ def main(args):
         random.shuffle(readlist)
         readlist = readlist[0:int(len(readlist)*float(args.mutfrac))] 
         print "picked:",str(len(readlist))
-        '''
 
         wrote = 0
         nmut = 0
         # change reads from .bam to mutated sequences
         for extqname,read in outreads.iteritems():
             if read.seq != mutreads[extqname]:
-                mutprob = random.uniform(0,1) # choose reads to mutate at random
-                if not args.nomut and mutprob < float(args.mutfrac):
+                #mutprob = random.uniform(0,1) # choose reads to mutate at random
+                #if not args.nomut and mutprob < float(args.mutfrac):
+                if not args.nomut and extqname in readlist:
                     qual = read.qual # changing seq resets qual (see pysam API docs)
                     read.seq = mutreads[extqname] # make mutation
                     read.qual = qual
