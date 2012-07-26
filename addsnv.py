@@ -54,6 +54,26 @@ def countReadCoverage(bam,chrom,start,end,strand=None):
     return coverage
 
 
+def countBaseAtPos(bamfile,chrom,pos):
+    locstr = chrom + ":" + str(pos) + "-" + str(pos)
+    args = ['samtools','mpileup',bamfile,'-r',locstr]
+
+    p = subprocess.Popen(args,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+    p.wait()
+    pout = p.stdout.readlines()
+
+    for line in pout:
+        c = line.strip().split()
+        pileup = c[4].upper()
+
+    bases = []
+    for b in pileup:
+        if b in ['A','T','C','G']:
+            bases.append(b)
+
+    return bases
+
+
 def remap(bamfn, threads, bwaref):
     sai1fn = bamfn + ".1.sai"
     sai2fn = bamfn + ".2.sai"
@@ -151,14 +171,17 @@ def main(args):
 
                 # make sure region doesn't have any changes that are likely SNPs
                 # (trying to avoid messing with haplotypes)
+                
+                basepile = countBaseAtPos(args.bamFileName,chrom,pcol.pos)
                 majb = majorbase(basepile)
                 minb = minorbase(basepile)
+
                 frac = float(minb[1])/(float(majb[1])+float(minb[1]))
                 if minb[0] == majb[0]:
                     frac = 0.0
                 if frac > snpfrac:
                     hasSNP = True
-                outlog = " ".join((refbase,basepile,str(pcol.pos),str(majb),str(minb),str(hasSNP),str(frac))) #debug
+                outlog = " ".join((refbase,str(basepile),str(pcol.pos),str(majb),str(minb),str(hasSNP),str(frac))) #debug
                 log.write(outlog + "\n")
 
         # pick reads to change
@@ -190,26 +213,26 @@ def main(args):
                 outbam.write(mutmates[extqname])
         print "wrote: ",str(wrote),nmut
 
-        outbam.close()
-        remap(args.outBamFile, 4, args.refFasta)
+        if not hasSNP:
+            outbam.close()
+            remap(args.outBamFile, 4, args.refFasta)
 
-        outbam = pysam.Samfile(args.outBamFile,'rb')
-        coverwindow = 1
-        incover  = countReadCoverage(bamfile,chrom,gmutpos-coverwindow,gmutpos+coverwindow)
-        outcover = countReadCoverage(outbam,chrom,gmutpos-coverwindow,gmutpos+coverwindow)
+            outbam = pysam.Samfile(args.outBamFile,'rb')
+            coverwindow = 1
+            incover  = countReadCoverage(bamfile,chrom,gmutpos-coverwindow,gmutpos+coverwindow)
+            outcover = countReadCoverage(outbam,chrom,gmutpos-coverwindow,gmutpos+coverwindow)
 
-        avgincover  = float(sum(incover))/float(len(incover)) 
-        avgoutcover = float(sum(outcover))/float(len(outcover))
+            avgincover  = float(sum(incover))/float(len(incover)) 
+            avgoutcover = float(sum(outcover))/float(len(outcover))
 
-        print avgincover 
-        print avgoutcover
+            print avgincover 
+            print avgoutcover
 
         outbam.close()
 
     bedfile.close()
     bamfile.close()
     bammate.close()
-    #outbam.close()
     log.close()
 
 
