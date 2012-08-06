@@ -193,10 +193,17 @@ def main(args):
         action = c[3] # INV, DEL, INS seqfile.fa TSDlength, DUP
         insseqfile = None
         tsdlen = 0
+        ndups = 0
         if action == 'INS':
             insseqfile = c[4]
             if len(c) > 5:
                 tsdlen = int(c[5])
+
+        if action == 'DUP':
+            if len(c) > 4:
+                ndups = int(c[4])
+            else:
+                ndups = 1
 
         contigs = asmregion.asm(chr, start, end, args.bamFileName, reffile, int(args.kmersize), args.noref, args.recycle)
 
@@ -230,7 +237,7 @@ def main(args):
             elif action == 'DUP':
                 dupstart = int(args.maxlibsize)
                 dupend = mutseq.length() - dupstart
-                mutseq.duplication(dupstart,dupend)
+                mutseq.duplication(dupstart,dupend,ndups)
                 pass
             else:
                 raise ValueError(bedline.strip() + ": mutation not one of: INS,INV,DEL,DUP")
@@ -260,8 +267,8 @@ if __name__ == '__main__':
     parser.add_argument('-o', '--outbam', dest='outBamFile', required=True,
                         help='.bam file name for output')
     parser.add_argument('-l', '--maxlibsize', dest='maxlibsize', default=600)
-    parser.add_argument('-k', '--kmer', dest='kmersize', default=31)
-    parser.add_argument('-s', '--svfrac', dest='svfrac', default=1)
+    parser.add_argument('-k', '--kmer', dest='kmersize', default=31, help="kmer size for assembly (default = 31)")
+    parser.add_argument('-s', '--svfrac', dest='svfrac', default=1.0, help="allele fraction of variant (default = 1.0)")
     parser.add_argument('--nomut', action='store_true', default=False)
     parser.add_argument('--noremap', action='store_true', default=False)
     parser.add_argument('--noref', action='store_true', default=False)

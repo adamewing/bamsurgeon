@@ -53,14 +53,16 @@ class MutableSeq:
         invseq = rc(self.seq[start:end])
         self.seq = self.seq[:start] + invseq + self.seq[end:]
 
-    def duplication(self,start,end):
+    def duplication(self,start,end,fold=1):
         """
         duplicates sequence between start and end, bases at start and end positions are not included
         """
         start = int(start)
         end   = int(end)
         assert start < end
-        dupseq = self.seq[start:end] + self.seq[start:end]
+        dupseq = self.seq[start:end]
+        for i in range(fold):
+            dupseq = dupseq + self.seq[start:end]
         self.seq = self.seq[:start] + dupseq + self.seq[end:]
         
         

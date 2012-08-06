@@ -69,9 +69,10 @@ def countBaseAtPos(bamfile,chrom,pos):
         pileup = c[4].upper()
 
     bases = []
-    for b in pileup:
-        if b in ['A','T','C','G']:
-            bases.append(b)
+    if pileup:
+        for b in pileup:
+            if b in ['A','T','C','G']:
+                bases.append(b)
 
     return bases
 
@@ -247,10 +248,12 @@ def main(args):
 
                 avgincover  = float(sum(incover))/float(len(incover)) 
                 avgoutcover = float(sum(outcover))/float(len(outcover))
-                snvfrac = float(nmut)/float(wrote)
+                snvfrac = 0.0
+                if wrote > 0:
+                    snvfrac = float(nmut)/float(wrote)
 
                 # qc cutoff for final snv depth 
-                if avgoutcover/avgincover >= 0.9:
+                if avgoutcover > 0 and avgincover > 0 and avgoutcover/avgincover >= 0.9:
                     tmpbams.append(tmpoutbamname)
                     log.write("\t".join(("snp",bedline.strip(),str(gmutpos),mutstr,str(avgoutcover),str(avgoutcover),str(snvfrac),str(maxfrac)))+"\n")
 
