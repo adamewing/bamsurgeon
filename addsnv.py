@@ -62,6 +62,8 @@ def countBaseAtPos(bamfile,chrom,pos):
     p.wait()
     pout = p.stdout.readlines()
 
+    pileup = None 
+
     for line in pout:
         c = line.strip().split()
         pileup = c[4].upper()
@@ -189,18 +191,21 @@ def main(args):
                     # (trying to avoid messing with haplotypes)
                 
                     basepile = countBaseAtPos(args.bamFileName,chrom,pcol.pos)
-                    majb = majorbase(basepile)
-                    minb = minorbase(basepile)
+                    if basepile:
+                        majb = majorbase(basepile)
+                        minb = minorbase(basepile)
 
-                    frac = float(minb[1])/(float(majb[1])+float(minb[1]))
-                    if minb[0] == majb[0]:
-                        frac = 0.0
-                    if frac > maxfrac:
-                        maxfrac = frac
-                    if frac > snpfrac:
+                        frac = float(minb[1])/(float(majb[1])+float(minb[1]))
+                        if minb[0] == majb[0]:
+                            frac = 0.0
+                        if frac > maxfrac:
+                            maxfrac = frac
+                        if frac > snpfrac:
+                            hasSNP = True
+                    else:
                         hasSNP = True
-                    #outlog = " ".join(('--',refbase,str(basepile),str(pcol.pos),str(majb),str(minb),str(hasSNP),str(frac))) #debug
-                    #log.write(outlog + "\n")
+                        #outlog = " ".join(('--',refbase,str(basepile),str(pcol.pos),str(majb),str(minb),str(hasSNP),str(frac))) #debug
+                        #log.write(outlog + "\n")
 
             # pick reads to change
             readlist = []
