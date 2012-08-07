@@ -94,8 +94,17 @@ def runwgsim(contig,newseq,svfrac):
                      "discard: " + str(discard) + "\n" +
                      "total  : " + str(totalreads) + "\n")
 
+    # adjustment factor for length of new contig vs. old contig
+    lenfrac = float(len(newseq))/float(len(contig.seq))
+
+    sys.stderr.write("old ctg len: " + str(len(contig.seq)) + "\n" +
+                     "new ctg len: " + str(len(newseq)) + "\n" +
+                     "adj. factor: " + str(lenfrac) + "\n")
+
     # number of paried reads to simulate
-    nsimreads = (paired + (single/2)) * svfrac
+    nsimreads = int((paired + (single/2)) * svfrac * lenfrac)
+
+    sys.stderr.write("num. sim. reads: " + str(nsimreads) + "\n")
 
     # length of quality score comes from original read, used here to set length of read
     maxqlen = 0
@@ -118,6 +127,9 @@ def fqReplaceList(fqfile,names,quals):
     '''
     Replace seq names in paired fastq files from a list until the list runs out
     (then stick with original names). fqfile = fastq file, names = list
+    if there are more names in the list than needed assign the remainder a null
+    sequence ("NNNNNNNNNNNN...N") so that they still replace a read in the original
+    .bam when reads are replaced with output 
     '''
 
     fqin = open(fqfile,'r')
@@ -126,6 +138,8 @@ def fqReplaceList(fqfile,names,quals):
     namenum = 0
     newnames = []
     seqs = []
+    usednames = {}
+
     for fqline in fqin:
         if ln == 0:
             if len(names) > namenum:
@@ -149,16 +163,24 @@ def fqReplaceList(fqfile,names,quals):
 
     # make sure there's enough (bogus) quality scores
     while len(seqs) > len(quals):
-        i = random.randint(0,len(quals))
+        i = random.randint(0,len(quals)-1)
         quals.append(quals[i])
 
-    # print "SEQS:",str(len(seqs))
-    # print "QUALS:",str(len(quals))
-
+    # write .fq with new names
     fqout = open(fqfile,'w')
     for i in range(namenum):
         fqout.write("@" + newnames[i] + "\n")
         fqout.write(seqs[i] + "\n+\n" + quals[i] + "\n")
+        usednames[newnames[i]] = True
+
+    # burn off excess
+    nullseq  = 'N'*len(seqs[0])
+    nullqual = '#'*len(seqs[0])
+    for name in names:
+        if name not in usednames:
+            fqout.write("@" + name + "\n")
+            fqout.write(nullseq + "\n+\n" + nullqual + "\n")
+
     fqout.close()
 
 def singleseqfa(file):
@@ -176,6 +198,7 @@ def main(args):
     bamfile = pysam.Samfile(args.bamFileName, 'rb')
     bammate = pysam.Samfile(args.bamFileName, 'rb') # use for mates to avoid iterator problems
     reffile = pysam.Fastafile(args.refFasta)
+    logfile = open(args.outBamFile + ".log", 'w')
 
     svfrac = float(args.svfrac)
 
@@ -224,21 +247,22 @@ def main(args):
 
             if action == 'INS':
                 mutseq.insertion(mutseq.length()/2,singleseqfa(insseqfile),tsdlen)
+                logfile.write("\t".join(('ins',str(mutseq.length()/2),inseqfile,str(tsdlen))) + "\n")
             elif action == 'INV':
                 invstart = int(args.maxlibsize)
                 invend = mutseq.length() - invstart
                 mutseq.inversion(invstart,invend)
-                pass
+                logfile.write("\t".join(('inv',str(invstart),str(invend))) + "\n")
             elif action == 'DEL':
                 delstart = int(args.maxlibsize)
                 delend = mutseq.length() - delstart
                 mutseq.deletion(delstart,delend)
-                pass
+                logfile.write("\t".join(('del',str(delstart),str(delend))) + "\n")
             elif action == 'DUP':
                 dupstart = int(args.maxlibsize)
                 dupend = mutseq.length() - dupstart
                 mutseq.duplication(dupstart,dupend,ndups)
-                pass
+                logfile.write("\t".join(('dup',str(dupstart),str(dupend),str(ndups))) + "\n")
             else:
                 raise ValueError(bedline.strip() + ": mutation not one of: INS,INV,DEL,DUP")
 
@@ -255,6 +279,7 @@ def main(args):
     varfile.close()
     bamfile.close()
     bammate.close()
+    logfile.close()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='adds SNVs to reads, outputs modified reads as .bam along with mates')
