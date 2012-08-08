@@ -250,22 +250,22 @@ def main(args):
 
             if action == 'INS':
                 mutseq.insertion(mutseq.length()/2,singleseqfa(insseqfile),tsdlen)
-                logfile.write("\t".join(('ins',str(mutseq.length()/2),inseqfile,str(tsdlen))) + "\n")
+                logfile.write("\t".join(('ins',chr,str(start),str(end),action,str(mutseq.length()),str(mutseq.length()/2),inseqfile,str(tsdlen))) + "\n")
             elif action == 'INV':
                 invstart = int(args.maxlibsize)
                 invend = mutseq.length() - invstart
                 mutseq.inversion(invstart,invend)
-                logfile.write("\t".join(('inv',str(invstart),str(invend))) + "\n")
+                logfile.write("\t".join(('inv',chr,str(start),str(end),action,str(mutseq.length()),str(invstart),str(invend))) + "\n")
             elif action == 'DEL':
                 delstart = int(args.maxlibsize)
                 delend = mutseq.length() - delstart
                 mutseq.deletion(delstart,delend)
-                logfile.write("\t".join(('del',str(delstart),str(delend))) + "\n")
+                logfile.write("\t".join(('del',chr,str(start),str(end),action,str(mutseq.length()),str(delstart),str(delend))) + "\n")
             elif action == 'DUP':
                 dupstart = int(args.maxlibsize)
                 dupend = mutseq.length() - dupstart
                 mutseq.duplication(dupstart,dupend,ndups)
-                logfile.write("\t".join(('dup',str(dupstart),str(dupend),str(ndups))) + "\n")
+                logfile.write("\t".join(('dup',chr,str(start),str(end),action,str(mutseq.length()),str(dupstart),str(dupend),str(ndups))) + "\n")
             else:
                 raise ValueError(bedline.strip() + ": mutation not one of: INS,INV,DEL,DUP")
 
