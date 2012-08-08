@@ -62,6 +62,7 @@ if __name__=='__main__':
     parser.add_argument('-r', '--replacebam', dest='donorbam', required=True,
                         help='.bam with reads to replace original bam')
     parser.add_argument('-o', '--outputbam', dest='outputbam', required=True)
+    parser.add_argument('-i', '--ignoresize', dest='ignoresize', default=0, help="don't replace reads with reads having insert size > ignoresize")
     parser.add_argument('--all', action='store_true', default=False, help="append reads that don't match target .bam")
     parser.add_argument('--keepqual', action='store_true', default=False, help="keep original quality scores, replace read and mapping only")
     args = parser.parse_args()

@@ -171,7 +171,10 @@ def fqReplaceList(fqfile,names,quals):
     for i in range(namenum):
         fqout.write("@" + newnames[i] + "\n")
         fqout.write(seqs[i] + "\n+\n" + quals[i] + "\n")
+        if newnames[i] in usednames:
+            sys.stderr.write("warning, used read name: " + newnames[i] + " in multiple pairs\n")
         usednames[newnames[i]] = True
+        
 
     # burn off excess
     nullseq  = 'N'*len(seqs[0])
