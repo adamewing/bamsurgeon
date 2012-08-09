@@ -250,7 +250,7 @@ def main(args):
 
             if action == 'INS':
                 mutseq.insertion(mutseq.length()/2,singleseqfa(insseqfile),tsdlen)
-                logfile.write("\t".join(('ins',chr,str(start),str(end),action,str(mutseq.length()),str(mutseq.length()/2),inseqfile,str(tsdlen))) + "\n")
+                logfile.write("\t".join(('ins',chr,str(start),str(end),action,str(mutseq.length()),str(mutseq.length()/2),insseqfile,str(tsdlen))) + "\n")
             elif action == 'INV':
                 invstart = int(args.maxlibsize)
                 invend = mutseq.length() - invstart
