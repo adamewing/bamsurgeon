@@ -216,20 +216,8 @@ def main(args):
         chr    = c[0]
         start  = int(c[1])
         end    = int(c[2])
-        action = c[3] # INV, DEL, INS seqfile.fa TSDlength, DUP
-        insseqfile = None
-        tsdlen = 0
-        ndups = 0
-        if action == 'INS':
-            insseqfile = c[4]
-            if len(c) > 5:
-                tsdlen = int(c[5])
-
-        if action == 'DUP':
-            if len(c) > 4:
-                ndups = int(c[4])
-            else:
-                ndups = 1
+        araw   = c[3:len(c)] # INV, DEL, INS seqfile.fa TSDlength, DUP
+        actions = map(lambda x: x.strip(),' '.join(araw).split(','))
 
         contigs = asmregion.asm(chr, start, end, args.bamFileName, reffile, int(args.kmersize), args.noref, args.recycle)
 
@@ -246,38 +234,64 @@ def main(args):
             # make mutation in the largest contig
             mutseq = mutableseq.MutableSeq(maxcontig.seq)
 
-            print "BEFORE:",mutseq
+            # support for multiple mutations
+            for actionstr in actions:
+                a = actionstr.split()
+                action = a[0]
 
-            if action == 'INS':
-                mutseq.insertion(mutseq.length()/2,singleseqfa(insseqfile),tsdlen)
-                logfile.write("\t".join(('ins',chr,str(start),str(end),action,str(mutseq.length()),str(mutseq.length()/2),insseqfile,str(tsdlen))) + "\n")
-            elif action == 'INV':
-                invstart = int(args.maxlibsize)
-                invend = mutseq.length() - invstart
-                mutseq.inversion(invstart,invend)
-                logfile.write("\t".join(('inv',chr,str(start),str(end),action,str(mutseq.length()),str(invstart),str(invend))) + "\n")
-            elif action == 'DEL':
-                delstart = int(args.maxlibsize)
-                delend = mutseq.length() - delstart
-                mutseq.deletion(delstart,delend)
-                logfile.write("\t".join(('del',chr,str(start),str(end),action,str(mutseq.length()),str(delstart),str(delend))) + "\n")
-            elif action == 'DUP':
-                dupstart = int(args.maxlibsize)
-                dupend = mutseq.length() - dupstart
-                mutseq.duplication(dupstart,dupend,ndups)
-                logfile.write("\t".join(('dup',chr,str(start),str(end),action,str(mutseq.length()),str(dupstart),str(dupend),str(ndups))) + "\n")
-            else:
-                raise ValueError(bedline.strip() + ": mutation not one of: INS,INV,DEL,DUP")
+                print actionstr,action
 
-            print "AFTER:",mutseq
+                insseqfile = None
+                tsdlen = 0
+                ndups = 0
+                if action == 'INS':
+                    assert len(a) > 1 # insertion syntax: INS <file.fa> [optional TSDlen]
+                    insseqfile = a[1]
+                    assert os.path.exists(insseqfile) # ensure insertion sequence file exists
+                    if len(a) > 2:
+                        tsdlen = int(a[2])
+
+                if action == 'DUP':
+                    if len(a) > 1:
+                        ndups = int(a[1])
+                    else:
+                        ndups = 1
+
+                print "BEFORE:",mutseq
+
+                if action == 'INS':
+                    mutseq.insertion(mutseq.length()/2,singleseqfa(insseqfile),tsdlen)
+                    logfile.write("\t".join(('ins',chr,str(start),str(end),action,str(mutseq.length()),str(mutseq.length()/2),insseqfile,str(tsdlen))) + "\n")
+                elif action == 'INV':
+                    invstart = int(args.maxlibsize)
+                    invend = mutseq.length() - invstart
+                    mutseq.inversion(invstart,invend)
+                    logfile.write("\t".join(('inv',chr,str(start),str(end),action,str(mutseq.length()),str(invstart),str(invend))) + "\n")
+                elif action == 'DEL':
+                    delstart = int(args.maxlibsize)
+                    delend = mutseq.length() - delstart
+                    mutseq.deletion(delstart,delend)
+                    logfile.write("\t".join(('del',chr,str(start),str(end),action,str(mutseq.length()),str(delstart),str(delend))) + "\n")
+                elif action == 'DUP':
+                    dupstart = int(args.maxlibsize)
+                    dupend = mutseq.length() - dupstart
+                    mutseq.duplication(dupstart,dupend,ndups)
+                    logfile.write("\t".join(('dup',chr,str(start),str(end),action,str(mutseq.length()),str(dupstart),str(dupend),str(ndups))) + "\n")
+                else:
+                    raise ValueError(bedline.strip() + ": mutation not one of: INS,INV,DEL,DUP")
+
+                print "AFTER:",mutseq
 
             # simulate reads
             (fq1,fq2) = runwgsim(maxcontig,mutseq.seq,svfrac)
 
             # remap reads
             remap(fq1,fq2,4,args.refFasta,args.outBamFile)
+
+
         else:
             print "best contig too short to make mutation: ",bedline.strip()
+
 
     varfile.close()
     bamfile.close()
