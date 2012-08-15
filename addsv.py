@@ -242,8 +242,9 @@ def main(args):
                 print actionstr,action
 
                 insseqfile = None
-                tsdlen = 0
-                ndups = 0
+                tsdlen = 0  # target site duplication length
+                ndups = 0   # number of tandem dups
+                dsize = 0.0 # deletion size
                 if action == 'INS':
                     assert len(a) > 1 # insertion syntax: INS <file.fa> [optional TSDlen]
                     insseqfile = a[1]
@@ -257,26 +258,48 @@ def main(args):
                     else:
                         ndups = 1
 
+                if action == 'DEL':
+                    if len(a) > 1:
+                        dsize = float(a[1]) # support smaller deletion size
+                        if dsize > 1.0:
+                            dsize = 1.0
+                    else:
+                        dsize = 1.0
+
                 print "BEFORE:",mutseq
 
                 if action == 'INS':
                     mutseq.insertion(mutseq.length()/2,singleseqfa(insseqfile),tsdlen)
                     logfile.write("\t".join(('ins',chr,str(start),str(end),action,str(mutseq.length()),str(mutseq.length()/2),insseqfile,str(tsdlen))) + "\n")
+
                 elif action == 'INV':
                     invstart = int(args.maxlibsize)
                     invend = mutseq.length() - invstart
                     mutseq.inversion(invstart,invend)
                     logfile.write("\t".join(('inv',chr,str(start),str(end),action,str(mutseq.length()),str(invstart),str(invend))) + "\n")
+
                 elif action == 'DEL':
                     delstart = int(args.maxlibsize)
                     delend = mutseq.length() - delstart
+                    dlen = int((float(delend-delstart) * dsize)+0.5) # support smaller deletion
+
+                    dadj = delend-delstart-dlen
+                    if dadj < 0:
+                        dadj = 0
+                        print "warning: deletion of length 0"
+
+                    delstart += dadj/2
+                    delend   -= dadj/2
+
                     mutseq.deletion(delstart,delend)
                     logfile.write("\t".join(('del',chr,str(start),str(end),action,str(mutseq.length()),str(delstart),str(delend))) + "\n")
+
                 elif action == 'DUP':
                     dupstart = int(args.maxlibsize)
                     dupend = mutseq.length() - dupstart
                     mutseq.duplication(dupstart,dupend,ndups)
                     logfile.write("\t".join(('dup',chr,str(start),str(end),action,str(mutseq.length()),str(dupstart),str(dupend),str(ndups))) + "\n")
+
                 else:
                     raise ValueError(bedline.strip() + ": mutation not one of: INS,INV,DEL,DUP")
 
@@ -287,7 +310,6 @@ def main(args):
 
             # remap reads
             remap(fq1,fq2,4,args.refFasta,args.outBamFile)
-
 
         else:
             print "best contig too short to make mutation: ",bedline.strip()
