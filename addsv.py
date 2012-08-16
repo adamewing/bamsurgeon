@@ -118,12 +118,12 @@ def runwgsim(contig,newseq,svfrac):
 
     os.remove(fasta)
 
-    fqReplaceList(fq1,pairednames,contig.rquals)
-    fqReplaceList(fq2,pairednames,contig.mquals)
+    fqReplaceList(fq1,pairednames,contig.rquals,svfrac)
+    fqReplaceList(fq2,pairednames,contig.mquals,svfrac)
 
     return (fq1,fq2)
 
-def fqReplaceList(fqfile,names,quals):
+def fqReplaceList(fqfile,names,quals,svfrac):
     '''
     Replace seq names in paired fastq files from a list until the list runs out
     (then stick with original names). fqfile = fastq file, names = list
@@ -175,14 +175,15 @@ def fqReplaceList(fqfile,names,quals):
             sys.stderr.write("warning, used read name: " + newnames[i] + " in multiple pairs\n")
         usednames[newnames[i]] = True
         
-
     # burn off excess
     nullseq  = 'N'*len(seqs[0])
     nullqual = '#'*len(seqs[0])
     for name in names:
         if name not in usednames:
-            fqout.write("@" + name + "\n")
-            fqout.write(nullseq + "\n+\n" + nullqual + "\n")
+            if random.uniform(0,1) < svfrac:
+                fqout.write("@" + name + "\n")
+                fqout.write(nullseq + "\n+\n" + nullqual + "\n")
+                
 
     fqout.close()
 
