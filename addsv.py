@@ -254,6 +254,7 @@ def main(args):
                 print actionstr,action
 
                 insseqfile = None
+                insseq = ''
                 tsdlen = 0  # target site duplication length
                 ndups = 0   # number of tandem dups
                 dsize = 0.0 # deletion size fraction
@@ -261,7 +262,9 @@ def main(args):
                 if action == 'INS':
                     assert len(a) > 1 # insertion syntax: INS <file.fa> [optional TSDlen]
                     insseqfile = a[1]
-                    assert os.path.exists(insseqfile) # ensure insertion sequence file exists
+                    if not os.path.exists(insseqfile): # not a file... is it a sequence? (support indel ins.)
+                        assert re.search('^[ATGCatgc]*$',insseqfile) # make sure it's a sequence
+                        insseq = insseqfile
                     if len(a) > 2:
                         tsdlen = int(a[2])
 
@@ -284,7 +287,10 @@ def main(args):
                 print "BEFORE:",mutseq
 
                 if action == 'INS':
-                    mutseq.insertion(mutseq.length()/2,singleseqfa(insseqfile),tsdlen)
+                    if insseqfile: # seq in file
+                        mutseq.insertion(mutseq.length()/2,singleseqfa(insseqfile),tsdlen)
+                    else: # seq is input
+                        mutseq.insertion(mutseq.length()/2,insseq,tsdlen)
                     logfile.write("\t".join(('ins',chr,str(start),str(end),action,str(mutseq.length()),str(mutseq.length()/2),insseqfile,str(tsdlen))) + "\n")
 
                 elif action == 'INV':
@@ -308,7 +314,7 @@ def main(args):
                     delend   -= dadj/2
 
                     mutseq.deletion(delstart,delend)
-                    logfile.write("\t".join(('del',chr,str(start),str(end),action,str(mutseq.length()),str(delstart),str(delend))) + "\n")
+                    logfile.write("\t".join(('del',chr,str(start),str(end),action,str(mutseq.length()),str(delstart),str(delend),str(dlen))) + "\n")
 
                 elif action == 'DUP':
                     dupstart = int(args.maxlibsize)
