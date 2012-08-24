@@ -193,7 +193,7 @@ def singleseqfa(file):
     seq = ""
     for line in f:
         if not re.search ('^>',line):
-            seq += line.strip()
+            seq += line.strip().upper()
     return seq
 
 
@@ -219,6 +219,17 @@ def main(args):
         end    = int(c[2])
         araw   = c[3:len(c)] # INV, DEL, INS seqfile.fa TSDlength, DUP
         actions = map(lambda x: x.strip(),' '.join(araw).split(','))
+
+        print "interval:",c
+        # modify start and end if interval is too long
+        maxctglen = int(args.maxctglen)
+        assert maxctglen > 3*int(args.maxlibsize) # maxctglen is too short
+        if end-start > maxctglen:
+            adj   = (end-start) - maxctglen
+            rndpt = random.randint(0,adj)
+            start = start + rndpt
+            end   = end - (adj-rndpt)
+            print "note: interval size too long, adjusted:",chr,start,end
 
         contigs = asmregion.asm(chr, start, end, args.bamFileName, reffile, int(args.kmersize), args.noref, args.recycle)
 
@@ -331,9 +342,10 @@ if __name__ == '__main__':
                         help='reference genome, fasta indexed with bwa index -a stdsw _and_ samtools faidx')
     parser.add_argument('-o', '--outbam', dest='outBamFile', required=True,
                         help='.bam file name for output')
-    parser.add_argument('-l', '--maxlibsize', dest='maxlibsize', default=600)
+    parser.add_argument('-l', '--maxlibsize', dest='maxlibsize', default=600, help="maximum fragment length of seq. library")
     parser.add_argument('-k', '--kmer', dest='kmersize', default=31, help="kmer size for assembly (default = 31)")
     parser.add_argument('-s', '--svfrac', dest='svfrac', default=1.0, help="allele fraction of variant (default = 1.0)")
+    parser.add_argument('--maxctglen', dest='maxctglen', default=32000, help="maximum contig length for assembly - can increase if velvet is compiled with LONGSEQUENCES")
     parser.add_argument('--nomut', action='store_true', default=False)
     parser.add_argument('--noremap', action='store_true', default=False)
     parser.add_argument('--noref', action='store_true', default=False)
