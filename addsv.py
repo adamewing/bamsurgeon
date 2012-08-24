@@ -264,7 +264,7 @@ def main(args):
                     insseqfile = a[1]
                     if not os.path.exists(insseqfile): # not a file... is it a sequence? (support indel ins.)
                         assert re.search('^[ATGCatgc]*$',insseqfile) # make sure it's a sequence
-                        insseq = insseqfile
+                        insseq = insseqfile.upper()
                         insseqfile = None
                     if len(a) > 2:
                         tsdlen = int(a[2])
