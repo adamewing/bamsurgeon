@@ -265,6 +265,7 @@ def main(args):
                     if not os.path.exists(insseqfile): # not a file... is it a sequence? (support indel ins.)
                         assert re.search('^[ATGCatgc]*$',insseqfile) # make sure it's a sequence
                         insseq = insseqfile
+                        insseqfile = None
                     if len(a) > 2:
                         tsdlen = int(a[2])
 
@@ -274,11 +275,11 @@ def main(args):
                     else:
                         ndups = 1
 
-                # for a 1 bp deletion, dsize would be 1.1
                 if action == 'DEL':
                     if len(a) > 1:
-                        dsize = float(a[1]) # support smaller deletion size
-                        if dsize > 1.0: # if DEL size is not a fraction, interpret as bp
+                        dsize = float(a[1])
+                        if dsize >= 1.0: # if DEL size is not a fraction, interpret as bp
+                            # since DEL 1 is default, if DEL 1 is specified, interpret as 1 bp deletion
                             dlen = int(dsize)
                             dsize = 1.0
                     else:
@@ -291,7 +292,7 @@ def main(args):
                         mutseq.insertion(mutseq.length()/2,singleseqfa(insseqfile),tsdlen)
                     else: # seq is input
                         mutseq.insertion(mutseq.length()/2,insseq,tsdlen)
-                    logfile.write("\t".join(('ins',chr,str(start),str(end),action,str(mutseq.length()),str(mutseq.length()/2),insseqfile,str(tsdlen))) + "\n")
+                    logfile.write("\t".join(('ins',chr,str(start),str(end),action,str(mutseq.length()),str(mutseq.length()/2),str(insseqfile),str(tsdlen))) + "\n")
 
                 elif action == 'INV':
                     invstart = int(args.maxlibsize)

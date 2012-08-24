@@ -41,7 +41,7 @@ class MutableSeq:
         inserts seq after position loc, adds taret site duplication (tsd) if tsdlen > 0
         """
         tsd = self.seq[loc:loc+tsdlen]
-        self.seq = self.seq[:loc] + tsd + seq + self.seq[loc+1:]
+        self.seq = self.seq[:loc] + tsd + seq + self.seq[loc:]
 
     def inversion(self, start, end):
         """
