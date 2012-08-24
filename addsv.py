@@ -256,7 +256,8 @@ def main(args):
                 insseqfile = None
                 tsdlen = 0  # target site duplication length
                 ndups = 0   # number of tandem dups
-                dsize = 0.0 # deletion size
+                dsize = 0.0 # deletion size fraction
+                dlen = 0
                 if action == 'INS':
                     assert len(a) > 1 # insertion syntax: INS <file.fa> [optional TSDlen]
                     insseqfile = a[1]
@@ -270,10 +271,12 @@ def main(args):
                     else:
                         ndups = 1
 
+                # for a 1 bp deletion, dsize would be 1.1
                 if action == 'DEL':
                     if len(a) > 1:
                         dsize = float(a[1]) # support smaller deletion size
-                        if dsize > 1.0:
+                        if dsize > 1.0: # if DEL size is not a fraction, interpret as bp
+                            dlen = int(dsize)
                             dsize = 1.0
                     else:
                         dsize = 1.0
@@ -293,7 +296,8 @@ def main(args):
                 elif action == 'DEL':
                     delstart = int(args.maxlibsize)
                     delend = mutseq.length() - delstart
-                    dlen = int((float(delend-delstart) * dsize)+0.5) # support smaller deletion
+                    if dlen == 0: # bp size not specified, delete fraction of contig
+                        dlen = int((float(delend-delstart) * dsize)+0.5) 
 
                     dadj = delend-delstart-dlen
                     if dadj < 0:
