@@ -354,12 +354,16 @@ if __name__ == '__main__':
     parser.add_argument('-o', '--outbam', dest='outBamFile', required=True,
                         help='.bam file name for output')
     parser.add_argument('-l', '--maxlibsize', dest='maxlibsize', default=600, help="maximum fragment length of seq. library")
-    parser.add_argument('-k', '--kmer', dest='kmersize', default=31, help="kmer size for assembly (default = 31)")
-    parser.add_argument('-s', '--svfrac', dest='svfrac', default=1.0, help="allele fraction of variant (default = 1.0)")
-    parser.add_argument('--maxctglen', dest='maxctglen', default=32000, help="maximum contig length for assembly - can increase if velvet is compiled with LONGSEQUENCES")
-    parser.add_argument('--nomut', action='store_true', default=False)
-    parser.add_argument('--noremap', action='store_true', default=False)
-    parser.add_argument('--noref', action='store_true', default=False)
+    parser.add_argument('-k', '--kmer', dest='kmersize', default=31, 
+                        help="kmer size for assembly (default = 31)")
+    parser.add_argument('-s', '--svfrac', dest='svfrac', default=1.0, 
+                        help="allele fraction of variant (default = 1.0)")
+    parser.add_argument('--maxctglen', dest='maxctglen', default=32000, 
+                        help="maximum contig length for assembly - can increase if velvet is compiled with LONGSEQUENCES")
+    parser.add_argument('--nomut', action='store_true', default=False, help="dry run")
+    parser.add_argument('--noremap', action='store_true', default=False, help="dry run")
+    parser.add_argument('--noref', action='store_true', default=False, 
+                        help="do not perform reference based assembly")
     parser.add_argument('--recycle', action='store_true', default=False)
     args = parser.parse_args()
     main(args)

@@ -122,7 +122,7 @@ def remap(bamfn, threads, bwaref):
     os.remove(samfn)
 
 def main(args):
-    bedfile = open(args.bedFileName, 'r')
+    bedfile = open(args.varFileName, 'r')
     bamfile = pysam.Samfile(args.bamFileName, 'rb')
     bammate = pysam.Samfile(args.bamFileName, 'rb') # use for mates to avoid iterator problems
     reffile = pysam.Fastafile(args.refFasta)
@@ -273,7 +273,7 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='adds SNVs to reads, outputs modified reads as .bam along with mates')
-    parser.add_argument('-b', '--bedfile', dest='bedFileName', required=True,
+    parser.add_argument('-v', '--varfile', dest='varFileName', required=True,
                         help='Target regions to try and add a SNV, as BED')
     parser.add_argument('-f', '--sambamfile', dest='bamFileName', required=True,
                         help='sam/bam file from which to obtain reads')
@@ -281,9 +281,12 @@ if __name__ == '__main__':
                         help='reference genome, fasta indexed with bwa index -a stdsw _and_ samtools faidx')
     parser.add_argument('-o', '--outbam', dest='outBamFile', required=True,
                         help='.bam file name for output')
-    parser.add_argument('-s', '--snpfrac', dest='snpfrac', default=1)
-    parser.add_argument('-m', '--mutfrac', dest='mutfrac', default=0.5)
-    parser.add_argument('-n', '--numsnvs', dest='numsnvs', default=0, help="maximum number of mutations to make")
-    parser.add_argument('--nomut', action='store_true', default=False)
+    parser.add_argument('-s', '--snpfrac', dest='snpfrac', default=1, 
+                        help='maximum allowable linked SNP MAF (for avoiding haplotypes) (default = 1)')
+    parser.add_argument('-m', '--mutfrac', dest='mutfrac', default=0.5, 
+                        help='allelic fraction at which to make SNVs (default = 0.5)')
+    parser.add_argument('-n', '--numsnvs', dest='numsnvs', default=0, 
+                        help="maximum number of mutations to make (default: entire input)")
+    parser.add_argument('--nomut', action='store_true', default=False, help="dry run")
     args = parser.parse_args()
     main(args)
