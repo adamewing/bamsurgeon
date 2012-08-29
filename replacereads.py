@@ -10,6 +10,11 @@ def main(args):
     donorbam  = pysam.Samfile(args.donorbam, 'rb')
     outputbam = pysam.Samfile(args.outputbam, 'wb', template=targetbam)
 
+    namechange = None
+
+    if args.namechange:
+        namechange = args.namechange
+
     # load reads from donorbam into dict 
     sys.stderr.write("loading donor reads into dictionary...\n")
     nr = 0
@@ -39,17 +44,27 @@ def main(args):
         extqname = ','.join((read.qname,pairname))
         if extqname in rdict: 
             if args.keepqual:
+                if namechange: # must set name _before_ setting quality (see pysam docs)
+                    rdict[extqname].qname = args.namechange + rdict[extqname].qname    
                 rdict[extqname].qual = read.qual
-            outputbam.write(rdict[extqname])
+            outputbam.write(rdict[extqname])  # write read from donor .bam
             used[extqname] = True
         else:
-            outputbam.write(read)
+            if namechange:
+                qual = read.qual # temp
+                read.qname = args.namechange + read.qname
+                read.qual = qual
+            outputbam.write(read) # write read from target .bam
 
     nadded = 0
     # dump the unused reads from the donor if requested with --all
     if args.all:
         for extqname in rdict.keys():
             if extqname not in used:
+                if namechange:
+                    qual = rdict[extqname].qual # temp
+                    rdict[extqname].qname = args.namechange + rdict[extqname].qname
+                    rdict[extqname].qual = qual
                 outputbam.write(rdict[extqname])
                 nadded += 1
         sys.stderr.write("added " + str(nadded) + " reads due to --all\n")
@@ -66,6 +81,7 @@ if __name__=='__main__':
                         help='.bam with reads to replace original bam')
     parser.add_argument('-o', '--outputbam', dest='outputbam', required=True)
     parser.add_argument('-i', '--ignoresize', dest='ignoresize', default=0, help="don't replace reads with reads having insert size > ignoresize")
+    parser.add_argument('-n', '--namechange', dest='namechange', default=None, help="change all read names by prepending string (passed as -n [string])")
     parser.add_argument('--all', action='store_true', default=False, help="append reads that don't match target .bam")
     parser.add_argument('--keepqual', action='store_true', default=False, help="keep original quality scores, replace read and mapping only")
     args = parser.parse_args()
