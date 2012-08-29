@@ -1,19 +1,45 @@
 #!/bin/env python
 
 import sys,pysam,argparse
+from random import randint
 
 # TODO: add readgroup mongering
 
-# fixes unmapped reads that are marked as 'reverse'
-def cleanup(read):
+def cleanup(read,RG):
+    '''
+    fixes unmapped reads that are marked as 'reverse'
+    fill in read group at random from existing RGs if 
+    RG tags are present in .bam header 
+    '''
     if read.is_unmapped and read.is_reverse:
         read.is_reverse = False
+
+    if RG:
+        hasRG = False
+        for tag in read.tags:
+            if tag[0] == 'RG':
+                hasRG = True
+
+        if not hasRG:
+            # add random read group from list in header
+            newRG = RG[randint(0,len(RG)-1)]
+            read.tags = read.tags + [("RG",newRG)]
     return read
+
+def getRGs(bam):
+    '''return list of RG IDs'''
+    RG = []
+    if 'RG' in bam.header:
+        for headRG in bam.header['RG']:
+            RG.append(headRG['ID'])
+    return RG
 
 def main(args):
     targetbam = pysam.Samfile(args.targetbam, 'rb')
     donorbam  = pysam.Samfile(args.donorbam, 'rb')
     outputbam = pysam.Samfile(args.outputbam, 'wb', template=targetbam)
+
+    RG = getRGs(targetbam) # read groups
 
     namechange = None
 
@@ -52,7 +78,7 @@ def main(args):
                 if namechange: # must set name _before_ setting quality (see pysam docs)
                     rdict[extqname].qname = args.namechange + rdict[extqname].qname    
                 rdict[extqname].qual = read.qual
-            rdict[extqname] = cleanup(rdict[extqname])
+            rdict[extqname] = cleanup(rdict[extqname],RG)
             outputbam.write(rdict[extqname])  # write read from donor .bam
             used[extqname] = True
         else:
@@ -60,7 +86,7 @@ def main(args):
                 qual = read.qual # temp
                 read.qname = args.namechange + read.qname
                 read.qual = qual
-            read = cleanup(read)
+            read = cleanup(read,RG)
             outputbam.write(read) # write read from target .bam
 
     nadded = 0
@@ -72,7 +98,7 @@ def main(args):
                     qual = rdict[extqname].qual # temp
                     rdict[extqname].qname = args.namechange + rdict[extqname].qname
                     rdict[extqname].qual = qual
-                rdict[extqname] = cleanup(rdict[extqname])
+                rdict[extqname] = cleanup(rdict[extqname],RG)
                 outputbam.write(rdict[extqname])
                 nadded += 1
         sys.stderr.write("added " + str(nadded) + " reads due to --all\n")
