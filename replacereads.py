@@ -3,7 +3,12 @@
 import sys,pysam,argparse
 
 # TODO: add readgroup mongering
-# TODO: fix unmapped orientation bug that makes picard's ValidateSam complain
+
+# fixes unmapped reads that are marked as 'reverse'
+def cleanup(read):
+    if read.is_unmapped and read.is_reverse:
+        read.is_reverse = False
+    return read
 
 def main(args):
     targetbam = pysam.Samfile(args.targetbam, 'rb')
@@ -47,6 +52,7 @@ def main(args):
                 if namechange: # must set name _before_ setting quality (see pysam docs)
                     rdict[extqname].qname = args.namechange + rdict[extqname].qname    
                 rdict[extqname].qual = read.qual
+            rdict[extqname] = cleanup(rdict[extqname])
             outputbam.write(rdict[extqname])  # write read from donor .bam
             used[extqname] = True
         else:
@@ -54,6 +60,7 @@ def main(args):
                 qual = read.qual # temp
                 read.qname = args.namechange + read.qname
                 read.qual = qual
+            read = cleanup(read)
             outputbam.write(read) # write read from target .bam
 
     nadded = 0
@@ -65,6 +72,7 @@ def main(args):
                     qual = rdict[extqname].qual # temp
                     rdict[extqname].qname = args.namechange + rdict[extqname].qname
                     rdict[extqname].qual = qual
+                rdict[extqname] = cleanup(rdict[extqname])
                 outputbam.write(rdict[extqname])
                 nadded += 1
         sys.stderr.write("added " + str(nadded) + " reads due to --all\n")
