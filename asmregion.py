@@ -165,23 +165,26 @@ def asm(chr, start, end, bamfilename, reffile, kmersize, noref=False, recycle=Fa
     for read in bamfile.fetch(chr,start,end):
         if not read.mate_is_unmapped and read.is_paired:
             # FIXME add try/except to prevent crash if mate doesn't exist
-            mate = matefile.mate(read)
-            readpairs[read.qname] = ReadPair(read,mate)
-            nreads += 1
-            if read.is_read1:
-                if read.is_reverse:
-                    rquals.append(read.qual[::-1])
-                    mquals.append(mate.qual)
+            try:
+                mate = matefile.mate(read)
+                readpairs[read.qname] = ReadPair(read,mate)
+                nreads += 1
+                if read.is_read1:
+                    if read.is_reverse:
+                        rquals.append(read.qual[::-1])
+                        mquals.append(mate.qual)
+                    else:
+                        rquals.append(read.qual)
+                        mquals.append(mate.qual[::-1])
                 else:
-                    rquals.append(read.qual)
-                    mquals.append(mate.qual[::-1])
-            else:
-                if read.is_reverse:
-                    rquals.append(mate.qual)
-                    mquals.append(read.qual[::-1])
-                else:
-                    rquals.append(mate.qual[::-1])
-                    mquals.append(read.qual)
+                    if read.is_reverse:
+                        rquals.append(mate.qual)
+                        mquals.append(read.qual[::-1])
+                    else:
+                        rquals.append(mate.qual[::-1])
+                        mquals.append(read.qual)
+            except ValueError:
+                sys.stderr.write("warning, cannot find mate for read marked paired: " + read.qname + "\n")
 
     sys.stderr.write("found " + str(nreads) + " reads in region.\n")
     refseq = None
