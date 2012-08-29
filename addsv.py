@@ -145,7 +145,10 @@ def fqReplaceList(fqfile,names,quals,svfrac):
             if len(names) > namenum:
                 newnames.append(names[namenum])
             else:
-                newnames.append(fqline.strip().lstrip('@').rstrip('/1').rstrip('/2'))
+                simname = fqline.strip().lstrip('@')
+                simname = re.sub('/1$','',simname)  #wgsim
+                simname = re.sub('/2$','',simname)  #wgsim
+                newnames.append(simname) 
             namenum += 1
             ln += 1
         elif ln == 1:
@@ -200,7 +203,6 @@ def singleseqfa(file):
 def main(args):
     varfile = open(args.varFileName, 'r')
     bamfile = pysam.Samfile(args.bamFileName, 'rb')
-    bammate = pysam.Samfile(args.bamFileName, 'rb') # use for mates to avoid iterator problems
     reffile = pysam.Fastafile(args.refFasta)
     logfile = open(args.outBamFile + ".log", 'w')
 
@@ -340,7 +342,6 @@ def main(args):
 
     varfile.close()
     bamfile.close()
-    bammate.close()
     logfile.close()
 
 if __name__ == '__main__':

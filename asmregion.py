@@ -164,6 +164,7 @@ def asm(chr, start, end, bamfilename, reffile, kmersize, noref=False, recycle=Fa
     mquals = []
     for read in bamfile.fetch(chr,start,end):
         if not read.mate_is_unmapped and read.is_paired:
+            # FIXME add try/except to prevent crash if mate doesn't exist
             mate = matefile.mate(read)
             readpairs[read.qname] = ReadPair(read,mate)
             nreads += 1

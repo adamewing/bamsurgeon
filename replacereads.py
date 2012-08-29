@@ -2,6 +2,9 @@
 
 import sys,pysam,argparse
 
+# TODO: add readgroup mongering
+# TODO: fix unmapped orientation bug that makes picard's ValidateSam complain
+
 def main(args):
     targetbam = pysam.Samfile(args.targetbam, 'rb')
     donorbam  = pysam.Samfile(args.donorbam, 'rb')
