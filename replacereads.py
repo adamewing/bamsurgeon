@@ -3,8 +3,6 @@
 import sys,pysam,argparse
 from random import randint
 
-# TODO: add readgroup mongering
-
 def cleanup(read,RG):
     '''
     fixes unmapped reads that are marked as 'reverse'
@@ -56,7 +54,10 @@ def main(args):
             pairname = 'S' # read is second in pair
         if not read.is_paired:
             pairname = 'U' # read is unpaired
-
+        if namechange:
+            qual = read.qual # temp
+            read.qname = args.namechange + read.qname # must set name _before_ setting quality (see pysam docs)
+            read.qual = qual
         extqname = ','.join((read.qname,pairname))
         rdict[extqname] = read
         nr += 1
@@ -71,21 +72,19 @@ def main(args):
             pairname = 'S' # read is second in pair
         if not read.is_paired:
             pairname = 'U' # read is unpaired
+        if namechange:
+            qual = read.qual # temp
+            read.qname = args.namechange + read.qname
+            read.qual = qual
 
         extqname = ','.join((read.qname,pairname))
         if extqname in rdict: 
             if args.keepqual:
-                if namechange: # must set name _before_ setting quality (see pysam docs)
-                    rdict[extqname].qname = args.namechange + rdict[extqname].qname    
                 rdict[extqname].qual = read.qual
             rdict[extqname] = cleanup(rdict[extqname],RG)
             outputbam.write(rdict[extqname])  # write read from donor .bam
             used[extqname] = True
         else:
-            if namechange:
-                qual = read.qual # temp
-                read.qname = args.namechange + read.qname
-                read.qual = qual
             read = cleanup(read,RG)
             outputbam.write(read) # write read from target .bam
 
@@ -94,10 +93,6 @@ def main(args):
     if args.all:
         for extqname in rdict.keys():
             if extqname not in used:
-                if namechange:
-                    qual = rdict[extqname].qual # temp
-                    rdict[extqname].qname = args.namechange + rdict[extqname].qname
-                    rdict[extqname].qual = qual
                 rdict[extqname] = cleanup(rdict[extqname],RG)
                 outputbam.write(rdict[extqname])
                 nadded += 1
