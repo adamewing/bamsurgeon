@@ -9,8 +9,12 @@ def cleanup(read,RG):
     fill in read group at random from existing RGs if 
     RG tags are present in .bam header 
     '''
+
+    # may need more testing
     if read.is_unmapped and read.is_reverse:
         read.is_reverse = False
+    if read.mate_is_unmapped and read.mate_is_reverse:
+        read.mate_is_reverse = False
 
     if RG:
         hasRG = False
@@ -109,7 +113,6 @@ if __name__=='__main__':
     parser.add_argument('-r', '--replacebam', dest='donorbam', required=True,
                         help='.bam with reads to replace original bam')
     parser.add_argument('-o', '--outputbam', dest='outputbam', required=True)
-    parser.add_argument('-i', '--ignoresize', dest='ignoresize', default=0, help="don't replace reads with reads having insert size > ignoresize")
     parser.add_argument('-n', '--namechange', dest='namechange', default=None, help="change all read names by prepending string (passed as -n [string])")
     parser.add_argument('--all', action='store_true', default=False, help="append reads that don't match target .bam")
     parser.add_argument('--keepqual', action='store_true', default=False, help="keep original quality scores, replace read and mapping only")
