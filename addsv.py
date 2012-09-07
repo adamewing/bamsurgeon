@@ -58,7 +58,7 @@ def remap(fq1, fq2, threads, bwaref, outbam):
     os.remove(fq1)
     os.remove(fq2)
 
-def runwgsim(contig,newseq,svfrac):
+def runwgsim(contig,newseq,svfrac,exclude):
     '''
     wrapper function for wgsim
     '''
@@ -118,20 +118,22 @@ def runwgsim(contig,newseq,svfrac):
 
     os.remove(fasta)
 
-    fqReplaceList(fq1,pairednames,contig.rquals,svfrac)
-    fqReplaceList(fq2,pairednames,contig.mquals,svfrac)
+    fqReplaceList(fq1,pairednames,contig.rquals,svfrac,exclude)
+    fqReplaceList(fq2,pairednames,contig.mquals,svfrac,exclude)
 
     return (fq1,fq2)
 
-def fqReplaceList(fqfile,names,quals,svfrac):
+def fqReplaceList(fqfile,names,quals,svfrac,exclude):
     '''
     Replace seq names in paired fastq files from a list until the list runs out
     (then stick with original names). fqfile = fastq file, names = list
     if there are more names in the list than needed assign the remainder a null
     sequence ("NNNNNNNNNNNN...N") so that they still replace a read in the original
-    .bam when reads are replaced with output 
+    .bam when reads are replaced with output
+
+    'exclude' is a filehandle
+
     '''
-    # FIXME
     fqin = open(fqfile,'r')
 
     ln = 0
@@ -178,7 +180,6 @@ def fqReplaceList(fqfile,names,quals,svfrac):
             sys.stderr.write("warning, used read name: " + newnames[i] + " in multiple pairs\n")
         usednames[newnames[i]] = True
         
-    # FIXME BAD
     # burn off excess
     nullseq  = 'N'*len(seqs[0])
     nullqual = '#'*len(seqs[0])
@@ -187,7 +188,7 @@ def fqReplaceList(fqfile,names,quals,svfrac):
             if random.uniform(0,1) < svfrac:
                 fqout.write("@" + name + "\n")
                 fqout.write(nullseq + "\n+\n" + nullqual + "\n")
-                
+                exclude.write(name + "\n")
 
     fqout.close()
 
@@ -206,6 +207,7 @@ def main(args):
     bamfile = pysam.Samfile(args.bamFileName, 'rb')
     reffile = pysam.Fastafile(args.refFasta)
     logfile = open(args.outBamFile + ".log", 'w')
+    exclude = open(args.exclfile, 'w')
 
     svfrac = float(args.svfrac)
 
@@ -332,7 +334,7 @@ def main(args):
                 print "AFTER:",mutseq
 
             # simulate reads
-            (fq1,fq2) = runwgsim(maxcontig,mutseq.seq,svfrac)
+            (fq1,fq2) = runwgsim(maxcontig,mutseq.seq,svfrac,exclude)
 
             # remap reads
             remap(fq1,fq2,4,args.refFasta,args.outBamFile)
@@ -340,7 +342,7 @@ def main(args):
         else:
             print "best contig too short to make mutation: ",bedline.strip()
 
-
+    exclude.close()
     varfile.close()
     bamfile.close()
     logfile.close()
@@ -360,6 +362,8 @@ if __name__ == '__main__':
                         help="kmer size for assembly (default = 31)")
     parser.add_argument('-s', '--svfrac', dest='svfrac', default=1.0, 
                         help="allele fraction of variant (default = 1.0)")
+    parser.add_argument('-x', '--excluded', dest='exclfile', default='excluded.txt',
+                        help="output excluded (e.g. from a deletion) read names to file (default=excluded.txt)")
     parser.add_argument('--maxctglen', dest='maxctglen', default=32000, 
                         help="maximum contig length for assembly - can increase if velvet is compiled with LONGSEQUENCES")
     parser.add_argument('--nomut', action='store_true', default=False, help="dry run")
