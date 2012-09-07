@@ -131,7 +131,7 @@ def fqReplaceList(fqfile,names,quals,svfrac):
     sequence ("NNNNNNNNNNNN...N") so that they still replace a read in the original
     .bam when reads are replaced with output 
     '''
-
+    # FIXME
     fqin = open(fqfile,'r')
 
     ln = 0
@@ -178,6 +178,7 @@ def fqReplaceList(fqfile,names,quals,svfrac):
             sys.stderr.write("warning, used read name: " + newnames[i] + " in multiple pairs\n")
         usednames[newnames[i]] = True
         
+    # FIXME BAD
     # burn off excess
     nullseq  = 'N'*len(seqs[0])
     nullqual = '#'*len(seqs[0])
