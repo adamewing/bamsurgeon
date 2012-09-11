@@ -89,22 +89,22 @@ def runwgsim(contig,newseq,svfrac,exclude):
         else:
             discard += 1
 
-    sys.stderr.write("paired : " + str(paired) + "\n" +
-                     "single : " + str(single) + "\n" +
-                     "discard: " + str(discard) + "\n" +
-                     "total  : " + str(totalreads) + "\n")
+    print "paired : " + str(paired)
+    print "single : " + str(single)
+    print "discard: " + str(discard)
+    print "total  : " + str(totalreads)
 
     # adjustment factor for length of new contig vs. old contig
     lenfrac = float(len(newseq))/float(len(contig.seq))
 
-    sys.stderr.write("old ctg len: " + str(len(contig.seq)) + "\n" +
-                     "new ctg len: " + str(len(newseq)) + "\n" +
-                     "adj. factor: " + str(lenfrac) + "\n")
+    print "old ctg len: " + str(len(contig.seq))
+    print "new ctg len: " + str(len(newseq))
+    print "adj. factor: " + str(lenfrac)
 
     # number of paried reads to simulate
     nsimreads = int((paired + (single/2)) * svfrac * lenfrac)
 
-    sys.stderr.write("num. sim. reads: " + str(nsimreads) + "\n")
+    print "num. sim. reads: " + str(nsimreads) 
 
     # length of quality score comes from original read, used here to set length of read
     maxqlen = 0
@@ -177,7 +177,7 @@ def fqReplaceList(fqfile,names,quals,svfrac,exclude):
         fqout.write("@" + newnames[i] + "\n")
         fqout.write(seqs[i] + "\n+\n" + quals[i] + "\n")
         if newnames[i] in usednames:
-            sys.stderr.write("warning, used read name: " + newnames[i] + " in multiple pairs\n")
+            print "warning, used read name: " + newnames[i] + " in multiple pairs"
         usednames[newnames[i]] = True
         
     # burn off excess
@@ -214,10 +214,15 @@ def main(args):
     if os.path.isfile(args.outBamFile):
         raise ValueError(args.outBamFile + " exists, delete or rename before running.\n")
 
+    nmuts = 0
+
     for bedline in varfile:
         if re.search('^#',bedline):
             continue
-    
+   
+        if args.maxmuts and nmuts >= int(args.maxmuts):
+            break
+ 
         c = bedline.strip().split()
         chr    = c[0]
         start  = int(c[1])
@@ -250,6 +255,9 @@ def main(args):
         if maxlen > 3*int(args.maxlibsize):
             # make mutation in the largest contig
             mutseq = mutableseq.MutableSeq(maxcontig.seq)
+
+            # if we're this far along, we're making a mutation
+            nmuts += 1 
 
             # support for multiple mutations
             for actionstr in actions:
@@ -342,6 +350,8 @@ def main(args):
         else:
             print "best contig too short to make mutation: ",bedline.strip()
 
+    print "addsv.py finished, made",nmuts,"mutations"
+
     exclude.close()
     varfile.close()
     bamfile.close()
@@ -366,6 +376,8 @@ if __name__ == '__main__':
                         help="output excluded (e.g. from a deletion) read names to file (default=excluded.txt)")
     parser.add_argument('--maxctglen', dest='maxctglen', default=32000, 
                         help="maximum contig length for assembly - can increase if velvet is compiled with LONGSEQUENCES")
+    parser.add_argument('-n', dest='maxmuts', default=None,
+                        help="maximum number of mutations to make")
     parser.add_argument('--nomut', action='store_true', default=False, help="dry run")
     parser.add_argument('--noremap', action='store_true', default=False, help="dry run")
     parser.add_argument('--noref', action='store_true', default=False, 
