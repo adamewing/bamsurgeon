@@ -132,7 +132,7 @@ def main(args):
 
     log = open(args.outBamFile + ".log",'w')
 
-    snpfrac = float(args.snpfrac)
+    snvfrac = float(args.snvfrac)
 
     for bedline in bedfile:
         if len(tmpbams) < int(args.numsnvs) or int(args.numsnvs) == 0:
@@ -201,7 +201,7 @@ def main(args):
                             frac = 0.0
                         if frac > maxfrac:
                             maxfrac = frac
-                        if frac > snpfrac:
+                        if frac > snvfrac:
                             hasSNP = True
                     else:
                         hasSNP = True
@@ -255,7 +255,7 @@ def main(args):
                 # qc cutoff for final snv depth 
                 if avgoutcover > 0 and avgincover > 0 and avgoutcover/avgincover >= 0.9:
                     tmpbams.append(tmpoutbamname)
-                    log.write("\t".join(("snp",bedline.strip(),str(gmutpos),mutstr,str(avgoutcover),str(avgoutcover),str(snvfrac),str(maxfrac)))+"\n")
+                    log.write("\t".join(("snv",bedline.strip(),str(gmutpos),mutstr,str(avgoutcover),str(avgoutcover),str(snvfrac),str(maxfrac)))+"\n")
 
             outbam.close()
 
@@ -281,7 +281,7 @@ if __name__ == '__main__':
                         help='reference genome, fasta indexed with bwa index -a stdsw _and_ samtools faidx')
     parser.add_argument('-o', '--outbam', dest='outBamFile', required=True,
                         help='.bam file name for output')
-    parser.add_argument('-s', '--snpfrac', dest='snpfrac', default=1, 
+    parser.add_argument('-s', '--snvfrac', dest='snvfrac', default=1, 
                         help='maximum allowable linked SNP MAF (for avoiding haplotypes) (default = 1)')
     parser.add_argument('-m', '--mutfrac', dest='mutfrac', default=0.5, 
                         help='allelic fraction at which to make SNVs (default = 0.5)')
