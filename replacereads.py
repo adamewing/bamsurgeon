@@ -92,7 +92,13 @@ def main(args):
     excount = 0
     recount = 0 # number of replaced reads
     used = {}
+    prog = 0
     for read in targetbam.fetch(until_eof=True):
+
+        prog += 1
+        if args.progress and prog % 10000000 == 0:
+            sys.stderr.write("processed " + str(prog) + " reads.\n")
+
         if read.qname not in exclude:
             pairname = 'F' # read is first in pair
             if read.is_read2:
@@ -150,5 +156,7 @@ if __name__=='__main__':
                         help="append reads that don't match target .bam")
     parser.add_argument('--keepqual', action='store_true', default=False, 
                         help="keep original quality scores, replace read and mapping only")
+    parser.add_argument('--progress', action='store_true', default=False,
+                        help="output progress every 10M reads")
     args = parser.parse_args()
     main(args)
