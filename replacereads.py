@@ -66,25 +66,28 @@ def main(args):
     nr = 0
     rdict = {}
     excount = 0 # number of excluded reads
+    nullcount = 0 # number of null reads
     for read in donorbam.fetch(until_eof=True):
-        if read.qname not in exclude:
-            pairname = 'F' # read is first in pair
-            if read.is_read2:
-                pairname = 'S' # read is second in pair
-            if not read.is_paired:
-                pairname = 'U' # read is unpaired
-            if namechange:
-                qual = read.qual # temp
-                read.qname = args.namechange + read.qname # must set name _before_ setting quality (see pysam docs)
-                read.qual = qual
-            extqname = ','.join((read.qname,pairname))
-            rdict[extqname] = read
-            nr += 1
-        else:
-            excount += 1 
+        if read.seq: # sanity check - don't include null reads
+            if read.qname not in exclude:
+                pairname = 'F' # read is first in pair
+                if read.is_read2:
+                    pairname = 'S' # read is second in pair
+                if not read.is_paired:
+                    pairname = 'U' # read is unpaired
+                if namechange:
+                    qual = read.qual # temp
+                    read.qname = args.namechange + read.qname # must set name _before_ setting quality (see pysam docs)
+                    read.qual = qual
+                extqname = ','.join((read.qname,pairname))
+                rdict[extqname] = read
+                nr += 1
+            else: # excluded
+                excount += 1
+        else: # no seq!
+            nullcount += 1
 
-    sys.stderr.write("loaded " + str(nr) + " reads, (" + str(excount) + " excluded) reading " + args.targetbam + "...\n")
-
+    sys.stderr.write("loaded " + str(nr) + " reads, (" + str(excount) + " excluded, " + str(nullcount) + " null-->ignored) reading " + args.targetbam + "...\n")
 
     excount = 0
     recount = 0 # number of replaced reads
