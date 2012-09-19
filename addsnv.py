@@ -14,13 +14,33 @@ def minorbase(basepile):
     else:
         return c.most_common()[0]
 
-def mut(base):
-    """change base to something different"""
+def mut(base,det=False):
+    """
+    change base to something different
+    if 'det' (deterministic) is true, mutations will be made in a predictable pattern:
+    A-->G, G-->A, T-->C, C-->T (transitions)
+    """
+
     bases = ('A','T','C','G')
-    mut = base
-    while mut == base:
-        mut = bases[int(random.uniform(0,4))]
-    return mut
+    base = base.upper()
+    if base not in bases:
+        raise ValueError("base passed to mut(): " + str(base) + " not one of (A,T,C,G)")
+
+    if det:
+        if base == 'A':
+            return 'T'
+        elif base == 'T':
+            return 'A'
+        elif base == 'G':
+            return 'C'
+        elif base == 'C':
+            return 'G'
+
+    else:
+        mut = base
+        while mut == base:
+            mut = bases[int(random.uniform(0,4))]
+        return mut
 
 def countReadCoverage(bam,chrom,start,end,strand=None):
     """
@@ -143,7 +163,7 @@ def main(args):
 
             gmutpos = int(random.uniform(start,end+1)) # position of mutation in genome
             refbase = reffile.fetch(chrom,gmutpos-1,gmutpos)
-            mutbase = mut(refbase)
+            mutbase = mut(refbase,args.det)
             mutstr = refbase + "-->" + mutbase
 
             #log.write("\t".join((bedline.strip(),str(gmutpos),mutstr))+"\n") # debug
@@ -288,5 +308,6 @@ if __name__ == '__main__':
     parser.add_argument('-n', '--numsnvs', dest='numsnvs', default=0, 
                         help="maximum number of mutations to make (default: entire input)")
     parser.add_argument('--nomut', action='store_true', default=False, help="dry run")
+    parser.add_argument('--det', action='store_true', default=False, help="deterministic base changes: make transitions only")
     args = parser.parse_args()
     main(args)
