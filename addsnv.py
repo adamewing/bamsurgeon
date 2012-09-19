@@ -202,7 +202,11 @@ def main(args):
                                 mutbases[pread.qpos-1] = mutbase
                                 mutread = ''.join(mutbases)
                                 mutreads[extqname] = mutread
-                                mate = bammate.mate(pread.alignment)
+                                mate = None
+                                try:
+                                    mate = bammate.mate(pread.alignment)
+                                except:
+                                    print "warning: no mate for",pread.alignment.qname
                                 mutmates[extqname] = mate
                                 log.write(" ".join(('read',extqname,mutread,"\n")))
                             else:
@@ -254,8 +258,9 @@ def main(args):
                 if not hasSNP:
                     wrote += 1
                     outbam.write(read)
-                    outbam.write(mutmates[extqname])
-            print "wrote: ",str(wrote),nmut
+                    if mutmates[extqname]:
+                        outbam.write(mutmates[extqname])
+            print "wrote: ",wrote,"mutated:",nmut
 
             if not hasSNP:
                 outbam.close()
