@@ -255,14 +255,14 @@ def main(args):
                         read.seq = mutreads[extqname] # make mutation
                         read.qual = qual
                         nmut += 1
-                if not hasSNP:
+                if not hasSNP or args.force:
                     wrote += 1
                     outbam.write(read)
                     if mutmates[extqname]:
                         outbam.write(mutmates[extqname])
             print "wrote: ",wrote,"mutated:",nmut
 
-            if not hasSNP:
+            if not hasSNP or args.force:
                 outbam.close()
                 remap(tmpoutbamname, 4, args.refFasta)
 
@@ -278,7 +278,7 @@ def main(args):
                     snvfrac = float(nmut)/float(wrote)
 
                 # qc cutoff for final snv depth 
-                if avgoutcover > 0 and avgincover > 0 and avgoutcover/avgincover >= 0.9:
+                if (avgoutcover > 0 and avgincover > 0 and avgoutcover/avgincover >= 0.9) or args.force:
                     tmpbams.append(tmpoutbamname)
                     log.write("\t".join(("snv",bedline.strip(),str(gmutpos),mutstr,str(avgoutcover),str(avgoutcover),str(snvfrac),str(maxfrac)))+"\n")
 
@@ -314,5 +314,6 @@ if __name__ == '__main__':
                         help="maximum number of mutations to make (default: entire input)")
     parser.add_argument('--nomut', action='store_true', default=False, help="dry run")
     parser.add_argument('--det', action='store_true', default=False, help="deterministic base changes: make transitions only")
+    parser.add_argument('--force', action='store_true', default=False, help="force mutation to happen regardless of nearby SNP or low coverage")
     args = parser.parse_args()
     main(args)
