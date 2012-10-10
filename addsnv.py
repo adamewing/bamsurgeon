@@ -3,11 +3,13 @@
 import sys, pysam, argparse, collections, random, subprocess, os
 
 def majorbase(basepile):
-    """returns tuple: (major base, count)"""
+    """returns tuple: (major base, count)
+    """
     return collections.Counter(basepile).most_common()[0]
 
 def minorbase(basepile):
-    """returns tuple: (minor base, count)"""
+    """returns tuple: (minor base, count)
+    """
     c = collections.Counter(basepile)
     if len(list(c.elements())) > 1:
         return c.most_common(2)[-1]
@@ -15,10 +17,9 @@ def minorbase(basepile):
         return c.most_common()[0]
 
 def mut(base,det=False):
-    """
-    change base to something different
-    if 'det' (deterministic) is true, mutations will be made in a predictable pattern:
-    A-->G, G-->A, T-->C, C-->T (transitions)
+    """ change base to something different
+        if 'det' (deterministic) is true, mutations will be made in a predictable pattern:
+        A-->G, G-->A, T-->C, C-->T (transitions)
     """
 
     bases = ('A','T','C','G')
@@ -43,8 +44,7 @@ def mut(base,det=False):
         return mut
 
 def countReadCoverage(bam,chrom,start,end,strand=None):
-    """
-    calculate coverage of aligned reads over region
+    """ calculate coverage of aligned reads over region
     """
 
     coverage = []
@@ -75,6 +75,8 @@ def countReadCoverage(bam,chrom,start,end,strand=None):
 
 
 def countBaseAtPos(bamfile,chrom,pos):
+    """ return list of bases at position chrom,pos
+    """
     locstr = chrom + ":" + str(pos) + "-" + str(pos)
     args = ['samtools','mpileup',bamfile,'-r',locstr]
 
@@ -97,6 +99,8 @@ def countBaseAtPos(bamfile,chrom,pos):
     return bases
 
 def mergebams(bamlist,outbamfn):
+    """ call samtools to merge two .bams
+    """
     args = ['samtools','merge','-f',outbamfn] + bamlist
     print "merging, cmd: ",args
     subprocess.call(args)
@@ -106,6 +110,8 @@ def mergebams(bamlist,outbamfn):
         os.remove(bamfile + '.bai')
 
 def remap(bamfn, threads, bwaref):
+    """ call bwa/samtools to remap .bam
+    """
     sai1fn = bamfn + ".1.sai"
     sai2fn = bamfn + ".2.sai"
     samfn  = bamfn + ".sam"
@@ -142,6 +148,8 @@ def remap(bamfn, threads, bwaref):
     os.remove(samfn)
 
 def main(args):
+    """ needs refactoring
+    """
     bedfile = open(args.varFileName, 'r')
     bamfile = pysam.Samfile(args.bamFileName, 'rb')
     bammate = pysam.Samfile(args.bamFileName, 'rb') # use for mates to avoid iterator problems
@@ -165,8 +173,6 @@ def main(args):
             refbase = reffile.fetch(chrom,gmutpos-1,gmutpos)
             mutbase = mut(refbase,args.det)
             mutstr = refbase + "-->" + mutbase
-
-            #log.write("\t".join((bedline.strip(),str(gmutpos),mutstr))+"\n") # debug
 
             # keep a list of reads to modify - use hash to keep unique since each
             # read will be visited as many times as it has bases covering the region
@@ -229,8 +235,6 @@ def main(args):
                             hasSNP = True
                     else:
                         hasSNP = True
-                        #outlog = " ".join(('--',refbase,str(basepile),str(pcol.pos),str(majb),str(minb),str(hasSNP),str(frac))) #debug
-                        #log.write(outlog + "\n")
 
             # pick reads to change
             readlist = []
@@ -248,8 +252,6 @@ def main(args):
             # change reads from .bam to mutated sequences
             for extqname,read in outreads.iteritems():
                 if read.seq != mutreads[extqname]:
-                    #mutprob = random.uniform(0,1) # choose reads to mutate at random
-                    #if not args.nomut and mutprob < float(args.mutfrac):
                     if not args.nomut and extqname in readlist:
                         qual = read.qual # changing seq resets qual (see pysam API docs)
                         read.seq = mutreads[extqname] # make mutation

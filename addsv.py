@@ -9,7 +9,8 @@ import argparse
 import pysam
 
 def remap(fq1, fq2, threads, bwaref, outbam):
-
+    """ call bwa/samtools to remap .bam and merge with existing .bam
+    """
     basefn = "bwatmp" + str(random.random())
     sai1fn = basefn + ".1.sai"
     sai2fn = basefn + ".2.sai"
@@ -59,8 +60,7 @@ def remap(fq1, fq2, threads, bwaref, outbam):
     os.remove(fq2)
 
 def runwgsim(contig,newseq,svfrac,exclude):
-    '''
-    wrapper function for wgsim
+    ''' wrapper function for wgsim
     '''
     namecount = collections.Counter(contig.reads.reads)
 
@@ -124,7 +124,7 @@ def runwgsim(contig,newseq,svfrac,exclude):
     return (fq1,fq2)
 
 def fqReplaceList(fqfile,names,quals,svfrac,exclude):
-    '''
+    """
     Replace seq names in paired fastq files from a list until the list runs out
     (then stick with original names). fqfile = fastq file, names = list
     if there are more names in the list than needed assign the remainder a null
@@ -133,7 +133,7 @@ def fqReplaceList(fqfile,names,quals,svfrac,exclude):
 
     'exclude' is a filehandle
 
-    '''
+    """
     fqin = open(fqfile,'r')
 
     ln = 0
@@ -203,6 +203,8 @@ def singleseqfa(file):
 
 
 def main(args):
+    """ needs refactoring
+    """
     varfile = open(args.varFileName, 'r')
     bamfile = pysam.Samfile(args.bamFileName, 'rb')
     reffile = pysam.Fastafile(args.refFasta)
