@@ -1,4 +1,4 @@
-#!/bin/env python
+#!/usr/bin/env python
 
 import sys,re
 
@@ -104,9 +104,10 @@ if __name__ == '__main__':
     '''
     This is here for testing/debugging
     '''
-    amosfile = sys.argv[1].strip() + "/velvet_asm.afg"
-    seqfile  = sys.argv[1].strip() + "/Sequences"
-    inputseqs = InputSeqs(seqfile)
-    contigmap = contigreadmap(amosfile,inputseqs)
-    for eid,contig in contigmap.iteritems():
-        contig.infodump()
+    if len(sys.argv) == 2:
+        amosfile = sys.argv[1].strip() + "/velvet_asm.afg"
+        seqfile  = sys.argv[1].strip() + "/Sequences"
+        inputseqs = InputSeqs(seqfile)
+        contigmap = contigreadmap(amosfile,inputseqs)
+        for eid,contig in contigmap.iteritems():
+            contig.infodump()

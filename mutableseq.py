@@ -1,4 +1,4 @@
-#!/bin/env python
+#!i/usr/bin/env python
 
 '''
 Methods for making mutations in a sequence
