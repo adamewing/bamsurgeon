@@ -2,11 +2,12 @@
 
 import re, os, sys, random
 import subprocess
-import collections
 import asmregion
 import mutableseq
 import argparse
 import pysam
+import replacereads
+from collections import Counter
 
 def remap(fq1, fq2, threads, bwaref, outbam):
     """ call bwa/samtools to remap .bam and merge with existing .bam
@@ -62,7 +63,7 @@ def remap(fq1, fq2, threads, bwaref, outbam):
 def runwgsim(contig,newseq,svfrac,exclude):
     ''' wrapper function for wgsim
     '''
-    namecount = collections.Counter(contig.reads.reads)
+    namecount = Counter(contig.reads.reads)
 
     basefn = "wgsimtmp" + str(random.random())
     fasta = basefn + ".fasta"
@@ -201,6 +202,18 @@ def singleseqfa(file):
             seq += line.strip().upper()
     return seq
 
+def replace(origbamfile, mutbamfile, outbamfile, excludefile):
+    ''' open .bam file and call replacereads
+    '''
+    origbam = pysam.Samfile(origbamfile, 'rb')
+    mutbam  = pysam.Samfile(mutbamfile, 'rb')
+    outbam  = pysam.Samfile(outbamfile, 'wb', template=origbam)
+
+    replacereads.replaceReads(origbam, mutbam, outbam, excludefile=excludefile, allreads=True)
+
+    origbam.close()
+    mutbam.close()
+    outbam.close()
 
 def main(args):
     """ needs refactoring
@@ -211,10 +224,10 @@ def main(args):
     logfile = open(args.outBamFile + ".log", 'w')
     exclude = open(args.exclfile, 'w')
 
-    svfrac = float(args.svfrac)
+    # temporary file to hold mutated reads
+    outbam_mutsfile = "tmp." + str(random.random()) + ".muts.bam"
 
-    if os.path.isfile(args.outBamFile):
-        raise ValueError(args.outBamFile + " exists, delete or rename before running.\n")
+    svfrac = float(args.svfrac)
 
     nmuts = 0
 
@@ -344,10 +357,10 @@ def main(args):
                 print "AFTER:",mutseq
 
             # simulate reads
-            (fq1,fq2) = runwgsim(maxcontig,mutseq.seq,svfrac,exclude)
+            (fq1, fq2) = runwgsim(maxcontig, mutseq.seq, svfrac, exclude)
 
             # remap reads
-            remap(fq1,fq2,4,args.refFasta,args.outBamFile)
+            remap(fq1, fq2, 4, args.refFasta, outbam_mutsfile)
 
         else:
             print "best contig too short to make mutation: ",bedline.strip()
@@ -358,6 +371,12 @@ def main(args):
     varfile.close()
     bamfile.close()
     logfile.close()
+
+    print "merging mutations into", args.bamFileName, "-->", args.outBamFile
+    replace(args.bamFileName, outbam_mutsfile, args.outBamFile, args.exclfile)
+
+    # cleanup
+    os.remove(outbam_mutsfile)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='adds SNVs to reads, outputs modified reads as .bam along with mates')
