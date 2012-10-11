@@ -352,7 +352,7 @@ def main(args):
         else:
             print "best contig too short to make mutation: ",bedline.strip()
 
-    print "addsv.py finished, made",nmuts,"mutations"
+    print "addsv.py finished, made", nmuts, "mutations"
 
     exclude.close()
     varfile.close()

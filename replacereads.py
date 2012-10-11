@@ -39,27 +39,24 @@ def getRGs(bam):
 def getExcludedReads(file):
     '''read list of excluded reads into a dictionary'''
     ex = {}
-    f = open(args.exclfile,'r')
+    f = open(file,'r')
     for line in f:
         line = line.strip()
         ex[line] = True
     f.close()
     return ex
 
-def main(args):
-    targetbam = pysam.Samfile(args.targetbam, 'rb')
-    donorbam  = pysam.Samfile(args.donorbam, 'rb')
-    outputbam = pysam.Samfile(args.outputbam, 'wb', template=targetbam)
-
+#replaceReads(targetbam, donorbam, outputbam, args.namechange, args.exclfile, args.all, args.keepqual, args.progress)
+def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=None, allreads=False, keepqual=False, progress=False):
+    ''' targetbam, donorbam, and outputbam are pysam.Samfile objects
+        outputbam must be writeable and use targetbam as template
+        read names in excludefile will not appear in final output
+    '''
     RG = getRGs(targetbam) # read groups
 
     exclude = {}
-    if args.exclfile:
-        exclude = getExcludedReads(args.exclfile)
-            
-    namechange = None
-    if args.namechange:
-        namechange = args.namechange
+    if excludefile:
+        exclude = getExcludedReads(excludefile)
 
     # load reads from donorbam into dict 
     sys.stderr.write("loading donor reads into dictionary...\n")
@@ -75,9 +72,9 @@ def main(args):
                     pairname = 'S' # read is second in pair
                 if not read.is_paired:
                     pairname = 'U' # read is unpaired
-                if namechange:
+                if nameprefix:
                     qual = read.qual # temp
-                    read.qname = args.namechange + read.qname # must set name _before_ setting quality (see pysam docs)
+                    read.qname = nameprefix + read.qname # must set name _before_ setting quality (see pysam docs)
                     read.qual = qual
                 extqname = ','.join((read.qname,pairname))
                 rdict[extqname] = read
@@ -87,7 +84,7 @@ def main(args):
         else: # no seq!
             nullcount += 1
 
-    sys.stderr.write("loaded " + str(nr) + " reads, (" + str(excount) + " excluded, " + str(nullcount) + " null-->ignored) reading " + args.targetbam + "...\n")
+    sys.stderr.write("loaded " + str(nr) + " reads, (" + str(excount) + " excluded, " + str(nullcount) + " null-->ignored)\n")
 
     excount = 0
     recount = 0 # number of replaced reads
@@ -96,7 +93,7 @@ def main(args):
     for read in targetbam.fetch(until_eof=True):
 
         prog += 1
-        if args.progress and prog % 10000000 == 0:
+        if progress and prog % 10000000 == 0:
             sys.stderr.write("processed " + str(prog) + " reads.\n")
 
         if read.qname not in exclude:
@@ -105,14 +102,14 @@ def main(args):
                 pairname = 'S' # read is second in pair
             if not read.is_paired:
                 pairname = 'U' # read is unpaired
-            if namechange:
+            if nameprefix:
                 qual = read.qual # temp
-                read.qname = args.namechange + read.qname
+                read.qname = nameprefix + read.qname
                 read.qual = qual
 
             extqname = ','.join((read.qname,pairname))
             if extqname in rdict: # replace read
-                if args.keepqual:
+                if keepqual:
                     rdict[extqname].qual = read.qual
                 rdict[extqname] = cleanup(rdict[extqname],RG)
                 outputbam.write(rdict[extqname])  # write read from donor .bam
@@ -128,13 +125,20 @@ def main(args):
 
     nadded = 0
     # dump the unused reads from the donor if requested with --all
-    if args.all:
+    if allreads:
         for extqname in rdict.keys():
             if extqname not in used and extqname not in exclude:
                 rdict[extqname] = cleanup(rdict[extqname],RG)
                 outputbam.write(rdict[extqname])
                 nadded += 1
         sys.stderr.write("added " + str(nadded) + " reads due to --all\n")
+
+def main(args):
+    targetbam = pysam.Samfile(args.targetbam, 'rb')
+    donorbam  = pysam.Samfile(args.donorbam, 'rb')
+    outputbam = pysam.Samfile(args.outputbam, 'wb', template=targetbam)
+
+    replaceReads(targetbam, donorbam, outputbam, args.namechange, args.exclfile, args.all, args.keepqual, args.progress)
 
     targetbam.close()
     donorbam.close()

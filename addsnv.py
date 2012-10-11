@@ -1,16 +1,23 @@
 #!/usr/bin/env python
 
-import sys, pysam, argparse, collections, random, subprocess, os
+import sys
+import pysam
+import argparse
+import random
+import subprocess
+import os
+import replacereads
+from collections import Counter
 
 def majorbase(basepile):
     """returns tuple: (major base, count)
     """
-    return collections.Counter(basepile).most_common()[0]
+    return Counter(basepile).most_common()[0]
 
 def minorbase(basepile):
     """returns tuple: (minor base, count)
     """
-    c = collections.Counter(basepile)
+    c = Counter(basepile)
     if len(list(c.elements())) > 1:
         return c.most_common(2)[-1]
     else:
@@ -147,6 +154,19 @@ def remap(bamfn, threads, bwaref):
     os.remove(sai2fn)
     os.remove(samfn)
 
+def replace(origbamfile, mutbamfile, outbamfile):
+    ''' open .bam file and call replacereads
+    '''
+    origbam = pysam.Samfile(origbamfile, 'rb')
+    mutbam  = pysam.Samfile(mutbamfile, 'rb')
+    outbam  = pysam.Samfile(outbamfile, 'wb', template=origbam)
+
+    replacereads.replaceReads(origbam, mutbam, outbam, keepqual=True)
+
+    origbam.close()
+    mutbam.close()
+    outbam.close()
+
 def main(args):
     """ needs refactoring
     """
@@ -154,8 +174,11 @@ def main(args):
     bamfile = pysam.Samfile(args.bamFileName, 'rb')
     bammate = pysam.Samfile(args.bamFileName, 'rb') # use for mates to avoid iterator problems
     reffile = pysam.Fastafile(args.refFasta)
-    outbam  = pysam.Samfile(args.outBamFile, 'wb', template=bamfile)
-    outbam.close()
+
+    # make a temporary file to hold mutated reads
+    outbam_mutsfile = "tmp." + str(random.random()) + ".muts.bam"
+    outbam_muts = pysam.Samfile(outbam_mutsfile, 'wb', template=bamfile)
+    outbam_muts.close()
     tmpbams = []
 
     log = open(args.outBamFile + ".log",'w')
@@ -183,7 +206,7 @@ def main(args):
             hasSNP = False
             tmpoutbamname = "tmpbam" + str(random.random()) + ".bam"
             print "creating tmp bam: ",tmpoutbamname #DEBUG
-            outbam = pysam.Samfile(tmpoutbamname, 'wb', template=bamfile)
+            outbam_muts = pysam.Samfile(tmpoutbamname, 'wb', template=bamfile)
             maxfrac = 0.0
 
             for pcol in bamfile.pileup(reference=chrom,start=gmutpos,end=gmutpos+1):
@@ -259,19 +282,19 @@ def main(args):
                         nmut += 1
                 if not hasSNP or args.force:
                     wrote += 1
-                    outbam.write(read)
+                    outbam_muts.write(read)
                     if mutmates[extqname]:
-                        outbam.write(mutmates[extqname])
+                        outbam_muts.write(mutmates[extqname])
             print "wrote: ",wrote,"mutated:",nmut
 
             if not hasSNP or args.force:
-                outbam.close()
+                outbam_muts.close()
                 remap(tmpoutbamname, 4, args.refFasta)
 
-                outbam = pysam.Samfile(tmpoutbamname,'rb')
+                outbam_muts = pysam.Samfile(tmpoutbamname,'rb')
                 coverwindow = 1
                 incover  = countReadCoverage(bamfile,chrom,gmutpos-coverwindow,gmutpos+coverwindow)
-                outcover = countReadCoverage(outbam,chrom,gmutpos-coverwindow,gmutpos+coverwindow)
+                outcover = countReadCoverage(outbam_muts,chrom,gmutpos-coverwindow,gmutpos+coverwindow)
 
                 avgincover  = float(sum(incover))/float(len(incover)) 
                 avgoutcover = float(sum(outcover))/float(len(outcover))
@@ -284,19 +307,29 @@ def main(args):
                     tmpbams.append(tmpoutbamname)
                     log.write("\t".join(("snv",bedline.strip(),str(gmutpos),mutstr,str(avgoutcover),str(avgoutcover),str(snvfrac),str(maxfrac)))+"\n")
 
-            outbam.close()
+            outbam_muts.close()
 
     # merge tmp bams
     if len(tmpbams) == 1:
-        os.rename(tmpbams[0],args.outBamFile)
+        os.rename(tmpbams[0],outbam_mutsfile)
     elif len(tmpbams) > 1:
-        mergebams(tmpbams,args.outBamFile)
+        mergebams(tmpbams,outbam_mutsfile)
+
+    # cleanup
+    for bam in tmpbams:
+        if os.path.exists(bam):
+            os.remove(bam)
 
     bedfile.close()
     bamfile.close()
     bammate.close()
     log.close()
 
+    print "done making mutations, merging mutations into", args.bamFileName, "-->", args.outBamFile
+    replace(args.bamFileName, outbam_mutsfile, args.outBamFile)
+
+    #cleanup
+    os.remove(outbam_mutsfile)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='adds SNVs to reads, outputs modified reads as .bam along with mates')
