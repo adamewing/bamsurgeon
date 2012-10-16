@@ -345,7 +345,7 @@ if __name__ == '__main__':
                         help='maximum allowable linked SNP MAF (for avoiding haplotypes) (default = 1)')
     parser.add_argument('-m', '--mutfrac', dest='mutfrac', default=0.5, 
                         help='allelic fraction at which to make SNVs (default = 0.5)')
-    parser.add_argument('-n', '--numsnvs', dest='numsnvs', default=0, 
+    parser.add_argument('-n', '--numsnvs', dest='numsnvs', default=0.5, 
                         help="maximum number of mutations to make (default: entire input)")
     parser.add_argument('--nomut', action='store_true', default=False, help="dry run")
     parser.add_argument('--det', action='store_true', default=False, help="deterministic base changes: make transitions only")
