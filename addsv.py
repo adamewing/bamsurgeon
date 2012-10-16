@@ -2,11 +2,11 @@
 
 import re, os, sys, random
 import subprocess
-import asmregion
-import mutableseq
 import argparse
 import pysam
-import replacereads
+import bs.replacereads as rr
+import bs.asmregion as ar
+import bs.mutableseq as ms
 from collections import Counter
 
 def remap(fq1, fq2, threads, bwaref, outbam):
@@ -209,7 +209,7 @@ def replace(origbamfile, mutbamfile, outbamfile, excludefile):
     mutbam  = pysam.Samfile(mutbamfile, 'rb')
     outbam  = pysam.Samfile(outbamfile, 'wb', template=origbam)
 
-    replacereads.replaceReads(origbam, mutbam, outbam, excludefile=excludefile, allreads=True)
+    rr.replaceReads(origbam, mutbam, outbam, excludefile=excludefile, allreads=True)
 
     origbam.close()
     mutbam.close()
@@ -256,7 +256,7 @@ def main(args):
             end   = end - (adj-rndpt)
             print "note: interval size too long, adjusted:",chr,start,end
 
-        contigs = asmregion.asm(chr, start, end, args.bamFileName, reffile, int(args.kmersize), args.noref, args.recycle)
+        contigs = ar.asm(chr, start, end, args.bamFileName, reffile, int(args.kmersize), args.noref, args.recycle)
 
         # find the largest contig        
         maxlen = 0
@@ -269,7 +269,7 @@ def main(args):
         # is there anough room to make mutations?
         if maxlen > 3*int(args.maxlibsize):
             # make mutation in the largest contig
-            mutseq = mutableseq.MutableSeq(maxcontig.seq)
+            mutseq = ms.MutableSeq(maxcontig.seq)
 
             # if we're this far along, we're making a mutation
             nmuts += 1 

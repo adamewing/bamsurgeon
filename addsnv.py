@@ -6,7 +6,7 @@ import argparse
 import random
 import subprocess
 import os
-import replacereads
+import bs.replacereads as rr
 from collections import Counter
 
 def majorbase(basepile):
@@ -161,7 +161,7 @@ def replace(origbamfile, mutbamfile, outbamfile):
     mutbam  = pysam.Samfile(mutbamfile, 'rb')
     outbam  = pysam.Samfile(outbamfile, 'wb', template=origbam)
 
-    replacereads.replaceReads(origbam, mutbam, outbam, keepqual=True)
+    rr.replaceReads(origbam, mutbam, outbam, keepqual=True)
 
     origbam.close()
     mutbam.close()
