@@ -255,8 +255,10 @@ def main(args):
                         if frac > maxfrac:
                             maxfrac = frac
                         if frac > snvfrac:
+                            print "dropped for proximity to SNP, nearby SNP MAF:",snvfrac
                             hasSNP = True
                     else:
+                        print "could not pileup for region:",chrom,pcol.pos
                         hasSNP = True
 
             # pick reads to change
@@ -315,15 +317,15 @@ def main(args):
     elif len(tmpbams) > 1:
         mergebams(tmpbams,outbam_mutsfile)
 
-    # cleanup
-    for bam in tmpbams:
-        if os.path.exists(bam):
-            os.remove(bam)
-
     bedfile.close()
     bamfile.close()
     bammate.close()
     log.close()
+
+    # cleanup
+    for bam in tmpbams:
+        if os.path.exists(bam):
+            os.remove(bam)
 
     print "done making mutations, merging mutations into", args.bamFileName, "-->", args.outBamFile
     replace(args.bamFileName, outbam_mutsfile, args.outBamFile)
