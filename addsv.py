@@ -393,8 +393,8 @@ if __name__ == '__main__':
                         help="kmer size for assembly (default = 31)")
     parser.add_argument('-s', '--svfrac', dest='svfrac', default=1.0, 
                         help="allele fraction of variant (default = 1.0)")
-    parser.add_argument('-x', '--excluded', dest='exclfile', default='excluded.txt',
-                        help="output excluded (e.g. from a deletion) read names to file (default=excluded.txt)")
+    parser.add_argument('-x', '--excluded', dest='exclfile', default="excluded." + str(random.random())+ ".txt",
+                        help="output excluded (e.g. from a deletion) read names to file (default=excluded.[random].txt)")
     parser.add_argument('--maxctglen', dest='maxctglen', default=32000, 
                         help="maximum contig length for assembly - can increase if velvet is compiled with LONGSEQUENCES")
     parser.add_argument('-n', dest='maxmuts', default=None,
