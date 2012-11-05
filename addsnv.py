@@ -175,6 +175,11 @@ def main(args):
     bammate = pysam.Samfile(args.bamFileName, 'rb') # use for mates to avoid iterator problems
     reffile = pysam.Fastafile(args.refFasta)
 
+    # optional CNV file
+    cnv = None
+    if (args.cnvfile):
+        cnv = pysam.Tabixfile(args.cnvfile, 'r')
+
     # make a temporary file to hold mutated reads
     outbam_mutsfile = "tmp." + str(random.random()) + ".muts.bam"
     outbam_muts = pysam.Samfile(outbam_mutsfile, 'wb', template=bamfile)
@@ -269,7 +274,17 @@ def main(args):
 
             print "len(readlist):",str(len(readlist))
             random.shuffle(readlist)
-            readlist = readlist[0:int(len(readlist)*float(args.mutfrac))] 
+
+            maf = float(args.mutfrac) # default minor allele freq
+            if cnv: # cnv file is present
+                for cnregion in cnv.fetch(chrom,start,end):
+                    cn = float(cnregion.strip().split()[3]) # expect chrom,start,end,CN
+                    sys.stderr.write(' '.join(("copy number in snp region:",chrom,str(start),str(end),"=",str(cn))) + "\n")
+                    maf = 1.0/float(cn)
+                    sys.stderr.write("adjusted MAF: " + str(maf) + "\n")
+
+            assert maf > 0.0 and maf <= 1.0
+            readlist = readlist[0:int(len(readlist)*maf)] 
             print "picked:",str(len(readlist))
 
             wrote = 0
@@ -349,6 +364,7 @@ if __name__ == '__main__':
                         help='allelic fraction at which to make SNVs (default = 0.5)')
     parser.add_argument('-n', '--numsnvs', dest='numsnvs', default=0.5, 
                         help="maximum number of mutations to make (default: entire input)")
+    parser.add_argument('-c', '--cnvfile', dest='cnvfile', default=None, help="tabix-indexed list of genome-wide absolute copy number values (e.g. 2 alleles = no change)")
     parser.add_argument('--nomut', action='store_true', default=False, help="dry run")
     parser.add_argument('--det', action='store_true', default=False, help="deterministic base changes: make transitions only")
     parser.add_argument('--force', action='store_true', default=False, help="force mutation to happen regardless of nearby SNP or low coverage")
