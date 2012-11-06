@@ -224,10 +224,13 @@ def main(args):
     logfile = open(args.outBamFile + ".log", 'w')
     exclude = open(args.exclfile, 'w')
 
+    # optional CNV file
+    cnv = None
+    if (args.cnvfile):
+        cnv = pysam.Tabixfile(args.cnvfile, 'r')
+
     # temporary file to hold mutated reads
     outbam_mutsfile = "tmp." + str(random.random()) + ".muts.bam"
-
-    svfrac = float(args.svfrac)
 
     nmuts = 0
 
@@ -239,11 +242,20 @@ def main(args):
             break
  
         c = bedline.strip().split()
-        chr    = c[0]
+        chrom    = c[0]
         start  = int(c[1])
         end    = int(c[2])
         araw   = c[3:len(c)] # INV, DEL, INS seqfile.fa TSDlength, DUP
         actions = map(lambda x: x.strip(),' '.join(araw).split(','))
+
+        svfrac = float(args.svfrac) # default, can be overridden by cnv file
+
+        if cnv: # CNV file is present
+            for cnregion in cnv.fetch(chrom,start,end):
+                cn = float(cnregion.strip().split()[3]) # expect chrom,start,end,CN
+                sys.stderr.write(' '.join(("copy number in snp region:",chrom,str(start),str(end),"=",str(cn))) + "\n")
+                svfrac = 1.0/float(cn)
+                sys.stderr.write("adjusted MAF: " + str(svfrac) + "\n")
 
         print "interval:",c
         # modify start and end if interval is too long
@@ -254,9 +266,9 @@ def main(args):
             rndpt = random.randint(0,adj)
             start = start + rndpt
             end   = end - (adj-rndpt)
-            print "note: interval size too long, adjusted:",chr,start,end
+            print "note: interval size too long, adjusted:",chrom,start,end
 
-        contigs = ar.asm(chr, start, end, args.bamFileName, reffile, int(args.kmersize), args.noref, args.recycle)
+        contigs = ar.asm(chrom, start, end, args.bamFileName, reffile, int(args.kmersize), args.noref, args.recycle)
 
         # find the largest contig        
         maxlen = 0
@@ -320,13 +332,13 @@ def main(args):
                         mutseq.insertion(mutseq.length()/2,singleseqfa(insseqfile),tsdlen)
                     else: # seq is input
                         mutseq.insertion(mutseq.length()/2,insseq,tsdlen)
-                    logfile.write("\t".join(('ins',chr,str(start),str(end),action,str(mutseq.length()),str(mutseq.length()/2),str(insseqfile),str(tsdlen))) + "\n")
+                    logfile.write("\t".join(('ins',chrom,str(start),str(end),action,str(mutseq.length()),str(mutseq.length()/2),str(insseqfile),str(tsdlen))) + "\n")
 
                 elif action == 'INV':
                     invstart = int(args.maxlibsize)
                     invend = mutseq.length() - invstart
                     mutseq.inversion(invstart,invend)
-                    logfile.write("\t".join(('inv',chr,str(start),str(end),action,str(mutseq.length()),str(invstart),str(invend))) + "\n")
+                    logfile.write("\t".join(('inv',chrom,str(start),str(end),action,str(mutseq.length()),str(invstart),str(invend))) + "\n")
 
                 elif action == 'DEL':
                     delstart = int(args.maxlibsize)
@@ -343,13 +355,13 @@ def main(args):
                     delend   -= dadj/2
 
                     mutseq.deletion(delstart,delend)
-                    logfile.write("\t".join(('del',chr,str(start),str(end),action,str(mutseq.length()),str(delstart),str(delend),str(dlen))) + "\n")
+                    logfile.write("\t".join(('del',chrom,str(start),str(end),action,str(mutseq.length()),str(delstart),str(delend),str(dlen))) + "\n")
 
                 elif action == 'DUP':
                     dupstart = int(args.maxlibsize)
                     dupend = mutseq.length() - dupstart
                     mutseq.duplication(dupstart,dupend,ndups)
-                    logfile.write("\t".join(('dup',chr,str(start),str(end),action,str(mutseq.length()),str(dupstart),str(dupend),str(ndups))) + "\n")
+                    logfile.write("\t".join(('dup',chrom,str(start),str(end),action,str(mutseq.length()),str(dupstart),str(dupend),str(ndups))) + "\n")
 
                 else:
                     raise ValueError(bedline.strip() + ": mutation not one of: INS,INV,DEL,DUP")
@@ -365,7 +377,7 @@ def main(args):
         else:
             print "best contig too short to make mutation: ",bedline.strip()
 
-    print "addsv.py finished, made", nmuts, "mutations"
+    print "addsv.py finished, made", nmuts, "mutations."
 
     exclude.close()
     varfile.close()
@@ -381,7 +393,7 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='adds SNVs to reads, outputs modified reads as .bam along with mates')
     parser.add_argument('-v', '--varfile', dest='varFileName', required=True,
-                        help='whitespace-delimited target regions to try and add a SNV: chr,start,stop,action,seqfile if insertion,TSDlength if insertion')
+                        help='whitespace-delimited target regions to try and add a SNV: chrom,start,stop,action,seqfile if insertion,TSDlength if insertion')
     parser.add_argument('-f', '--sambamfile', dest='bamFileName', required=True,
                         help='sam/bam file from which to obtain reads')
     parser.add_argument('-r', '--reference', dest='refFasta', required=True,
@@ -399,6 +411,8 @@ if __name__ == '__main__':
                         help="maximum contig length for assembly - can increase if velvet is compiled with LONGSEQUENCES")
     parser.add_argument('-n', dest='maxmuts', default=None,
                         help="maximum number of mutations to make")
+    parser.add_argument('-c', '--cnvfile', dest='cnvfile', default=None, 
+                        help="tabix-indexed list of genome-wide absolute copy number values (e.g. 2 alleles = no change)")
     parser.add_argument('--nomut', action='store_true', default=False, help="dry run")
     parser.add_argument('--noremap', action='store_true', default=False, help="dry run")
     parser.add_argument('--noref', action='store_true', default=False, 
