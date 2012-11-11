@@ -277,11 +277,12 @@ def main(args):
 
             maf = float(args.mutfrac) # default minor allele freq
             if cnv: # cnv file is present
-                for cnregion in cnv.fetch(chrom,start,end):
-                    cn = float(cnregion.strip().split()[3]) # expect chrom,start,end,CN
-                    sys.stderr.write(' '.join(("copy number in snp region:",chrom,str(start),str(end),"=",str(cn))) + "\n")
-                    maf = 1.0/float(cn)
-                    sys.stderr.write("adjusted MAF: " + str(maf) + "\n")
+                if chrom in cnv.contigs:
+                    for cnregion in cnv.fetch(chrom,start,end):
+                        cn = float(cnregion.strip().split()[3]) # expect chrom,start,end,CN
+                        sys.stderr.write(' '.join(("copy number in snp region:",chrom,str(start),str(end),"=",str(cn))) + "\n")
+                        maf = 1.0/float(cn)
+                        sys.stderr.write("adjusted MAF: " + str(maf) + "\n")
 
             assert maf > 0.0 and maf <= 1.0
             readlist = readlist[0:int(len(readlist)*maf)] 
