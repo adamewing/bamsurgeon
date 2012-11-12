@@ -281,7 +281,10 @@ def main(args):
                     for cnregion in cnv.fetch(chrom,start,end):
                         cn = float(cnregion.strip().split()[3]) # expect chrom,start,end,CN
                         sys.stderr.write(' '.join(("copy number in snp region:",chrom,str(start),str(end),"=",str(cn))) + "\n")
-                        maf = 1.0/float(cn)
+                        if float(cn) > 0.0:
+                            maf = 1.0/float(cn)
+                        else:
+                            maf = 0.0
                         sys.stderr.write("adjusted MAF: " + str(maf) + "\n")
 
             assert maf > 0.0 and maf <= 1.0
