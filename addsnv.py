@@ -287,7 +287,6 @@ def main(args):
                             maf = 0.0
                         sys.stderr.write("adjusted MAF: " + str(maf) + "\n")
 
-            assert maf > 0.0 and maf <= 1.0
             readlist = readlist[0:int(len(readlist)*maf)] 
             print "picked:",str(len(readlist))
 

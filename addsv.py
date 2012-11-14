@@ -251,11 +251,12 @@ def main(args):
         svfrac = float(args.svfrac) # default, can be overridden by cnv file
 
         if cnv: # CNV file is present
-            for cnregion in cnv.fetch(chrom,start,end):
-                cn = float(cnregion.strip().split()[3]) # expect chrom,start,end,CN
-                sys.stderr.write(' '.join(("copy number in snp region:",chrom,str(start),str(end),"=",str(cn))) + "\n")
-                svfrac = 1.0/float(cn)
-                sys.stderr.write("adjusted MAF: " + str(svfrac) + "\n")
+            if chrom in cnv.contigs:
+                for cnregion in cnv.fetch(chrom,start,end):
+                    cn = float(cnregion.strip().split()[3]) # expect chrom,start,end,CN
+                    sys.stderr.write(' '.join(("copy number in snp region:",chrom,str(start),str(end),"=",str(cn))) + "\n")
+                    svfrac = 1.0/float(cn)
+                    sys.stderr.write("adjusted MAF: " + str(svfrac) + "\n")
 
         print "interval:",c
         # modify start and end if interval is too long
