@@ -187,6 +187,10 @@ def asm(chr, start, end, bamfilename, reffile, kmersize, noref=False, recycle=Fa
                 sys.stderr.write("warning, cannot find mate for read marked paired: " + read.qname + "\n")
 
     sys.stderr.write("found " + str(nreads) + " reads in region.\n")
+
+    if nreads == 0:
+        return []
+
     refseq = None
     if reffile:
         refseq = reffile.fetch(chr,start,end)

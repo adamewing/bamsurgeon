@@ -196,10 +196,19 @@ def main(args):
             chrom   = c[0]
             start = int(c[1])
             end   = int(c[2])
+            if len(c) > 3:
+                maf   = float(c[3])
+            else:
+                maf = None
 
             gmutpos = int(random.uniform(start,end+1)) # position of mutation in genome
             refbase = reffile.fetch(chrom,gmutpos-1,gmutpos)
-            mutbase = mut(refbase,args.det)
+            try:
+                mutbase = mut(refbase,args.det)
+            except ValueError as e:
+                sys.stderr.write(' '.join(("skipped site:",chrom,str(start),str(end),"due to N base:",str(e),"\n")))
+                continue
+
             mutstr = refbase + "-->" + mutbase
 
             # keep a list of reads to modify - use hash to keep unique since each
@@ -260,7 +269,7 @@ def main(args):
                         if frac > maxfrac:
                             maxfrac = frac
                         if frac > snvfrac:
-                            print "dropped for proximity to SNP, nearby SNP MAF:",snvfrac
+                            print "dropped for proximity to SNP, nearby SNP MAF:",frac,"maxfrac:",snvfrac
                             hasSNP = True
                     else:
                         print "could not pileup for region:",chrom,pcol.pos
@@ -275,7 +284,8 @@ def main(args):
             print "len(readlist):",str(len(readlist))
             random.shuffle(readlist)
 
-            maf = float(args.mutfrac) # default minor allele freq
+            if maf is None:
+                maf = float(args.mutfrac) # default minor allele freq if not otherwise specifi
             if cnv: # cnv file is present
                 if chrom in cnv.contigs:
                     for cnregion in cnv.fetch(chrom,start,end):
@@ -286,6 +296,15 @@ def main(args):
                         else:
                             maf = 0.0
                         sys.stderr.write("adjusted MAF: " + str(maf) + "\n")
+            else:
+                sys.stderr.write("selected MAF: " + str(maf) + "\n")
+
+            lastread = int(len(readlist)*maf)
+
+            # pick at least one read if possible
+            if lastread == 0 and len(readlist) > 0:
+                sys.stderr.write("forced 1 read.\n")
+                lastread = 1
 
             readlist = readlist[0:int(len(readlist)*maf)] 
             print "picked:",str(len(readlist))
@@ -303,7 +322,7 @@ def main(args):
                 if not hasSNP or args.force:
                     wrote += 1
                     outbam_muts.write(read)
-                    if mutmates[extqname]:
+                    if mutmates[extqname] is not None:
                         outbam_muts.write(mutmates[extqname])
             print "wrote: ",wrote,"mutated:",nmut
 
@@ -318,14 +337,14 @@ def main(args):
 
                 avgincover  = float(sum(incover))/float(len(incover)) 
                 avgoutcover = float(sum(outcover))/float(len(outcover))
-                snvfrac = 0.0
+                spikein_snvfrac = 0.0
                 if wrote > 0:
-                    snvfrac = float(nmut)/float(wrote)
+                    spikein_snvfrac = float(nmut)/float(wrote)
 
                 # qc cutoff for final snv depth 
                 if (avgoutcover > 0 and avgincover > 0 and avgoutcover/avgincover >= 0.9) or args.force:
                     tmpbams.append(tmpoutbamname)
-                    log.write("\t".join(("snv",bedline.strip(),str(gmutpos),mutstr,str(avgoutcover),str(avgoutcover),str(snvfrac),str(maxfrac)))+"\n")
+                    log.write("\t".join(("snv",bedline.strip(),str(gmutpos),mutstr,str(avgoutcover),str(avgoutcover),str(spikein_snvfrac),str(maxfrac)))+"\n")
 
             outbam_muts.close()
 

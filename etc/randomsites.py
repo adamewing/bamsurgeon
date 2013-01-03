@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/bin/env python
 
 import argparse, random, pysam, re
 
@@ -10,6 +10,10 @@ def main(args):
 
     if args.requireseq and not args.fastaFile:
         raise ValueError("--requireseq set without -f/--fasta")
+
+    maptabix = None
+    if args.maptabix:
+        maptabix = pysam.Tabixfile(args.maptabix, 'r')
 
     minlen = int(args.minlen)
     maxlen = int(args.maxlen)
@@ -46,6 +50,7 @@ def main(args):
                 rndloc -= lastoffset
             lastoffset = offset
 
+        # handle single chromosome option
         if args.chrom and args.chrom != rndchr:
             continue
 
@@ -53,6 +58,31 @@ def main(args):
 
         fragstart = rndloc
         fragend   = rndloc + int(fraglen)
+
+        # handle mappability option
+        if maptabix:
+            reject = False 
+
+            if rndchr not in maptabix.contigs and 'chr' + rndchr in maptabix.contigs:
+                mchrom = 'chr' + rndchr
+            else:
+                mchrom = rndchr 
+
+            if mchrom in maptabix.contigs:
+                for mapline in maptabix.fetch(mchrom, fragstart, fragend):
+                    m = mapline.strip().split()
+                    mscore = float(m[3])
+
+                    if mscore < float(args.minmap):
+                        reject = True
+            if reject:
+                continue
+
+        # don't pick sites on contigs if --nocontigs is set
+        if (rndchr.startswith('chr') and len(rndchr) > 5) or (not rndchr.startswith('chr') and len(rndchr) > 2):
+            if args.nocontigs:
+                continue
+
         if fragend < offset:
             if genome:
                 seq = genome.fetch(rndchr,fragstart,fragend)
@@ -75,8 +105,11 @@ if __name__ == '__main__':
     parser.add_argument('-f', '--fasta', dest='fastaFile', default=None, help="if used, the fragment sequence is returned with coordinates")
     parser.add_argument('-n', '--num', dest='numpicks', required=True, help="number of sites to pick")
     parser.add_argument('-c', '--chr', dest='chrom', default=None, help='make mutations on one chromosome only')
+    parser.add_argument('--maptabix', dest='maptabix', default=None, help='mappability tabix, required for --minmap')
+    parser.add_argument('--minmap', dest='minmap', default=0.8, help='only select regions above mappability threshold (default 0.8)')
     parser.add_argument('--lmin', dest='minlen', default=1, help='minimum fragment length (default=1)')
     parser.add_argument('--lmax', dest='maxlen', default=1, help='maximum fragment length (default=1)')
     parser.add_argument('--requireseq', action="store_true", help="do not select hits in unsequenced regions, requires fasta file")
+    parser.add_argument('--nocontigs', action="store_true", help="exclude contigs")
     args = parser.parse_args()
     main(args)

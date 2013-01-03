@@ -182,14 +182,15 @@ def fqReplaceList(fqfile,names,quals,svfrac,exclude):
         usednames[newnames[i]] = True
         
     # burn off excess
-    nullseq  = 'N'*len(seqs[0])
-    nullqual = '#'*len(seqs[0])
-    for name in names:
-        if name not in usednames:
-            if random.uniform(0,1) < svfrac:
-                fqout.write("@" + name + "\n")
-                fqout.write(nullseq + "\n+\n" + nullqual + "\n")
-                exclude.write(name + "\n")
+    if len(seqs) > 0:
+        nullseq  = 'N'*len(seqs[0])
+        nullqual = '#'*len(seqs[0])
+        for name in names:
+            if name not in usednames:
+                if random.uniform(0,1) < svfrac:
+                    fqout.write("@" + name + "\n")
+                    fqout.write(nullseq + "\n+\n" + nullqual + "\n")
+                    exclude.write(name + "\n")
 
     fqout.close()
 
