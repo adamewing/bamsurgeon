@@ -288,6 +288,10 @@ def main(args):
             print "len(readlist):",str(len(readlist))
             random.shuffle(readlist)
 
+            if len(readlist) == 0:
+                print "no reads in region, skipping..."
+                continue
+
             if maf is None:
                 maf = float(args.mutfrac) # default minor allele freq if not otherwise specifi
             if cnv: # cnv file is present
