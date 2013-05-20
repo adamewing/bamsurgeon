@@ -120,7 +120,7 @@ def mergebams(bamlist,outbamfn):
         os.remove(bamfile)
         os.remove(bamfile + '.bai')
 
-def remap(bamfn, threads, bwaref):
+def remap_paired(bamfn, threads, bwaref):
     """ call bwa/samtools to remap .bam
     """
     sai1fn = bamfn + ".1.sai"
@@ -156,6 +156,39 @@ def remap(bamfn, threads, bwaref):
     # cleanup
     os.remove(sai1fn)
     os.remove(sai2fn)
+    os.remove(samfn)
+
+def remap_single(bamfn, threads, bwaref):
+    """ call bwa/samtools to remap .bam
+    """
+    saifn = bamfn + ".sai"
+    samfn  = bamfn + ".sam"
+    refidx = bwaref + ".fai"
+
+    saiargs = ['bwa', 'aln', bwaref, '-q', '5', '-l', '32', '-k', '3', '-t', str(threads), '-o', '1', '-f', saifn, '-b1', bamfn]
+    samargs  = ['bwa', 'samse', '-f', samfn, bwaref, saifn, bamfn]
+    bamargs  = ['samtools', 'view', '-bt', refidx, '-o', bamfn, samfn] 
+
+    print "mapping, cmd: " + " ".join(saiargs)
+    subprocess.call(saiargs)
+    print "pairing ends, building .sam, cmd: " + " ".join(samargs)
+    subprocess.call(samargs)
+    print "sam --> bam, cmd: " + " ".join(bamargs)
+    subprocess.call(bamargs)
+
+    sortbase = bamfn + ".sort"
+    sortfn   = sortbase + ".bam"
+    sortargs = ['samtools','sort','-m','10000000000',bamfn,sortbase]
+    print "sorting, cmd: " + " ".join(sortargs)
+    subprocess.call(sortargs)
+    os.rename(sortfn,bamfn)
+
+    indexargs = ['samtools','index',bamfn]
+    print "indexing, cmd: " + " ".join(indexargs)
+    subprocess.call(indexargs)
+
+    # cleanup
+    os.remove(saifn)
     os.remove(samfn)
 
 def replace(origbamfile, mutbamfile, outbamfile):
@@ -250,10 +283,11 @@ def main(args):
                                 mutread = ''.join(mutbases)
                                 mutreads[extqname] = mutread
                                 mate = None
-                                try:
-                                    mate = bammate.mate(pread.alignment)
-                                except:
-                                    print "warning: no mate for",pread.alignment.qname
+                                if not args.single:
+                                    try:
+                                        mate = bammate.mate(pread.alignment)
+                                    except:
+                                        print "warning: no mate for",pread.alignment.qname
                                 mutmates[extqname] = mate
                                 log.write(" ".join(('read',extqname,mutread,"\n")))
                             else:
@@ -336,7 +370,10 @@ def main(args):
 
             if not hasSNP or args.force:
                 outbam_muts.close()
-                remap(tmpoutbamname, 4, args.refFasta)
+                if args.single:
+                    remap_single(tmpoutbamname, 4, args.refFasta)
+                else:
+                    remap_paired(tmpoutbamname, 4, args.refFasta)
 
                 outbam_muts = pysam.Samfile(tmpoutbamname,'rb')
                 coverwindow = 1
@@ -398,5 +435,6 @@ if __name__ == '__main__':
     parser.add_argument('--nomut', action='store_true', default=False, help="dry run")
     parser.add_argument('--det', action='store_true', default=False, help="deterministic base changes: make transitions only")
     parser.add_argument('--force', action='store_true', default=False, help="force mutation to happen regardless of nearby SNP or low coverage")
+    parser.add_argument('--single', action='store_true', default=False, help="input BAM is simgle-ended (default is paired-end)")
     args = parser.parse_args()
     main(args)
