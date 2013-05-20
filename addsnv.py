@@ -364,7 +364,9 @@ def main(args):
                 if not hasSNP or args.force:
                     wrote += 1
                     outbam_muts.write(read)
-                    if mutmates[extqname] is not None:
+                    if args.sinle:
+                        outbam_muts.write(mutmates[extqname])
+                    elif mutmates[extqname] is not None:
                         outbam_muts.write(mutmates[extqname])
             print "wrote: ",wrote,"mutated:",nmut
 
