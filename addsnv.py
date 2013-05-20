@@ -7,6 +7,7 @@ import random
 import subprocess
 import os
 import bs.replacereads as rr
+from multiprocessing import Pool, Value, Lock
 from collections import Counter
 
 def majorbase(basepile):
@@ -228,7 +229,7 @@ def makemut(args, chrom, start, end, vaf):
     if (args.cnvfile):
         cnv = pysam.Tabixfile(args.cnvfile, 'r')
 
-    log = open(args.outBamFile + "." + str(random.random()) + ".log",'w')
+    log = open(args.outBamFile + "." + "_".join((chrom,str(start),str(end))) + ".log",'w')
 
     # keep a list of reads to modify - use hash to keep unique since each
     # read will be visited as many times as it has bases covering the region
@@ -380,7 +381,7 @@ def makemut(args, chrom, start, end, vaf):
     bamfile.close()
     bammate.close()
     log.close() 
-    
+
     return tmpbams
 
 
@@ -396,8 +397,12 @@ def main(args):
     bamfile.close()
     tmpbams = []
 
+    pool = Pool(processes=int(args.procs))
+    results = []
+
+    ntried = 0
     for bedline in bedfile:
-        if len(tmpbams) < int(args.numsnvs) or int(args.numsnvs) == 0:
+        if ntried < int(args.numsnvs) or int(args.numsnvs) == 0:
             c = bedline.strip().split()
             chrom   = c[0]
             start = int(c[1])
@@ -406,10 +411,15 @@ def main(args):
             if len(c) > 3:
                 vaf = float(c[3])
 
+            result = pool.apply_async(makemut, [args, chrom, start, end, vaf])
+            results.append(result)
+            ntried += 1
 
-            for tmpbam in makemut(args, chrom, start, end, vaf):
-                if tmpbam is not None:
-                    tmpbams.append(tmpbam)
+    for result in results:
+        tmpbamlist = result.get()
+        if tmpbamlist is not None:
+            for tmpbam in tmpbamlist:
+                tmpbams.append(tmpbam)
 
     # merge tmp bams
     if len(tmpbams) == 1:
@@ -432,21 +442,15 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='adds SNVs to reads, outputs modified reads as .bam along with mates')
-    parser.add_argument('-v', '--varfile', dest='varFileName', required=True,
-                        help='Target regions to try and add a SNV, as BED')
-    parser.add_argument('-f', '--sambamfile', dest='bamFileName', required=True,
-                        help='sam/bam file from which to obtain reads')
-    parser.add_argument('-r', '--reference', dest='refFasta', required=True,
-                        help='reference genome, fasta indexed with bwa index -a stdsw _and_ samtools faidx')
-    parser.add_argument('-o', '--outbam', dest='outBamFile', required=True,
-                        help='.bam file name for output')
-    parser.add_argument('-s', '--snvfrac', dest='snvfrac', default=1, 
-                        help='maximum allowable linked SNP MAF (for avoiding haplotypes) (default = 1)')
-    parser.add_argument('-m', '--mutfrac', dest='mutfrac', default=0.5, 
-                        help='allelic fraction at which to make SNVs (default = 0.5)')
-    parser.add_argument('-n', '--numsnvs', dest='numsnvs', default=0.5, 
-                        help="maximum number of mutations to make (default: entire input)")
+    parser.add_argument('-v', '--varfile', dest='varFileName', required=True, help='Target regions to try and add a SNV, as BED')
+    parser.add_argument('-f', '--sambamfile', dest='bamFileName', required=True, help='sam/bam file from which to obtain reads')
+    parser.add_argument('-r', '--reference', dest='refFasta', required=True, help='reference genome, fasta indexed with bwa index -a stdsw _and_ samtools faidx')
+    parser.add_argument('-o', '--outbam', dest='outBamFile', required=True, help='.bam file name for output')
+    parser.add_argument('-s', '--snvfrac', dest='snvfrac', default=1, help='maximum allowable linked SNP MAF (for avoiding haplotypes) (default = 1)')
+    parser.add_argument('-m', '--mutfrac', dest='mutfrac', default=0.5, help='allelic fraction at which to make SNVs (default = 0.5)')
+    parser.add_argument('-n', '--numsnvs', dest='numsnvs', default=0.5, help="maximum number of mutations to make (default: entire input)")
     parser.add_argument('-c', '--cnvfile', dest='cnvfile', default=None, help="tabix-indexed list of genome-wide absolute copy number values (e.g. 2 alleles = no change)")
+    parser.add_argument('-p', '--procs', dest='procs', default=1, help="split into multiple processes (default=1)")
     parser.add_argument('--nomut', action='store_true', default=False, help="dry run")
     parser.add_argument('--det', action='store_true', default=False, help="deterministic base changes: make transitions only")
     parser.add_argument('--force', action='store_true', default=False, help="force mutation to happen regardless of nearby SNP or low coverage")
