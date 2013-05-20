@@ -18,9 +18,10 @@ def cleanup(read,RG):
 
     if RG:
         hasRG = False
-        for tag in read.tags:
-            if tag[0] == 'RG':
-                hasRG = True
+        if read.tags is not None:
+            for tag in read.tags:
+                if tag[0] == 'RG':
+                    hasRG = True
 
         if not hasRG:
             # add random read group from list in header
