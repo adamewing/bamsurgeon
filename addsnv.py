@@ -307,6 +307,8 @@ def makemut(args, chrom, start, end, vaf):
 
     if len(readlist) == 0:
         print "no reads in region, skipping..."
+        outbam_muts.close()
+        os.remove(tmpoutbamname)
         return None
 
     if vaf is None:
@@ -376,6 +378,10 @@ def makemut(args, chrom, start, end, vaf):
             tmpbams.append(tmpoutbamname)
             snvstr = chrom + ":" + str(start) + "-" + str(end) + " (VAF=" + str(vaf) + ")"
             log.write("\t".join(("snv",snvstr,str(mutpos),mutstr,str(avgoutcover),str(avgoutcover),str(spikein_snvfrac),str(maxfrac)))+"\n")
+        else:
+            outbam_muts.close()
+            os.remove(tmpoutbamname)
+            return None
 
     outbam_muts.close()
     bamfile.close()
@@ -452,6 +458,7 @@ if __name__ == '__main__':
     parser.add_argument('-c', '--cnvfile', dest='cnvfile', default=None, help="tabix-indexed list of genome-wide absolute copy number values (e.g. 2 alleles = no change)")
     parser.add_argument('-p', '--procs', dest='procs', default=1, help="split into multiple processes (default=1)")
     parser.add_argument('--nomut', action='store_true', default=False, help="dry run")
+    #parser.add_argument('--exome', action='store_true', default=False, help="exome: don't search for coverage surrounding mutation site (negates -s/--snvfrac)")
     parser.add_argument('--det', action='store_true', default=False, help="deterministic base changes: make transitions only")
     parser.add_argument('--force', action='store_true', default=False, help="force mutation to happen regardless of nearby SNP or low coverage")
     parser.add_argument('--single', action='store_true', default=False, help="input BAM is simgle-ended (default is paired-end)")
