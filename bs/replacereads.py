@@ -47,12 +47,26 @@ def getExcludedReads(file):
     f.close()
     return ex
 
-#replaceReads(targetbam, donorbam, outputbam, args.namechange, args.exclfile, args.all, args.keepqual, args.progress)
+def compare_ref(targetbam, donorbam):
+    ''' if targetbam and donorbam are aligned to different references 
+        and the references are in a different order it's a problem
+    '''
+    for ref in targetbam.references:
+        if ref not in donorbam.references or donorbam.gettid(ref) != targetbam.gettid(ref):
+            return False
+    return True
+    
+
 def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=None, allreads=False, keepqual=False, progress=False):
     ''' targetbam, donorbam, and outputbam are pysam.Samfile objects
         outputbam must be writeable and use targetbam as template
         read names in excludefile will not appear in final output
     '''
+
+    # check whether references are compatible
+    if not compare_ref(targetbam, donorbam):
+        sys.exit("Target and donor are aligned to incompatable reference genomes!")
+
     RG = getRGs(targetbam) # read groups
 
     exclude = {}
