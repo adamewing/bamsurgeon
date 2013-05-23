@@ -110,16 +110,46 @@ def countBaseAtPos(bamfile,chrom,pos):
 
     return bases
 
-def mergebams(bamlist,outbamfn):
+def mergebams(bamlist, outbamfn, maxopen=100):
     """ call samtools to merge two .bams
     """
-    args = ['samtools','merge','-f',outbamfn] + bamlist
-    print "merging, cmd: ",args
+
+    assert outbamfn.endswith('.bam')
+
+    nmerge = 1
+    mergenum = 0
+    merge_sublists = {}
+    for tmpbam in bamlist:
+        mergetmp = "tmp.merging." + str(mergenum) + "." + outbamfn
+        if mergetmp in merge_sublists:
+            merge_sublists[mergetmp].append(tmpbam)
+        else:
+            merge_sublists[mergetmp] = []
+            merge_sublists[mergetmp].append(tmpbam)
+        if nmerge % maxopen == 0:
+            mergenum += 1
+        nmerge += 1
+
+    for submergefn, tmpbams in merge_sublists.iteritems():
+        if len(tmpbams) == 1:
+            os.rename(tmpbams[0], submergefn)
+            print "renamed:",tmpbams[0],"-->",submergefn
+        else:
+            args = ['samtools','merge','-f',submergefn] + tmpbams 
+            print "merging, cmd: ",args
+            subprocess.call(args)
+
+    args = ['samtools','merge','-f',outbamfn] + merge_sublists.keys() 
+    print "final merge, cmd: ",args
     subprocess.call(args)
 
+    for submergefn in merge_sublists.keys():
+        os.remove(submergefn)
+
     for bamfile in bamlist:
-        os.remove(bamfile)
-        os.remove(bamfile + '.bai')
+        if os.path.exists(bamfile):
+            os.remove(bamfile)
+            os.remove(bamfile + '.bai')
 
 def remap_paired(bamfn, threads, bwaref):
     """ call bwa/samtools to remap .bam

@@ -13,7 +13,7 @@ from re import sub
 def namesort_bam(bamfile):
     sortbase = bamfile + ".namesort"
     sortfn   = sortbase + ".bam"
-    sortargs = ['samtools','sort','-n','-m','10000000000',bamfile,sortbase]
+    sortargs = ['samtools','sort','-n','-@','8','-m','2G',bamfile,sortbase]
     print "sorting, cmd: " + " ".join(sortargs)
     subprocess.call(sortargs)
     return sortfn
@@ -21,7 +21,7 @@ def namesort_bam(bamfile):
 def possort_bam(bamfile):
     sortbase = bamfile + ".sort"
     sortfn   = sortbase + ".bam"
-    sortargs = ['samtools','sort','-m','10000000000',bamfile,sortbase]
+    sortargs = ['samtools','sort','-@','8','-m','2G',bamfile,sortbase]
     print "sorting, cmd: " + " ".join(sortargs)
     subprocess.call(sortargs)
     os.rename(sortfn,bamfile)
