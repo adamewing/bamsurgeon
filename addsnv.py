@@ -115,36 +115,46 @@ def mergebams(bamlist, outbamfn, maxopen=100):
     """
 
     assert outbamfn.endswith('.bam')
+    print "DEBUG: len(bamlist)", len(bamlist)
 
-    nmerge = 1
-    mergenum = 0
-    merge_sublists = {}
-    for tmpbam in bamlist:
-        mergetmp = "tmp.merging." + str(mergenum) + "." + outbamfn
-        if mergetmp in merge_sublists:
-            merge_sublists[mergetmp].append(tmpbam)
-        else:
-            merge_sublists[mergetmp] = []
-            merge_sublists[mergetmp].append(tmpbam)
-        if nmerge % maxopen == 0:
-            mergenum += 1
-        nmerge += 1
+    if len(bamlist) == 1:
+        print "only one BAM to merge, renaming",bamlist[0],"-->",outbamfn
+        os.rename(bamlist[0], outbamfn)
+    else:
+        nmerge = 1
+        mergenum = 0
+        merge_sublists = {}
+        for tmpbam in bamlist:
+            mergetmp = "tmp.merging." + str(mergenum) + "." + outbamfn
+            if mergetmp in merge_sublists:
+                merge_sublists[mergetmp].append(tmpbam)
+            else:
+                merge_sublists[mergetmp] = []
+                merge_sublists[mergetmp].append(tmpbam)
+            if nmerge % maxopen == 0:
+                mergenum += 1
+            nmerge += 1
 
-    for submergefn, tmpbams in merge_sublists.iteritems():
-        if len(tmpbams) == 1:
-            os.rename(tmpbams[0], submergefn)
-            print "renamed:",tmpbams[0],"-->",submergefn
+        for submergefn, tmpbams in merge_sublists.iteritems():
+            if len(tmpbams) == 1:
+                os.rename(tmpbams[0], submergefn)
+                print "renamed:",tmpbams[0],"-->",submergefn
+            else:
+                args = ['samtools','merge','-f',submergefn] + tmpbams 
+                print "merging, cmd: ",args
+                subprocess.call(args)
+
+        if len(merge_sublists.keys()) == 1:
+            print "merge finished, renaming:",merge_sublists.keys()[0],"-->",outbamfn
+            os.rename(merge_sublists.keys()[0], outbamfn)
         else:
-            args = ['samtools','merge','-f',submergefn] + tmpbams 
-            print "merging, cmd: ",args
+            args = ['samtools','merge','-f',outbamfn] + merge_sublists.keys() 
+            print "final merge, cmd: ",args
             subprocess.call(args)
 
-    args = ['samtools','merge','-f',outbamfn] + merge_sublists.keys() 
-    print "final merge, cmd: ",args
-    subprocess.call(args)
-
-    for submergefn in merge_sublists.keys():
-        os.remove(submergefn)
+        for submergefn in merge_sublists.keys():
+            if os.path.exists(submergefn):
+                os.remove(submergefn)
 
     for bamfile in bamlist:
         if os.path.exists(bamfile):
@@ -404,7 +414,7 @@ def makemut(args, chrom, start, end, vaf):
             spikein_snvfrac = float(nmut)/float(wrote)
 
         # qc cutoff for final snv depth 
-        if (avgoutcover > 0 and avgincover > 0 and avgoutcover/avgincover >= 0.9) or args.force:
+        if (avgoutcover > 0 and avgincover > 0 and avgoutcover/avgincover >= float(args.coverdiff)) or args.force:
             tmpbams.append(tmpoutbamname)
             snvstr = chrom + ":" + str(start) + "-" + str(end) + " (VAF=" + str(vaf) + ")"
             log.write("\t".join(("snv",snvstr,str(mutpos),mutstr,str(avgoutcover),str(avgoutcover),str(spikein_snvfrac),str(maxfrac)))+"\n")
@@ -486,9 +496,9 @@ if __name__ == '__main__':
     parser.add_argument('-m', '--mutfrac', dest='mutfrac', default=0.5, help='allelic fraction at which to make SNVs (default = 0.5)')
     parser.add_argument('-n', '--numsnvs', dest='numsnvs', default=0.5, help="maximum number of mutations to make (default: entire input)")
     parser.add_argument('-c', '--cnvfile', dest='cnvfile', default=None, help="tabix-indexed list of genome-wide absolute copy number values (e.g. 2 alleles = no change)")
+    parser.add_argument('-d', '--coverdiff', dest='coverdiff', default=0.9, help="allow difference in input and output coverage (default=0.9)")
     parser.add_argument('-p', '--procs', dest='procs', default=1, help="split into multiple processes (default=1)")
     parser.add_argument('--nomut', action='store_true', default=False, help="dry run")
-    #parser.add_argument('--exome', action='store_true', default=False, help="exome: don't search for coverage surrounding mutation site (negates -s/--snvfrac)")
     parser.add_argument('--det', action='store_true', default=False, help="deterministic base changes: make transitions only")
     parser.add_argument('--force', action='store_true', default=False, help="force mutation to happen regardless of nearby SNP or low coverage")
     parser.add_argument('--single', action='store_true', default=False, help="input BAM is simgle-ended (default is paired-end)")
