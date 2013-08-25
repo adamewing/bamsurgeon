@@ -457,6 +457,7 @@ def main(args):
             if len(c) > 3:
                 vaf = float(c[3])
 
+            # make mutation (submit job to thread pool)
             result = pool.apply_async(makemut, [args, chrom, start, end, vaf])
             results.append(result)
             ntried += 1
@@ -494,7 +495,7 @@ if __name__ == '__main__':
     parser.add_argument('-o', '--outbam', dest='outBamFile', required=True, help='.bam file name for output')
     parser.add_argument('-s', '--snvfrac', dest='snvfrac', default=1, help='maximum allowable linked SNP MAF (for avoiding haplotypes) (default = 1)')
     parser.add_argument('-m', '--mutfrac', dest='mutfrac', default=0.5, help='allelic fraction at which to make SNVs (default = 0.5)')
-    parser.add_argument('-n', '--numsnvs', dest='numsnvs', default=0.5, help="maximum number of mutations to make (default: entire input)")
+    parser.add_argument('-n', '--numsnvs', dest='numsnvs', default=0, help="maximum number of mutations to try (default: entire input)")
     parser.add_argument('-c', '--cnvfile', dest='cnvfile', default=None, help="tabix-indexed list of genome-wide absolute copy number values (e.g. 2 alleles = no change)")
     parser.add_argument('-d', '--coverdiff', dest='coverdiff', default=0.9, help="allow difference in input and output coverage (default=0.9)")
     parser.add_argument('-p', '--procs', dest='procs', default=1, help="split into multiple processes (default=1)")
