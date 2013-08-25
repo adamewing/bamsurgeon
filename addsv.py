@@ -327,7 +327,7 @@ def main(args):
                     else:
                         dsize = 1.0
 
-                print "BEFORE:",mutseq
+                logfile.write(">" + chrom + ":" + str(start) + "-" + str(end) + " BEFORE\n" + str(mutseq) + "\n")
 
                 if action == 'INS':
                     if insseqfile: # seq in file
@@ -368,7 +368,7 @@ def main(args):
                 else:
                     raise ValueError(bedline.strip() + ": mutation not one of: INS,INV,DEL,DUP")
 
-                print "AFTER:",mutseq
+                logfile.write(">" + chrom + ":" + str(start) + "-" + str(end) +" AFTER\n" + str(mutseq) + "\n")
 
             # simulate reads
             (fq1, fq2) = runwgsim(maxcontig, mutseq.seq, svfrac, exclude)
