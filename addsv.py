@@ -140,16 +140,14 @@ def runwgsim(contig,newseq,svfrac,exclude):
     return (fq1,fq2)
 
 def fqReplaceList(fqfile,names,quals,svfrac,exclude):
-    """
+    '''
     Replace seq names in paired fastq files from a list until the list runs out
     (then stick with original names). fqfile = fastq file, names = list
-    if there are more names in the list than needed assign the remainder a null
-    sequence ("NNNNNNNNNNNN...N") so that they still replace a read in the original
-    .bam when reads are replaced with output
 
-    'exclude' is a filehandle
+    'exclude' is a filehandle, the exclude file contains read names that should
+    not appear in the final output BAM
 
-    """
+    '''
     fqin = open(fqfile,'r')
 
     ln = 0
@@ -198,24 +196,25 @@ def fqReplaceList(fqfile,names,quals,svfrac,exclude):
         
     # burn off excess
     if len(seqs) > 0:
-        #nullseq  = 'N'*len(seqs[0]) DELETE ME
-        #nullqual = '#'*len(seqs[0]) DELETE ME
         for name in names:
             if name not in usednames:
                 if random.uniform(0,1) < svfrac:  # this controls deletion depth
-                    #fqout.write("@" + name + "\n") DELETE ME
-                    #fqout.write(nullseq + "\n+\n" + nullqual + "\n") DELETE ME
                     exclude.write(name + "\n")
 
     fqout.close()
 
 def singleseqfa(file):
-    print file
-    f = open(file, 'r')
-    seq = ""
-    for line in f:
-        if not re.search ('^>',line):
-            seq += line.strip().upper()
+    with open(file, 'r') as fasta:
+        header = None
+        seq = ''
+        for line in fasta:
+            line = line.strip()
+            if line.startswith('>'):
+                if header is not None:
+                    sys.stderr.write("multiple entries found in " + file + " only using the first\n")
+                header = line.lstrip('>')
+            else:
+                seq += line
     return seq
 
 def mergebams(bamlist, outbamfn, maxopen=100):
