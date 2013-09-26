@@ -8,8 +8,9 @@ import bs.replacereads as rr
 import bs.asmregion as ar
 import bs.mutableseq as ms
 from collections import Counter
+from multiprocessing import Pool
 
-def remap(fq1, fq2, threads, bwaref, outbam):
+def remap(fq1, fq2, threads, bwaref, outbam, deltmp=True):
     """ call bwa/samtools to remap .bam and merge with existing .bam
     """
     basefn = "bwatmp" + str(random.random())
@@ -40,6 +41,7 @@ def remap(fq1, fq2, threads, bwaref, outbam):
     os.remove(tmpbam)
     os.rename(tmpsrt + ".bam", tmpbam)
 
+    ## the following may be unneeded after recent refactor:
     if os.path.isfile(outbam):
         tmpmerge  = basefn + ".merge.bam"
         mergeargs = ['samtools','merge',tmpmerge,tmpbam,outbam]
@@ -52,13 +54,26 @@ def remap(fq1, fq2, threads, bwaref, outbam):
     else:
         print "rename " + tmpbam + " --> " + outbam
         os.rename(tmpbam, outbam)
+    ##
 
     # cleanup
-    os.remove(sai1fn)
-    os.remove(sai2fn)
-    os.remove(samfn)
-    os.remove(fq1)
-    os.remove(fq2)
+    if deltmp:
+        os.remove(sai1fn)
+        os.remove(sai2fn)
+        os.remove(samfn)
+        os.remove(fq1)
+        os.remove(fq2)
+
+    return bamreads(outbam)
+
+def bamreads(bamfn):
+    assert os.path.exists(bamfn) and bamfn.endswith('.bam')
+    if not os.path.exists(bamfn + '.bai'):
+        args = ['samtools', 'index', bamfn]
+        subprocess.call(args)
+
+    bam = pysam.Samfile(bamfn, 'rb')
+    return bam.mapped
 
 def runwgsim(contig,newseq,svfrac,exclude):
     ''' wrapper function for wgsim
@@ -183,13 +198,13 @@ def fqReplaceList(fqfile,names,quals,svfrac,exclude):
         
     # burn off excess
     if len(seqs) > 0:
-        nullseq  = 'N'*len(seqs[0])
-        nullqual = '#'*len(seqs[0])
+        #nullseq  = 'N'*len(seqs[0]) DELETE ME
+        #nullqual = '#'*len(seqs[0]) DELETE ME
         for name in names:
             if name not in usednames:
-                if random.uniform(0,1) < svfrac:
-                    fqout.write("@" + name + "\n")
-                    fqout.write(nullseq + "\n+\n" + nullqual + "\n")
+                if random.uniform(0,1) < svfrac:  # this controls deletion depth
+                    #fqout.write("@" + name + "\n") DELETE ME
+                    #fqout.write(nullseq + "\n+\n" + nullqual + "\n") DELETE ME
                     exclude.write(name + "\n")
 
     fqout.close()
@@ -202,6 +217,56 @@ def singleseqfa(file):
         if not re.search ('^>',line):
             seq += line.strip().upper()
     return seq
+
+def mergebams(bamlist, outbamfn, maxopen=100):
+    ''' call samtools to merge a list of bams hierarchically '''
+
+    assert outbamfn.endswith('.bam')
+    print "DEBUG: len(bamlist)", len(bamlist)
+
+    if len(bamlist) == 1:
+        print "only one BAM to merge, renaming",bamlist[0],"-->",outbamfn
+        os.rename(bamlist[0], outbamfn)
+    else:
+        nmerge = 1
+        mergenum = 0
+        merge_sublists = {}
+        for tmpbam in bamlist:
+            mergetmp = "tmp.merging." + str(mergenum) + "." + outbamfn
+            if mergetmp in merge_sublists:
+                merge_sublists[mergetmp].append(tmpbam)
+            else:
+                merge_sublists[mergetmp] = []
+                merge_sublists[mergetmp].append(tmpbam)
+            if nmerge % maxopen == 0:
+                mergenum += 1
+            nmerge += 1
+
+        for submergefn, tmpbams in merge_sublists.iteritems():
+            if len(tmpbams) == 1:
+                os.rename(tmpbams[0], submergefn)
+                print "renamed:",tmpbams[0],"-->",submergefn
+            else:
+                args = ['samtools','merge','-f',submergefn] + tmpbams 
+                print "merging, cmd: ",args
+                subprocess.call(args)
+
+        if len(merge_sublists.keys()) == 1:
+            print "merge finished, renaming:",merge_sublists.keys()[0],"-->",outbamfn
+            os.rename(merge_sublists.keys()[0], outbamfn)
+        else:
+            args = ['samtools','merge','-f',outbamfn] + merge_sublists.keys() 
+            print "final merge, cmd: ",args
+            subprocess.call(args)
+
+        for submergefn in merge_sublists.keys():
+            if os.path.exists(submergefn):
+                os.remove(submergefn)
+
+    for bamfile in bamlist:
+        if os.path.exists(bamfile):
+            os.remove(bamfile)
+            os.remove(bamfile + '.bai')
 
 def replace(origbamfile, mutbamfile, outbamfile, excludefile):
     ''' open .bam file and call replacereads
@@ -216,14 +281,13 @@ def replace(origbamfile, mutbamfile, outbamfile, excludefile):
     mutbam.close()
     outbam.close()
 
-def main(args):
-    """ needs refactoring
-    """
-    varfile = open(args.varFileName, 'r')
+def makemut(args, bedline):
+    #varfile = open(args.varFileName, 'r')
     bamfile = pysam.Samfile(args.bamFileName, 'rb')
     reffile = pysam.Fastafile(args.refFasta)
     logfile = open(args.outBamFile + ".log", 'w')
-    exclude = open(args.exclfile, 'w')
+    exclfile = 'exclude.' + str(random.random()) + '.txt'
+    exclude = open(exclfile, 'w')
 
     # optional CNV file
     cnv = None
@@ -233,157 +297,156 @@ def main(args):
     # temporary file to hold mutated reads
     outbam_mutsfile = "tmp." + str(random.random()) + ".muts.bam"
 
-    nmuts = 0
-
-    for bedline in varfile:
-        if re.search('^#',bedline):
-            continue
-   
-        if args.maxmuts and nmuts >= int(args.maxmuts):
-            break
+    c = bedline.strip().split()
+    chrom    = c[0]
+    start  = int(c[1])
+    end    = int(c[2])
+    araw   = c[3:len(c)] # INV, DEL, INS seqfile.fa TSDlength, DUP
  
-        c = bedline.strip().split()
-        chrom    = c[0]
-        start  = int(c[1])
-        end    = int(c[2])
-        araw   = c[3:len(c)] # INV, DEL, INS seqfile.fa TSDlength, DUP
-        actions = map(lambda x: x.strip(),' '.join(araw).split(','))
+    actions = map(lambda x: x.strip(),' '.join(araw).split(','))
 
-        svfrac = float(args.svfrac) # default, can be overridden by cnv file
+    svfrac = float(args.svfrac) # default, can be overridden by cnv file
 
-        if cnv: # CNV file is present
-            if chrom in cnv.contigs:
-                for cnregion in cnv.fetch(chrom,start,end):
-                    cn = float(cnregion.strip().split()[3]) # expect chrom,start,end,CN
-                    sys.stderr.write(' '.join(("copy number in snp region:",chrom,str(start),str(end),"=",str(cn))) + "\n")
-                    svfrac = 1.0/float(cn)
-                    sys.stderr.write("adjusted MAF: " + str(svfrac) + "\n")
+    if cnv: # CNV file is present
+        if chrom in cnv.contigs:
+            for cnregion in cnv.fetch(chrom,start,end):
+                cn = float(cnregion.strip().split()[3]) # expect chrom,start,end,CN
+                sys.stderr.write(' '.join(("copy number in snp region:",chrom,str(start),str(end),"=",str(cn))) + "\n")
+                svfrac = 1.0/float(cn)
+                sys.stderr.write("adjusted MAF: " + str(svfrac) + "\n")
 
-        print "interval:",c
-        # modify start and end if interval is too long
-        maxctglen = int(args.maxctglen)
-        assert maxctglen > 3*int(args.maxlibsize) # maxctglen is too short
-        if end-start > maxctglen:
-            adj   = (end-start) - maxctglen
-            rndpt = random.randint(0,adj)
-            start = start + rndpt
-            end   = end - (adj-rndpt)
-            print "note: interval size too long, adjusted:",chrom,start,end
+    print "interval:",c
+    # modify start and end if interval is too long
+    maxctglen = int(args.maxctglen)
+    assert maxctglen > 3*int(args.maxlibsize) # maxctglen is too short
+    if end-start > maxctglen:
+        adj   = (end-start) - maxctglen
+        rndpt = random.randint(0,adj)
+        start = start + rndpt
+        end   = end - (adj-rndpt)
+        print "note: interval size too long, adjusted:",chrom,start,end
 
-        contigs = ar.asm(chrom, start, end, args.bamFileName, reffile, int(args.kmersize), args.noref, args.recycle)
+    contigs = ar.asm(chrom, start, end, args.bamFileName, reffile, int(args.kmersize), args.noref, args.recycle)
 
-        # find the largest contig        
-        maxlen = 0
-        maxcontig = None
-        for contig in contigs:
-            if contig.len > maxlen:
-                maxlen = contig.len
-                maxcontig = contig
+    # find the largest contig        
+    maxlen = 0
+    maxcontig = None
+    for contig in contigs:
+        if contig.len > maxlen:
+            maxlen = contig.len
+            maxcontig = contig
 
-        # is there anough room to make mutations?
-        if maxlen > 3*int(args.maxlibsize):
-            # make mutation in the largest contig
-            mutseq = ms.MutableSeq(maxcontig.seq)
+    # is there anough room to make mutations?
+    if maxlen > 3*int(args.maxlibsize):
+        # make mutation in the largest contig
+        mutseq = ms.MutableSeq(maxcontig.seq)
 
-            # if we're this far along, we're making a mutation
-            nmuts += 1 
+        # support for multiple mutations
+        for actionstr in actions:
+            a = actionstr.split()
+            action = a[0]
 
-            # support for multiple mutations
-            for actionstr in actions:
-                a = actionstr.split()
-                action = a[0]
+            print actionstr,action
 
-                print actionstr,action
+            insseqfile = None
+            insseq = ''
+            tsdlen = 0  # target site duplication length
+            ndups = 0   # number of tandem dups
+            dsize = 0.0 # deletion size fraction
+            dlen = 0
+            if action == 'INS':
+                assert len(a) > 1 # insertion syntax: INS <file.fa> [optional TSDlen]
+                insseqfile = a[1]
+                if not os.path.exists(insseqfile): # not a file... is it a sequence? (support indel ins.)
+                    assert re.search('^[ATGCatgc]*$',insseqfile) # make sure it's a sequence
+                    insseq = insseqfile.upper()
+                    insseqfile = None
+                if len(a) > 2:
+                    tsdlen = int(a[2])
 
-                insseqfile = None
-                insseq = ''
-                tsdlen = 0  # target site duplication length
-                ndups = 0   # number of tandem dups
-                dsize = 0.0 # deletion size fraction
-                dlen = 0
-                if action == 'INS':
-                    assert len(a) > 1 # insertion syntax: INS <file.fa> [optional TSDlen]
-                    insseqfile = a[1]
-                    if not os.path.exists(insseqfile): # not a file... is it a sequence? (support indel ins.)
-                        assert re.search('^[ATGCatgc]*$',insseqfile) # make sure it's a sequence
-                        insseq = insseqfile.upper()
-                        insseqfile = None
-                    if len(a) > 2:
-                        tsdlen = int(a[2])
-
-                if action == 'DUP':
-                    if len(a) > 1:
-                        ndups = int(a[1])
-                    else:
-                        ndups = 1
-
-                if action == 'DEL':
-                    if len(a) > 1:
-                        dsize = float(a[1])
-                        if dsize >= 1.0: # if DEL size is not a fraction, interpret as bp
-                            # since DEL 1 is default, if DEL 1 is specified, interpret as 1 bp deletion
-                            dlen = int(dsize)
-                            dsize = 1.0
-                    else:
-                        dsize = 1.0
-
-                logfile.write(">" + chrom + ":" + str(start) + "-" + str(end) + " BEFORE\n" + str(mutseq) + "\n")
-
-                if action == 'INS':
-                    if insseqfile: # seq in file
-                        mutseq.insertion(mutseq.length()/2,singleseqfa(insseqfile),tsdlen)
-                    else: # seq is input
-                        mutseq.insertion(mutseq.length()/2,insseq,tsdlen)
-                    logfile.write("\t".join(('ins',chrom,str(start),str(end),action,str(mutseq.length()),str(mutseq.length()/2),str(insseqfile),str(tsdlen))) + "\n")
-
-                elif action == 'INV':
-                    invstart = int(args.maxlibsize)
-                    invend = mutseq.length() - invstart
-                    mutseq.inversion(invstart,invend)
-                    logfile.write("\t".join(('inv',chrom,str(start),str(end),action,str(mutseq.length()),str(invstart),str(invend))) + "\n")
-
-                elif action == 'DEL':
-                    delstart = int(args.maxlibsize)
-                    delend = mutseq.length() - delstart
-                    if dlen == 0: # bp size not specified, delete fraction of contig
-                        dlen = int((float(delend-delstart) * dsize)+0.5) 
-
-                    dadj = delend-delstart-dlen
-                    if dadj < 0:
-                        dadj = 0
-                        print "warning: deletion of length 0"
-
-                    delstart += dadj/2
-                    delend   -= dadj/2
-
-                    mutseq.deletion(delstart,delend)
-                    logfile.write("\t".join(('del',chrom,str(start),str(end),action,str(mutseq.length()),str(delstart),str(delend),str(dlen))) + "\n")
-
-                elif action == 'DUP':
-                    dupstart = int(args.maxlibsize)
-                    dupend = mutseq.length() - dupstart
-                    mutseq.duplication(dupstart,dupend,ndups)
-                    logfile.write("\t".join(('dup',chrom,str(start),str(end),action,str(mutseq.length()),str(dupstart),str(dupend),str(ndups))) + "\n")
-
+            if action == 'DUP':
+                if len(a) > 1:
+                    ndups = int(a[1])
                 else:
-                    raise ValueError(bedline.strip() + ": mutation not one of: INS,INV,DEL,DUP")
+                    ndups = 1
 
-                logfile.write(">" + chrom + ":" + str(start) + "-" + str(end) +" AFTER\n" + str(mutseq) + "\n")
+            if action == 'DEL':
+                if len(a) > 1:
+                    dsize = float(a[1])
+                    if dsize >= 1.0: # if DEL size is not a fraction, interpret as bp
+                        # since DEL 1 is default, if DEL 1 is specified, interpret as 1 bp deletion
+                        dlen = int(dsize)
+                        dsize = 1.0
+                else:
+                    dsize = 1.0
 
-            # simulate reads
-            (fq1, fq2) = runwgsim(maxcontig, mutseq.seq, svfrac, exclude)
+            logfile.write(">" + chrom + ":" + str(start) + "-" + str(end) + " BEFORE\n" + str(mutseq) + "\n")
 
-            # remap reads
-            remap(fq1, fq2, 4, args.refFasta, outbam_mutsfile)
+            if action == 'INS':
+                if insseqfile: # seq in file
+                    mutseq.insertion(mutseq.length()/2,singleseqfa(insseqfile),tsdlen)
+                else: # seq is input
+                    mutseq.insertion(mutseq.length()/2,insseq,tsdlen)
+                logfile.write("\t".join(('ins',chrom,str(start),str(end),action,str(mutseq.length()),str(mutseq.length()/2),str(insseqfile),str(tsdlen))) + "\n")
 
-        else:
-            print "best contig too short to make mutation: ",bedline.strip()
+            elif action == 'INV':
+                invstart = int(args.maxlibsize)
+                invend = mutseq.length() - invstart
+                mutseq.inversion(invstart,invend)
+                logfile.write("\t".join(('inv',chrom,str(start),str(end),action,str(mutseq.length()),str(invstart),str(invend))) + "\n")
 
-    print "addsv.py finished, made", nmuts, "mutations."
+            elif action == 'DEL':
+                delstart = int(args.maxlibsize)
+                delend = mutseq.length() - delstart
+                if dlen == 0: # bp size not specified, delete fraction of contig
+                    dlen = int((float(delend-delstart) * dsize)+0.5) 
+
+                dadj = delend-delstart-dlen
+                if dadj < 0:
+                    dadj = 0
+                    print "warning: deletion of length 0"
+
+                delstart += dadj/2
+                delend   -= dadj/2
+
+                mutseq.deletion(delstart,delend)
+                logfile.write("\t".join(('del',chrom,str(start),str(end),action,str(mutseq.length()),str(delstart),str(delend),str(dlen))) + "\n")
+
+            elif action == 'DUP':
+                dupstart = int(args.maxlibsize)
+                dupend = mutseq.length() - dupstart
+                mutseq.duplication(dupstart,dupend,ndups)
+                logfile.write("\t".join(('dup',chrom,str(start),str(end),action,str(mutseq.length()),str(dupstart),str(dupend),str(ndups))) + "\n")
+
+            else:
+                raise ValueError(bedline.strip() + ": mutation not one of: INS,INV,DEL,DUP")
+
+            logfile.write(">" + chrom + ":" + str(start) + "-" + str(end) +" AFTER\n" + str(mutseq) + "\n")
+
+        # simulate reads
+        (fq1, fq2) = runwgsim(maxcontig, mutseq.seq, svfrac, exclude)
+
+        # remap reads
+        outreads = remap(fq1, fq2, 4, args.refFasta, outbam_mutsfile)
+
+        if outreads == 0:
+            print "outbam", outbam_mutsfile, "has no mapped reads!"
+            return None, None
+
+    else:
+        print "best contig too short to make mutation: ",bedline.strip()
+        return None, None
+
+    sys.stderr.write("temporary bam: " + outbam_mutsfile + "\n")
 
     exclude.close()
-    varfile.close()
     bamfile.close()
+
+    return outbam_mutsfile, exclfile
+    '''
+    #FIXME
+    print "addsv.py finished, made", nmuts, "mutations."
+
     logfile.close()
 
     print "merging mutations into", args.bamFileName, "-->", args.outBamFile
@@ -391,6 +454,77 @@ def main(args):
 
     # cleanup
     os.remove(outbam_mutsfile)
+    '''
+
+def main(args):
+    tmpbams = []
+    exclfns = [] # 'exclude' files
+
+    results = []
+    pool = Pool(processes=int(args.procs))
+
+    nmuts = 0
+
+    with open(args.varFileName, 'r') as varfile:
+        for bedline in varfile:
+            if re.search('^#',bedline):
+                continue
+            if args.maxmuts and nmuts >= int(args.maxmuts):
+                break
+            #tmpbam, exclude = makemut(args, bedline)
+            result = pool.apply_async(makemut, [args, bedline]) #MT
+            results.append(result)                              #MT
+            #tmpbams.append(tmpbam)
+            #exclfns.append(exclude)
+            nmuts += 1
+
+    ## MT ##
+    for result in results:
+        tmpbam, exclfn = result.get()
+        if tmpbam is not None and exclfn is not None:
+            tmpbams.append(tmpbam)
+            exclfns.append(exclfn)
+    ########
+
+    print "bams:",tmpbams
+    print "excl:",exclfns
+
+    excl_merged = 'exclude.final.' + str(random.random()) + '.bam'
+    mergedtmp = 'mergetmp.final.' + str(random.random()) + '.bam'
+
+    print "merging exclude files into", excl_merged, "..."
+    exclout = open(excl_merged, 'w')
+    for exclfn in exclfns:
+        with open(exclfn, 'r') as excl:
+            for line in excl:
+                exclout.write(line)
+    exclout.close()
+
+    if len(tmpbams) == 1:
+        print "only one bam:", tmpbams[0], "renaming to", mergedtmp
+        os.rename(tmpbams[0], mergedtmp)
+
+    elif len(tmpbams) > 1:
+        print "merging bams into", mergedtmp, "..."
+        mergebams(tmpbams, mergedtmp)
+
+    print "swapping reads into original and writing to", args.outBamFile
+    replace(args.bamFileName, mergedtmp, args.outBamFile, excl_merged)
+
+    os.remove(excl_merged)
+    os.remove(mergedtmp)
+
+    for exclfn in exclfns:
+        if os.path.isfile(exclfn):
+            os.remove(exclfn)
+
+    for tmpbam in tmpbams:
+        if os.path.isfile(tmpbam):
+            os.remove(tmpbam)
+        if os.path.isfile(tmpbam + '.bai'):
+            os.remove(tmpbam + '.bai')
+
+    print "done."
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='adds SNVs to reads, outputs modified reads as .bam along with mates')
@@ -407,14 +541,13 @@ if __name__ == '__main__':
                         help="kmer size for assembly (default = 31)")
     parser.add_argument('-s', '--svfrac', dest='svfrac', default=1.0, 
                         help="allele fraction of variant (default = 1.0)")
-    parser.add_argument('-x', '--excluded', dest='exclfile', default="excluded." + str(random.random())+ ".txt",
-                        help="output excluded (e.g. from a deletion) read names to file (default=excluded.[random].txt)")
     parser.add_argument('--maxctglen', dest='maxctglen', default=32000, 
                         help="maximum contig length for assembly - can increase if velvet is compiled with LONGSEQUENCES")
     parser.add_argument('-n', dest='maxmuts', default=None,
                         help="maximum number of mutations to make")
     parser.add_argument('-c', '--cnvfile', dest='cnvfile', default=None, 
                         help="tabix-indexed list of genome-wide absolute copy number values (e.g. 2 alleles = no change)")
+    parser.add_argument('-p', '--procs', dest='procs', default=1, help="split into multiple processes (default=1)")
     parser.add_argument('--nomut', action='store_true', default=False, help="dry run")
     parser.add_argument('--noremap', action='store_true', default=False, help="dry run")
     parser.add_argument('--noref', action='store_true', default=False, 

@@ -27,10 +27,10 @@ then
     exit 65
 fi
 
-../addsv.py -v ../test_data/test_sv.txt -f ../test_data/testregion.bam -r $1 -o ../test_data/testregion_sv_mut.bam -c ../test_data/test_cnvlist.txt.gz
+../addsv.py -p 3 -v ../test_data/test_sv.txt -f ../test_data/testregion.bam -r $1 -o ../test_data/testregion_sv_mut.bam -c ../test_data/test_cnvlist.txt.gz
 if [ $? -ne 0 ]
 then
-  echo "addsnv.py failed."
+  echo "addsv.py failed."
   exit 65
 else
   echo "sorting output bam..."
