@@ -285,7 +285,7 @@ def makemut(args, bedline):
     #varfile = open(args.varFileName, 'r')
     bamfile = pysam.Samfile(args.bamFileName, 'rb')
     reffile = pysam.Fastafile(args.refFasta)
-    logfile = open(args.outBamFile + ".log", 'w')
+    logfile = open(args.outBamFile + '_' + '_'.join(bedline.strip().split()) + ".log", 'w')
     exclfile = 'exclude.' + str(random.random()) + '.txt'
     exclude = open(exclfile, 'w')
 
@@ -443,18 +443,6 @@ def makemut(args, bedline):
     bamfile.close()
 
     return outbam_mutsfile, exclfile
-    '''
-    #FIXME
-    print "addsv.py finished, made", nmuts, "mutations."
-
-    logfile.close()
-
-    print "merging mutations into", args.bamFileName, "-->", args.outBamFile
-    replace(args.bamFileName, outbam_mutsfile, args.outBamFile, args.exclfile)
-
-    # cleanup
-    os.remove(outbam_mutsfile)
-    '''
 
 def main(args):
     tmpbams = []
