@@ -514,7 +514,7 @@ def main(args):
     print "bams:",tmpbams
     print "excl:",exclfns
 
-    excl_merged = 'exclude.final.' + str(random.random()) + '.bam'
+    excl_merged = 'exclude.final.' + str(random.random()) + '.txt'
     mergedtmp = 'mergetmp.final.' + str(random.random()) + '.bam'
 
     print "merging exclude files into", excl_merged, "..."
