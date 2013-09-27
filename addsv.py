@@ -267,6 +267,38 @@ def mergebams(bamlist, outbamfn, maxopen=100):
             os.remove(bamfile)
             os.remove(bamfile + '.bai')
 
+def align(qryseq, refseq):
+    rnd = str(random.random())
+    tgtfa = 'tmp.' + rnd + '.tgt.fa'
+    qryfa = 'tmp.' + rnd + '.qry.fa'
+
+    tgt = open(tgtfa, 'w')
+    qry = open(qryfa, 'w')
+
+    tgt.write('>ref' + '\n' + refseq + '\n')
+    qry.write('>qry' + '\n' + qryseq + '\n')
+
+    tgt.close()
+    qry.close()
+
+    cmd = ['exonerate', '--bestn', '1', '-m', 'ungapped', '--showalignment','0', '--ryo', 'SUMMARY\t%s\t%qab\t%qae\t%tab\t%tae\n', qryfa, tgtfa]
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    best = []
+    topscore = 0
+
+    for pline in p.stdout.readlines():
+        if pline.startswith('SUMMARY'):
+            c = pline.strip().split()
+            if int(c[1]) > topscore:
+                topscore = int(c[1])
+                best = c
+
+    os.remove(tgtfa)
+    os.remove(qryfa)
+
+    return best
+
 def replace(origbamfile, mutbamfile, outbamfile, excludefile):
     ''' open .bam file and call replacereads
     '''
@@ -314,7 +346,8 @@ def makemut(args, bedline):
                 svfrac = 1.0/float(cn)
                 sys.stderr.write("adjusted MAF: " + str(svfrac) + "\n")
 
-    print "interval:",c
+    print "interval:", c
+    print "length:", end-start
     # modify start and end if interval is too long
     maxctglen = int(args.maxctglen)
     assert maxctglen > 3*int(args.maxlibsize) # maxctglen is too short
@@ -334,6 +367,11 @@ def makemut(args, bedline):
         if contig.len > maxlen:
             maxlen = contig.len
             maxcontig = contig
+
+    alignstats = align(maxcontig.seq, reffile.fetch(chrom,start,end))
+
+    print "best contig length:", maxlen
+    print "alignment result:", alignstats
 
     # is there anough room to make mutations?
     if maxlen > 3*int(args.maxlibsize):
