@@ -41,20 +41,8 @@ def remap(fq1, fq2, threads, bwaref, outbam, deltmp=True):
     os.remove(tmpbam)
     os.rename(tmpsrt + ".bam", tmpbam)
 
-    ## the following may be unneeded after recent refactor:
-    if os.path.isfile(outbam):
-        tmpmerge  = basefn + ".merge.bam"
-        mergeargs = ['samtools','merge',tmpmerge,tmpbam,outbam]
-        print outbam + " exists, merging: " + " ".join(mergeargs)
-        subprocess.call(mergeargs)
-        os.remove(outbam)
-        os.remove(tmpbam)
-        print "rename " + tmpmerge + " --> " + outbam
-        os.rename(tmpmerge, outbam)
-    else:
-        print "rename " + tmpbam + " --> " + outbam
-        os.rename(tmpbam, outbam)
-    ##
+    print "rename " + tmpbam + " --> " + outbam
+    os.rename(tmpbam, outbam)
 
     # cleanup
     if deltmp:
