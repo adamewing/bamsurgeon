@@ -356,13 +356,18 @@ def makemut(args, bedline):
             maxlen = contig.len
             maxcontig = contig
 
+    # trim contig to get best ungapped aligned region to ref.
     alignstats = align(maxcontig.seq, reffile.fetch(chrom,start,end))
+    qrystart, qryend = alignstats[2:4]
 
     print "best contig length:", maxlen
     print "alignment result:", alignstats
 
+    maxcontig.trimseq(qrystart, qryend)
+    print "trimmed contig length:", maxcontig.len
+
     # is there anough room to make mutations?
-    if maxlen > 3*int(args.maxlibsize):
+    if maxcontig.len > 3*int(args.maxlibsize):
         # make mutation in the largest contig
         mutseq = ms.MutableSeq(maxcontig.seq)
 

@@ -49,6 +49,17 @@ class Contig:
         assert self.name
         assert self.seq
         assert self.len
+
+    def subseq(self, start, end):
+        start = int(start)
+        end   = int(end)
+        assert start < end
+        return self.seq[start:end]
+
+    def trimseq(self, start, end):
+        self.seq = self.subseq(start, end)
+        self.len = len(self.seq)
+
     def __str__(self):
         return ">" + self.name + "\n" + self.seq 
 
