@@ -308,6 +308,7 @@ def align(qryseq, refseq):
 
 def check_asmvariants(bamfile, contigseq, reffile, chrom, refstart, refend):
     ''' check contig for variants, add full depth variants if they're present in the original bam but not the local assembly '''
+
     refbases = list(reffile.fetch(chrom, refstart, refend))
     ctgbases = list(contigseq)
 
@@ -444,6 +445,9 @@ def makemut(args, bedline):
     refstart = start + tgtstart
     refend = start + tgtend
 
+    if refstart > refend:
+        refstart, refend = refend, refstart
+    
     print 'start, end, tgtstart, tgtend, refstart, refend:', start, end, tgtstart, tgtend, refstart, refend
 
     #print '***DEBUG***'
@@ -451,12 +455,12 @@ def makemut(args, bedline):
     #print reffile.fetch(chrom, refstart, refend)
     #print '***DEBUG***'
 
-    check_asmvariants(args.bamFileName, maxcontig.seq, reffile, chrom, refstart, refend)
+    fixedseq = check_asmvariants(args.bamFileName, maxcontig.seq, reffile, chrom, refstart, refend)
 
     # is there anough room to make mutations?
     if maxcontig.len > 3*int(args.maxlibsize):
         # make mutation in the largest contig
-        mutseq = ms.MutableSeq(maxcontig.seq)
+        mutseq = ms.MutableSeq(fixedseq)
 
         # support for multiple mutations
         for actionstr in actions:
@@ -497,20 +501,20 @@ def makemut(args, bedline):
                 else:
                     dsize = 1.0
 
-            logfile.write(">" + chrom + ":" + str(start) + "-" + str(end) + " BEFORE\n" + str(mutseq) + "\n")
+            logfile.write(">" + chrom + ":" + str(refstart) + "-" + str(refend) + " BEFORE\n" + str(mutseq) + "\n")
 
             if action == 'INS':
                 if insseqfile: # seq in file
                     mutseq.insertion(mutseq.length()/2,singleseqfa(insseqfile),tsdlen)
                 else: # seq is input
                     mutseq.insertion(mutseq.length()/2,insseq,tsdlen)
-                logfile.write("\t".join(('ins',chrom,str(start),str(end),action,str(mutseq.length()),str(mutseq.length()/2),str(insseqfile),str(tsdlen))) + "\n")
+                logfile.write("\t".join(('ins',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(mutseq.length()/2),str(insseqfile),str(tsdlen))) + "\n")
 
             elif action == 'INV':
                 invstart = int(args.maxlibsize)
                 invend = mutseq.length() - invstart
                 mutseq.inversion(invstart,invend)
-                logfile.write("\t".join(('inv',chrom,str(start),str(end),action,str(mutseq.length()),str(invstart),str(invend))) + "\n")
+                logfile.write("\t".join(('inv',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(invstart),str(invend))) + "\n")
 
             elif action == 'DEL':
                 delstart = int(args.maxlibsize)
@@ -527,18 +531,18 @@ def makemut(args, bedline):
                 delend   -= dadj/2
 
                 mutseq.deletion(delstart,delend)
-                logfile.write("\t".join(('del',chrom,str(start),str(end),action,str(mutseq.length()),str(delstart),str(delend),str(dlen))) + "\n")
+                logfile.write("\t".join(('del',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(delstart),str(delend),str(dlen))) + "\n")
 
             elif action == 'DUP':
                 dupstart = int(args.maxlibsize)
                 dupend = mutseq.length() - dupstart
                 mutseq.duplication(dupstart,dupend,ndups)
-                logfile.write("\t".join(('dup',chrom,str(start),str(end),action,str(mutseq.length()),str(dupstart),str(dupend),str(ndups))) + "\n")
+                logfile.write("\t".join(('dup',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(dupstart),str(dupend),str(ndups))) + "\n")
 
             else:
                 raise ValueError(bedline.strip() + ": mutation not one of: INS,INV,DEL,DUP")
 
-            logfile.write(">" + chrom + ":" + str(start) + "-" + str(end) +" AFTER\n" + str(mutseq) + "\n")
+            logfile.write(">" + chrom + ":" + str(refstart) + "-" + str(refend) +" AFTER\n" + str(mutseq) + "\n")
 
         # simulate reads
         (fq1, fq2) = runwgsim(maxcontig, mutseq.seq, svfrac, exclude)
