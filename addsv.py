@@ -307,21 +307,56 @@ def align(qryseq, refseq):
     return best
 
 def check_asmvariants(bamfile, contigseq, reffile, chrom, refstart, refend):
+    ''' check contig for variants, add full depth variants if they're present in the original bam but not the local assembly '''
     refbases = list(reffile.fetch(chrom, refstart, refend))
     ctgbases = list(contigseq)
+
     offset = 0
+    numchanges = 0
+    changepos = []
 
-    matches = 0
-    mismatches = 0
+    region = chrom + ':' + str(refstart) + '-' + str(refend)
+    lastpos  = refstart-1
+    mpargs = ['samtools', 'mpileup', '-q','10','-r', region, '-f', reffile.filename, bamfile]
 
-    for refbase, ctgbase in izip(refbases, ctgbases):
-        if refbase == ctgbase:
-            matches += 1
-        else:
-            mismatches += 1
+    print "pileup:", mpargs
 
-    print "matches, mismatches:",matches,mismatches
- 
+    p = subprocess.Popen(mpargs, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    for line in p.stdout.readlines():
+        mpileupstr=''
+        c = line.strip().split()
+        if len(c) == 6:
+            refpos     = int(c[1])
+            refbase    = c[2].upper()
+            depth      = int(c[3])
+            mpileupstr = c[4]
+
+            assert refpos > lastpos
+
+            baselist = []
+            for base in list(mpileupstr):
+                base = base.upper()
+                if base in ['A', 'T', 'G', 'C']:
+                    baselist.append(base)
+
+            basecount = Counter(baselist)
+
+            for base, count in basecount.items():
+                if count > depth/2:
+                    ctgbases[offset] = base
+                    numchanges += 1
+                    changepos.append(refpos)
+
+            offset += (refpos-lastpos)
+            lastpos = refpos
+
+    if numchanges > len(contigseq) * .10: # could set as a parameter
+        sys.stderr.write("*** Whoops, I mangled a contig! Returning original... *** " + region + "\n")
+        return contigseq 
+
+    print "contig editing successful, made", numchanges, "changes."
+    print "change positions: " + ','.join(map(str, changepos))
+    return ''.join(ctgbases) 
 
 def replace(origbamfile, mutbamfile, outbamfile, excludefile):
     ''' open .bam file and call replacereads
