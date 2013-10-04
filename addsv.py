@@ -7,6 +7,7 @@ import pysam
 import bs.replacereads as rr
 import bs.asmregion as ar
 import bs.mutableseq as ms
+from itertools import izip
 from collections import Counter
 from multiprocessing import Pool
 
@@ -27,16 +28,26 @@ def remap(fq1, fq2, threads, bwaref, outbam, deltmp=True):
     bamargs  = ['samtools', 'view', '-bt', refidx, '-o', tmpbam, samfn]
     sortargs = ['samtools', 'sort', tmpbam, tmpsrt]
 
-    print "mapping 1st end, cmd: " + " ".join(sai1args)
-    subprocess.call(sai1args)
-    print "mapping 2nd end, cmd: " + " ".join(sai2args)
-    subprocess.call(sai2args)
+    print "mapping 1st end, cmd: " + " ".join(sai2args)
+    p = subprocess.Popen(sai2args, stderr=subprocess.STDOUT)
+    p.wait()
+
+    print "mapping 2nd end, cmd: " + " ".join(sai1args)
+    p = subprocess.Popen(sai1args, stderr=subprocess.STDOUT)
+    p.wait()
+
     print "pairing ends, building .sam, cmd: " + " ".join(samargs)
-    subprocess.call(samargs)
+    p = subprocess.Popen(samargs, stderr=subprocess.STDOUT)
+    p.wait()
+
     print "sam --> bam, cmd: " + " ".join(bamargs)
-    subprocess.call(bamargs)
+    p = subprocess.Popen(bamargs, stderr=subprocess.STDOUT)
+    p.wait()
+
     print "sorting, cmd: " + " ".join(sortargs)
-    subprocess.call(sortargs)
+    p = subprocess.Popen(sortargs, stderr=subprocess.STDOUT)
+    p.wait()
+
     print "rename " + tmpsrt + ".bam --> " + tmpbam
     os.remove(tmpbam)
     os.rename(tmpsrt + ".bam", tmpbam)
@@ -177,6 +188,14 @@ def fqReplaceList(fqfile,names,quals,svfrac,exclude):
     fqout = open(fqfile,'w')
     for i in range(namenum):
         fqout.write("@" + newnames[i] + "\n")
+
+        # make sure quality strings are the same length as the sequences
+        while len(seqs[i]) > len(quals[i]):
+            quals[i] = quals[i] + 'B'
+
+        if len(seqs[i]) < len(quals[i]):
+            quals[i] = quals[i][:len(seqs[i])]
+
         fqout.write(seqs[i] + "\n+\n" + quals[i] + "\n")
         if newnames[i] in usednames:
             print "warning, used read name: " + newnames[i] + " in multiple pairs"
@@ -287,6 +306,23 @@ def align(qryseq, refseq):
 
     return best
 
+def check_asmvariants(bamfile, contigseq, reffile, chrom, refstart, refend):
+    refbases = list(reffile.fetch(chrom, refstart, refend))
+    ctgbases = list(contigseq)
+    offset = 0
+
+    matches = 0
+    mismatches = 0
+
+    for refbase, ctgbase in izip(refbases, ctgbases):
+        if refbase == ctgbase:
+            matches += 1
+        else:
+            mismatches += 1
+
+    print "matches, mismatches:",matches,mismatches
+ 
+
 def replace(origbamfile, mutbamfile, outbamfile, excludefile):
     ''' open .bam file and call replacereads
     '''
@@ -357,14 +393,30 @@ def makemut(args, bedline):
             maxcontig = contig
 
     # trim contig to get best ungapped aligned region to ref.
-    alignstats = align(maxcontig.seq, reffile.fetch(chrom,start,end))
-    qrystart, qryend = alignstats[2:4]
+    refseq = reffile.fetch(chrom,start,end)
+    alignstats = align(maxcontig.seq, refseq)
+    qrystart, qryend = map(int, alignstats[2:4])
+    tgtstart, tgtend = map(int, alignstats[4:6])
+
+    refseq = refseq[tgtstart:tgtend]
 
     print "best contig length:", maxlen
     print "alignment result:", alignstats
 
     maxcontig.trimseq(qrystart, qryend)
     print "trimmed contig length:", maxcontig.len
+
+    refstart = start + tgtstart
+    refend = start + tgtend
+
+    print 'start, end, tgtstart, tgtend, refstart, refend:', start, end, tgtstart, tgtend, refstart, refend
+
+    #print '***DEBUG***'
+    #print maxcontig.seq
+    #print reffile.fetch(chrom, refstart, refend)
+    #print '***DEBUG***'
+
+    check_asmvariants(args.bamFileName, maxcontig.seq, reffile, chrom, refstart, refend)
 
     # is there anough room to make mutations?
     if maxcontig.len > 3*int(args.maxlibsize):
