@@ -5,7 +5,7 @@ import sys
 
 def randomindel():
     i = randint(0,1)
-    l = int(expovariate(7)*10)+1 # indel size, exponential dist to bias towards shorter indels
+    l = int(expovariate(10)*100)+1 # indel size, exponential dist to bias towards shorter indels
     if i == 0: # DEL
         return "DEL " + str(l)
     if i == 1: # INS
