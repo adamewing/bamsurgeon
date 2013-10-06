@@ -1,6 +1,10 @@
 #!/bin/env python
 
-import argparse, random, pysam, re
+import argparse
+import random
+import pysam
+import re
+import subprocess
 
 def main(args):
 
@@ -78,6 +82,29 @@ def main(args):
             if reject:
                 continue
 
+        # handle bamfile depth option
+        if args.bamfile is not None and int(args.mindepth) > 0:
+            reject = False
+    
+            # pileup 
+            region = rndchr + ':' + str(fragstart) + '-' + str(fragend)
+            mpargs = ['samtools', 'mpileup', '-r', region, args.bamfile]
+            p = subprocess.Popen(mpargs, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            lastpos = fragstart-1
+            for line in p.stdout.readlines():
+                c = line.strip().split()
+                if len(c) == 6:
+                    pos   = int(c[1])
+                    depth = int(c[3])
+                    if depth < int(args.mindepth):
+                        reject = True
+                    if pos - lastpos > 1:
+                        reject = True
+                    lastpos = pos
+
+            if reject:
+                continue
+
         # don't pick sites on contigs if --nocontigs is set
         if (rndchr.startswith('chr') and len(rndchr) > 5) or (not rndchr.startswith('chr') and len(rndchr) > 2):
             if args.nocontigs:
@@ -105,6 +132,8 @@ if __name__ == '__main__':
     parser.add_argument('-f', '--fasta', dest='fastaFile', default=None, help="if used, the fragment sequence is returned with coordinates")
     parser.add_argument('-n', '--num', dest='numpicks', required=True, help="number of sites to pick")
     parser.add_argument('-c', '--chr', dest='chrom', default=None, help='make mutations on one chromosome only')
+    parser.add_argument('-b', '--bamfile', dest='bamfile', default=None, help='bamfile to use with -d/--mindepth')
+    parser.add_argument('-d', '--mindepth', dest='mindepth', default=0, help='mindepth to use with -b/--bamfile')
     parser.add_argument('--maptabix', dest='maptabix', default=None, help='mappability tabix, required for --minmap')
     parser.add_argument('--minmap', dest='minmap', default=0.8, help='only select regions above mappability threshold (default 0.8)')
     parser.add_argument('--lmin', dest='minlen', default=1, help='minimum fragment length (default=1)')
