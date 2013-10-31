@@ -185,7 +185,7 @@ def asm(chr, start, end, bamfilename, reffile, kmersize, noref=False, recycle=Fa
                 nreads += 1
                 if not read.is_proper_pair:
                     ndisc  += 1
-                if nreads % 100 == 0:
+                if nreads % 1000 == 0:
                     print "found mates for", nreads, "reads,", float(ndisc)/float(nreads), "discordant."
                 if read.is_read1:
                     if read.is_reverse:

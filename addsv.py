@@ -389,7 +389,7 @@ def makemut(args, bedline):
     try:
         bamfile = pysam.Samfile(args.bamFileName, 'rb')
         reffile = pysam.Fastafile(args.refFasta)
-        logfile = open(args.outBamFile + '_' + '_'.join(bedline.strip().split()) + ".log", 'w')
+        logfile = open('addsv_logs_' + os.path.basename(args.outBamFile) + '/' + os.path.basename(args.outBamFile) + '_' + '_'.join(bedline.strip().split()) + ".log", 'w')
         exclfile = 'exclude.' + str(random.random()) + '.txt'
         exclude = open(exclfile, 'w')
 
@@ -598,6 +598,10 @@ def main(args):
     pool = Pool(processes=int(args.procs))
 
     nmuts = 0
+
+    if not os.path.exists('addsv_logs_' + os.path.basename(args.outBamFile)):
+        os.mkdir('addsv_logs_' + os.path.basename(args.outBamFile))
+        print "created log directory: addsv_logs_" + os.path.basename(args.outBamFile)
 
     with open(args.varFileName, 'r') as varfile:
         for bedline in varfile:

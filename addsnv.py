@@ -269,7 +269,7 @@ def makemut(args, chrom, start, end, vaf):
     if (args.cnvfile):
         cnv = pysam.Tabixfile(args.cnvfile, 'r')
 
-    log = open(args.outBamFile + "." + "_".join((chrom,str(start),str(end))) + ".log",'w')
+    log = open('addsnv_logs_' + os.path.basename(args.outBamFile) + '/' + os.path.basename(args.outBamFile) + "." + "_".join((chrom,str(start),str(end))) + ".log",'w')
 
     # keep a list of reads to modify - use hash to keep unique since each
     # read will be visited as many times as it has bases covering the region
@@ -442,6 +442,10 @@ def main(args):
     outbam_muts.close()
     bamfile.close()
     tmpbams = []
+
+    if not os.path.exists('addsnv_logs_' + os.path.basename(args.outBamFile)):
+        os.mkdir('addsnv_logs_' + os.path.basename(args.outBamFile))
+        print "created directory: addsnv_logs_" + os.path.basename(args.outBamFile)
 
     pool = Pool(processes=int(args.procs))
     results = []
