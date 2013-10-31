@@ -372,6 +372,17 @@ def replace(origbamfile, mutbamfile, outbamfile, excludefile):
     mutbam.close()
     outbam.close()
 
+def discordant_fraction(bamfile, chrom, start, end):
+    r = 0
+    d = 0
+    bam = pysam.Samfile(bamfile, 'rb')
+    for read in bam.fetch(chrom, start, end):
+        r += 1
+        if not read.is_proper_pair:
+            d += 1
+
+    return float(d)/float(r)
+
 def makemut(args, bedline):
     #varfile = open(args.varFileName, 'r')
 
@@ -419,6 +430,14 @@ def makemut(args, bedline):
             start = start + rndpt
             end   = end - (adj-rndpt)
             print "note: interval size too long, adjusted:",chrom,start,end
+
+        dfrac = discordant_fraction(args.bamFileName, chrom, start, end)
+        print "discordant fraction:",dfrac
+
+        maxdfrac = 0.1 # FIXME make a parameter
+        if dfrac > .1: 
+            print "discordant fraction >", maxdfrac, "aborting mutation!"
+            return None, None
 
         contigs = ar.asm(chrom, start, end, args.bamFileName, reffile, int(args.kmersize), args.noref, args.recycle)
 

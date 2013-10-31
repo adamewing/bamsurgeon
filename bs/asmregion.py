@@ -171,8 +171,11 @@ def asm(chr, start, end, bamfilename, reffile, kmersize, noref=False, recycle=Fa
 
     readpairs = {}
     nreads = 0
+    ndisc  = 0 # track discordant reads
     rquals = []
     mquals = []
+
+
     for read in bamfile.fetch(chr,start,end):
         if not read.mate_is_unmapped and read.is_paired:
             # FIXME add try/except to prevent crash if mate doesn't exist
@@ -180,6 +183,10 @@ def asm(chr, start, end, bamfilename, reffile, kmersize, noref=False, recycle=Fa
                 mate = matefile.mate(read)
                 readpairs[read.qname] = ReadPair(read,mate)
                 nreads += 1
+                if not read.is_proper_pair:
+                    ndisc  += 1
+                if nreads % 100 == 0:
+                    print "found mates for", nreads, "reads,", float(ndisc)/float(nreads), "discordant."
                 if read.is_read1:
                     if read.is_reverse:
                         rquals.append(read.qual[::-1])
