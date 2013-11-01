@@ -5,7 +5,7 @@ from os import getcwd
 import sys
 
 def randomsv():
-    pre = getcwd() + '/ins_seqs/'
+    pre = os.path.dirname(os.path.realpath(__file__)) + '/ins_seqs/'
     i = randint(0,3)
     if i == 0: # DEL
         dfrac = uniform(0.5,1)
