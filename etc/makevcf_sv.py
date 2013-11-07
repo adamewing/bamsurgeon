@@ -116,6 +116,11 @@ def process_block(lines, ref):
     os.remove(tgtfa)
     os.remove(qryfa)
 
+    if None in (bnd1, bnd2):
+        precise = False
+        bnd1 = refstart
+        bnd2 = refend
+
     return chrom, bnd1, bnd2, precise, mut[0], len(before_seq)-len(after_seq)
 
 if len(sys.argv) == 3:
