@@ -3,6 +3,7 @@
 \usepackage{graphicx}
 \usepackage[margin=1.0in]{geometry}
 \usepackage[hyphens]{url}
+\usepackage{hyperref}
 
 \makeatletter
 \setlength{\@fptop}{0pt}
@@ -126,10 +127,42 @@ optional arguments:
     
      Output consists of a BAM file containing the spike-in mutations and a directory of log files describing which bases were changed in which reads (one log per mutation) and the local assemblies for each region where a mutation was made. Currently, the directory containing output logs for SV spike-ins can be transformed into VCF format using the script \texttt {makevcf\_sv.py} in the \texttt {etc/} subdirectory. The spike-in process may be multithreaded through the sue of the \texttt {-p / --procs} option.
 
+\newpage % forces fig 2 into the right place
+
 \begin{figure}[!h]
 \centering
 \includegraphics[width=5.5in]{bamsurgeon_sv_del.eps}
 \caption{Method for adding multi-nucleotide variants (indels and SVs) to existing BAMs: deletion example. Starting with the original BAM alignment (a) regions, e.g. (b), are assembled using Velvet/Columbus (\texttt{http://www.ebi.ac.uk/~zerbino/velvet/}) and the desired mutation(s) are created in the largest contig. Read coverage is simulated over the contig using wgsim (\texttt{https://github.com/lh3/wgsim}, also included with samtools) with parameters \texttt{-e 0 -r 0 -R 0} to suppress additional mutations, other parameters are set based on the input BAM and desired coverage. Simulated coverage is scaled based on whether the mutation is adds sequence (duplication) or removes sequence (deletions), and replaced into the original BAM while excluded reads are removed from the original BAM (d).}
 \end{figure}
+
+\section{Testing}
+The \texttt{test/} directory contains two scripts useful for testing bamsurgeon installations, one for SNVs and one for SVs.
+\subsection{Testing addsnv.py}
+The script {test/test\_snv.sh} may be run with no parameters to display a usage statement:
+\begin{verbatim}
+usage: ./test_snv.sh <number of SNPs> <number of threads> <reference indexed with bwa index>
+\end{verbatim}
+
+The number of SNPs can be up to 100 and are selected from the file \texttt{test\_data/random\_snvs.txt}, number of threads must be specified, use 1 to run on a single core, and the final argument must be a path to a human genome (GRCh37) reference indexed with \texttt{bwa index -a bwtsw}. The reference \textbf{should not} use the 'chr' prefix on the chromosome names.
+
+\subsection{Testing addsv.py}
+The script {test/test\_sv.sh} may be run with no parameters to display a usage statement:
+\begin{verbatim}
+usage: ./test_sv.sh <reference indexed with bwa index>
+\end{verbatim}
+
+\section{Software Dependencies}
+bamsurgeon requires the following software packages be available:
+
+\begin{enumerate}
+  \item samtools/wgsim/tabix (\url{http://samtools.sourceforge.net/})
+  \item pysam (\url{http://code.google.com/p/pysam/} or \texttt{pip install pysam})
+  \item bwa (\url{http://bio-bwa.sourceforge.net/})
+  \item velvet (\url{http://www.ebi.ac.uk/~zerbino/velvet/})
+  \item exonerate (\url{http://www.ebi.ac.uk/~guy/exonerate/})
+\end{enumerate}
+
+\section{Other Considerations}
+Reads should be re-aligned using the same aligner and parameters as were used to create the original BAM file. By default, bamsurgeon assumes alignments were performed using bwa with parameters \texttt{-q 5 -l 32 -k 3 -o 1}. The specific parameters are not currently specifiable on the command line but may be altered through modification of the functions \texttt{remap\_paired} (for paired reads) or \texttt{remap\_single} (for single reads in \texttt{addsnv.py} only). In testing, it has been straightforward to substitute other aligners (e.g. for RNA-seq spike-in) and future plans include a library of remapping functions from which a user may select.
 
 \end{document}
