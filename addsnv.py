@@ -110,7 +110,7 @@ def countBaseAtPos(bamfile,chrom,pos):
 
     return bases
 
-def mergebams(bamlist, outbamfn, maxopen=100):
+def mergebams(bamlist, outbamfn, maxopen=1000):
     """ call samtools to merge two .bams
     """
 
@@ -476,7 +476,7 @@ def main(args):
     if len(tmpbams) == 1:
         os.rename(tmpbams[0],outbam_mutsfile)
     elif len(tmpbams) > 1:
-        mergebams(tmpbams,outbam_mutsfile)
+        mergebams(tmpbams,outbam_mutsfile,maxopen=int(args.maxopen))
 
     bedfile.close()
 
@@ -507,5 +507,6 @@ if __name__ == '__main__':
     parser.add_argument('--det', action='store_true', default=False, help="deterministic base changes: make transitions only")
     parser.add_argument('--force', action='store_true', default=False, help="force mutation to happen regardless of nearby SNP or low coverage")
     parser.add_argument('--single', action='store_true', default=False, help="input BAM is simgle-ended (default is paired-end)")
+    parser.add_argument('--maxopen', dest='maxopen', default=1000, help="maximum number of open files during merge (default 1000)")
     args = parser.parse_args()
     main(args)
