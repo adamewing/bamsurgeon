@@ -1,8 +1,7 @@
 #!/bin/env python
 
 from random import *
-from os import getcwd
-import sys
+import sys, os
 
 def randomsv():
     pre = os.path.dirname(os.path.realpath(__file__)) + '/ins_seqs/'
