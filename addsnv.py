@@ -51,7 +51,7 @@ def mut(base,det=False):
             mut = bases[int(random.uniform(0,4))]
         return mut
 
-def countReadCoverage(bam,chrom,start,end,strand=None):
+def countReadCoverage(bam,chrom,start,end):
     """ calculate coverage of aligned reads over region
     """
 
@@ -67,15 +67,8 @@ def countReadCoverage(bam,chrom,start,end,strand=None):
             n = 0
             if pcol.pos >= start and pcol.pos <= end:
                 for read in pcol.pileups:
-                    if strand == '+':
-                        if not read.alignment.is_reverse and read.alignment.mapq >= 0 and not read.alignment.is_duplicate:
-                            n += 1
-                    elif strand == '-':
-                        if read.alignment.is_reverse and read.alignment.mapq >= 0 and not read.alignment.is_duplicate:
-                            n += 1
-                    else:
-                        if read.alignment.mapq >= 0 and not read.alignment.is_duplicate:
-                            n += 1
+                    if read.alignment.mapq >= 0 and not read.alignment.is_duplicate:
+                        n += 1
                 coverage[i] = n
                 i += 1
 
