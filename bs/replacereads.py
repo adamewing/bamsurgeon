@@ -80,7 +80,7 @@ def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=No
     excount = 0 # number of excluded reads
     nullcount = 0 # number of null reads
     for read in donorbam.fetch(until_eof=True):
-        if not read.is_secondary and read.seq: # sanity check - don't include null reads
+        if read.seq: # sanity check - don't include null reads
             if read.qname not in exclude:
                 pairname = 'F' # read is first in pair
                 if read.is_read2:
@@ -129,6 +129,8 @@ def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=No
                         rdict[extqname].qual = read.qual
                     except ValueError as e:
                         sys.stderr.write("error replacing quality score for read: " + str(rdict[extqname].qname) + " : " + str(e) + "\n")
+                        sys.stderr.write("donor:  " + str(rdict[extqname]) + "\n")
+                        sys.stderr.write("target: " + str(read) + "\n")
                         sys.exit(1)
                 rdict[extqname] = cleanup(rdict[extqname],RG)
                 outputbam.write(rdict[extqname])  # write read from donor .bam

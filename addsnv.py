@@ -282,32 +282,33 @@ def makemut(args, chrom, start, end, vaf):
             refbase = reffile.fetch(chrom,pcol.pos-1,pcol.pos)
             basepile = ''
             for pread in pcol.pileups:
-                basepile += pread.alignment.seq[pread.qpos-1]
-                pairname = 'F' # read is first in pair
-                if pread.alignment.is_read2:
-                    pairname = 'S' # read is second in pair
-                if not pread.alignment.is_paired:
-                    pairname = 'U' # read is unpaired
+                if not pread.is_secondary: # only consider primary alignments
+                    basepile += pread.alignment.seq[pread.qpos-1]
+                    pairname = 'F' # read is first in pair
+                    if pread.alignment.is_read2:
+                        pairname = 'S' # read is second in pair
+                    if not pread.alignment.is_paired:
+                        pairname = 'U' # read is unpaired
 
-                extqname = ','.join((pread.alignment.qname,str(pread.alignment.pos),pairname))
+                    extqname = ','.join((pread.alignment.qname,str(pread.alignment.pos),pairname))
 
-                if pcol.pos == mutpos:
-                    if not pread.alignment.mate_is_unmapped:
-                        outreads[extqname] = pread.alignment
-                        mutbases = list(pread.alignment.seq)
-                        mutbases[pread.qpos-1] = mutbase
-                        mutread = ''.join(mutbases)
-                        mutreads[extqname] = mutread
-                        mate = None
-                        if not args.single:
-                            try:
-                                mate = bammate.mate(pread.alignment)
-                            except:
-                                print "warning: no mate for",pread.alignment.qname
-                        mutmates[extqname] = mate
-                        log.write(" ".join(('read',extqname,mutread,"\n")))
-                    else:
-                        numunmap += 1
+                    if pcol.pos == mutpos:
+                        if not pread.alignment.mate_is_unmapped:
+                            outreads[extqname] = pread.alignment
+                            mutbases = list(pread.alignment.seq)
+                            mutbases[pread.qpos-1] = mutbase
+                            mutread = ''.join(mutbases)
+                            mutreads[extqname] = mutread
+                            mate = None
+                            if not args.single:
+                                try:
+                                    mate = bammate.mate(pread.alignment)
+                                except:
+                                    print "warning: no mate for",pread.alignment.qname
+                            mutmates[extqname] = mate
+                            log.write(" ".join(('read',extqname,mutread,"\n")))
+                        else:
+                            numunmap += 1
 
             # make sure region doesn't have any changes that are likely SNPs
             # (trying to avoid messing with haplotypes)
