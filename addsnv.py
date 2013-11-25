@@ -282,7 +282,7 @@ def makemut(args, chrom, start, end, vaf):
             refbase = reffile.fetch(chrom,pcol.pos-1,pcol.pos)
             basepile = ''
             for pread in pcol.pileups:
-                if not pread.is_secondary: # only consider primary alignments
+                if not pread.alignment.is_secondary: # only consider primary alignments
                     basepile += pread.alignment.seq[pread.qpos-1]
                     pairname = 'F' # read is first in pair
                     if pread.alignment.is_read2:
