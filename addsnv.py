@@ -293,7 +293,7 @@ def makemut(args, chrom, start, end, vaf):
                     extqname = ','.join((pread.alignment.qname,str(pread.alignment.pos),pairname))
 
                     if pcol.pos == mutpos:
-                        if not pread.alignment.mate_is_unmapped:
+                        if not pread.alignment.is_secondary and not pread.alignment.mate_is_unmapped:
                             outreads[extqname] = pread.alignment
                             mutbases = list(pread.alignment.seq)
                             mutbases[pread.qpos-1] = mutbase
