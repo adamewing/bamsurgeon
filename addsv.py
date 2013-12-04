@@ -2,6 +2,7 @@
 
 import re, os, sys, random
 import subprocess
+import traceback
 import argparse
 import pysam
 import bs.replacereads as rr
@@ -381,7 +382,10 @@ def discordant_fraction(bamfile, chrom, start, end):
         if not read.is_proper_pair:
             d += 1
 
-    return float(d)/float(r)
+    if r > 0:
+        return float(d)/float(r)
+    else:
+        return 0.0
 
 def makemut(args, bedline):
     #varfile = open(args.varFileName, 'r')
@@ -389,7 +393,8 @@ def makemut(args, bedline):
     try:
         bamfile = pysam.Samfile(args.bamFileName, 'rb')
         reffile = pysam.Fastafile(args.refFasta)
-        logfile = open('addsv_logs_' + os.path.basename(args.outBamFile) + '/' + os.path.basename(args.outBamFile) + '_' + '_'.join(bedline.strip().split()) + ".log", 'w')
+        logfn   = '_'.join(map(os.path.basename, bedline.strip().split())) + ".log"
+        logfile = open('addsv_logs_' + os.path.basename(args.outBamFile) + '/' + os.path.basename(args.outBamFile) + '_' + logfn, 'w')
         exclfile = 'exclude.' + str(random.random()) + '.txt'
         exclude = open(exclfile, 'w')
 
@@ -449,6 +454,10 @@ def makemut(args, bedline):
                 maxlen = contig.len
                 maxcontig = contig
 
+        if maxcontig is None:
+            print "maxcontig has length 0, aborting mutation!"
+            return None, None
+
         # trim contig to get best ungapped aligned region to ref.
         refseq = reffile.fetch(chrom,start,end)
         alignstats = align(maxcontig.seq, refseq)
@@ -470,11 +479,6 @@ def makemut(args, bedline):
             refstart, refend = refend, refstart
     
         print 'start, end, tgtstart, tgtend, refstart, refend:', start, end, tgtstart, tgtend, refstart, refend
-
-        #print '***DEBUG***'
-        #print maxcontig.seq
-        #print reffile.fetch(chrom, refstart, refend)
-        #print '***DEBUG***'
 
         fixedseq = check_asmvariants(args.bamFileName, maxcontig.seq, reffile, chrom, refstart, refend)
 
@@ -586,8 +590,10 @@ def makemut(args, bedline):
 
         return outbam_mutsfile, exclfile
 
-    except:
-        sys.stderr.write("***encountered error in mutation spikein: " + bedline + "\n")
+    except Exception, e:
+        sys.stderr.write("*"*60 + "\nencountered error in mutation spikein: " + bedline + "\n")
+        traceback.print_exc(file=sys.stdout)
+        sys.stderr.write("*"*60 + "\n")
         return None, None
 
 def main(args):
