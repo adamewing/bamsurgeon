@@ -68,6 +68,7 @@ def process_block(lines, ref):
     refend   = int(refend)
     refseq   = ref.fetch(chrom, refstart, refend)
 
+    '''
     rnd = str(random.random())
     tgtfa = 'tmp.' + rnd + '.tgt.fa'
     qryfa = 'tmp.' + rnd + '.qry.fa'
@@ -120,6 +121,11 @@ def process_block(lines, ref):
         precise = False
         bnd1 = refstart
         bnd2 = refend
+    '''
+
+    precise = False
+    bnd1 = refstart
+    bnd2 = refend
 
     return chrom, bnd1, bnd2, precise, mut[0], len(before_seq)-len(after_seq)
 
