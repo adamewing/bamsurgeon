@@ -314,18 +314,6 @@ def makemut(args, chrom, start, end, vaf, ins):
 
     snvfrac = float(args.snvfrac)
 
-    '''
-    mutpos = int(random.uniform(start,end+1)) # position of mutation in genome
-    refbase = reffile.fetch(chrom,mutpos-1,mutpos)
-
-    try:
-        mutbase = mut(refbase,args.det)
-    except ValueError as e:
-        sys.stderr.write(' '.join(("skipped site:",chrom,str(start),str(end),"due to N base:",str(e),"\n")))
-        return None
-
-    mutstr = refbase + "-->" + mutbase
-    '''
     mutstr = get_mutstr(chrom, start, end, ins, reffile)
 
     del_ln = 0
@@ -356,7 +344,6 @@ def makemut(args, chrom, start, end, vaf, ins):
     for pcol in bamfile.pileup(reference=chrom,start=mutpos,end=mutpos+del_ln+1):
         # this will include all positions covered by a read that covers the region of interest
         if pcol.pos: #> start and pcol.pos <= end:
-            #refbase = reffile.fetch(chrom,pcol.pos-1,pcol.pos)
             basepile = ''
             for pread in pcol.pileups:
                 if not pread.alignment.is_secondary: # only consider primary alignments
@@ -373,9 +360,6 @@ def makemut(args, chrom, start, end, vaf, ins):
                     if pcol.pos == mutpos:
                         if not pread.alignment.is_secondary and not pread.alignment.mate_is_unmapped:
                             outreads[extqname] = pread.alignment
-                            #mutbases = list(pread.alignment.seq)
-                            #mutbases[pread.qpos-1] = mutbase
-                            #mutread = ''.join(mutbases)
                             if is_insertion:
                                 mutreads[extqname] = makeins(pread.alignment, start, ins) #FIXME
                             if is_deletion:
@@ -498,7 +482,7 @@ def makemut(args, chrom, start, end, vaf, ins):
                 indelstr = ':'.join(('DEL', chrom, str(start), str(end)))
 
             snvstr = chrom + ":" + str(start) + "-" + str(end) + " (VAF=" + str(vaf) + ")"
-            log.write("\t".join(("indel",indelstr,str(mutpos),mutstr,str(avgoutcover),str(avgoutcover),str(spikein_frac),str(maxfrac)))+"\n")
+            log.write("\t".join(("indel",indelstr,str(mutpos),mutstr,str(avgincover),str(avgoutcover),str(spikein_frac),str(maxfrac)))+"\n")
         else:
             outbam_muts.close()
             os.remove(tmpoutbamname)

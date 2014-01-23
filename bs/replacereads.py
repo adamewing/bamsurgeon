@@ -80,7 +80,7 @@ def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=No
     excount = 0 # number of excluded reads
     nullcount = 0 # number of null reads
     for read in donorbam.fetch(until_eof=True):
-        if read.seq: # sanity check - don't include null reads
+        if read.seq and not read.is_secondary: # sanity check - don't include null reads, secondary alignments
             if read.qname not in exclude:
                 pairname = 'F' # read is first in pair
                 if read.is_read2:
@@ -99,7 +99,7 @@ def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=No
         else: # no seq!
             nullcount += 1
 
-    sys.stderr.write("loaded " + str(nr) + " reads, (" + str(excount) + " excluded, " + str(nullcount) + " null-->ignored)\n")
+    sys.stderr.write("loaded " + str(nr) + " reads, (" + str(excount) + " excluded, " + str(nullcount) + " null or secondary --> ignored)\n")
 
     excount = 0
     recount = 0 # number of replaced reads
