@@ -18,6 +18,8 @@ def print_header():
     ##INFO=<ID=SVTYPE,Number=1,Type=String,Description="Type of structural variant">
     ##INFO=<ID=SVLEN,Number=.,Type=Integer,Description="Difference in length between REF and ALT alleles">
     ##INFO=<ID=SOMATIC,Number=0,Type=Flag,Description="Somatic mutation in primary">
+    ##INFO=<ID=VAF,Number=1,Type=Float,Description="Variant Allele Frequency">
+    ##INFO=<ID=DPR,Number=1,Type=Float,Description="Avg Depth in Region (+/- 1bp)">
     ##INFO=<ID=MATEID,Number=1,Type=String,Description="Breakend mate">
     ##ALT=<ID=INV,Description="Inversion">
     ##ALT=<ID=DUP,Description="Duplication">
