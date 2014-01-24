@@ -2,6 +2,7 @@
 
 import sys, os
 import vcf
+import argparse
 
 '''
 Submission evaluation code for TCGA/ICGC/DREAM SMC
@@ -63,8 +64,10 @@ def relevant(rec, vtype, ignorechroms):
     rel = (rec.is_snp and vtype == 'SNV') or (rec.is_sv and vtype == 'SV') or (rec.is_indel and vtype == 'INDEL')
     return rel and (ignorechroms is None or rec.CHROM not in ignorechroms)
 
-def passfilter(rec):
+def passfilter(rec, disabled=False):
     ''' Return true if a record is unfiltered or has 'PASS' in the filter field (pyvcf sets FILTER to None) '''
+    if disabled:
+        return True
     if rec.FILTER is None or rec.FILTER == '.' or not rec.FILTER:
         return True
     return False
@@ -79,7 +82,7 @@ def svmask(rec, vcfh, truchroms):
     return False
 
 
-def evaluate(submission, truth, vtype='SNV', ignorechroms=None):
+def evaluate(submission, truth, vtype='SNV', ignorechroms=None, ignorepass=False):
     ''' return stats on sensitivity, specificity, balanced accuracy '''
 
     assert vtype in ('SNV', 'SV', 'INDEL')
@@ -103,7 +106,7 @@ def evaluate(submission, truth, vtype='SNV', ignorechroms=None):
 
     ''' parse submission vcf, compare to truth '''
     for subrec in subvcfh:
-        if passfilter(subrec):
+        if passfilter(subrec, disabled=ignorepass):
             if subrec.is_snp and vtype == 'SNV':
                 if not svmask(subrec, truvcfh, truchroms):
                     subrecs += 1
@@ -119,7 +122,7 @@ def evaluate(submission, truth, vtype='SNV', ignorechroms=None):
         if vtype == 'SV' and subrec.is_sv:
             startpos, endpos = expand_sv_ends(subrec)
         try:
-            if relevant(subrec, vtype, ignorechroms) and passfilter(subrec) and subrec.CHROM in truchroms:
+            if relevant(subrec, vtype, ignorechroms) and passfilter(subrec, disabled=ignorepass) and subrec.CHROM in truchroms:
                 for trurec in truvcfh.fetch(subrec.CHROM, startpos, end=endpos):
                     if match(subrec, trurec, vtype=vtype) and str(trurec) not in used_truth:
                         matched = True
@@ -131,43 +134,48 @@ def evaluate(submission, truth, vtype='SNV', ignorechroms=None):
         if matched:
             tpcount += 1
         else:
-            if relevant(subrec, vtype, ignorechroms) and passfilter(subrec) and not svmask(subrec, truvcfh, truchroms): 
+            if relevant(subrec, vtype, ignorechroms) and passfilter(subrec, disabled=ignorepass) and not svmask(subrec, truvcfh, truchroms): 
                 fpcount += 1 # FP counting method needs to change for real tumors
                 #print "FP:", subrec
 
     print "tpcount, fpcount, subrecs, trurecs:"
     print tpcount, fpcount, subrecs, trurecs
 
-    sensitivity = float(tpcount) / float(trurecs)
-    precision   = float(tpcount) / float(tpcount + fpcount)
-    specificity = 1.0 - float(fpcount) / float(subrecs)
-    balaccuracy = (sensitivity + specificity) / 2.0
+    recall    = float(tpcount) / float(trurecs)
+    precision = float(tpcount) / float(tpcount + fpcount)
+    fdr       = 1.0 - float(fpcount) / float(subrecs)
+    f1score   = 2.0*(precision*recall)/(precision+recall)
 
-    return sensitivity, specificity, balaccuracy
+    return precision, recall, f1score
+
+def main(args):
+
+    chromlist = None
+    if args.chromlist is not None:
+        chromlist = args.chromlist.split(',')
+
+    if not args.subvcf.endswith('.vcf') and not args.subvcf.endswith('.vcf.gz'):
+        sys.stderr.write("submission VCF filename does not end in .vcf or .vcf.gz\n")
+        sys.exit(1)
+
+    if not os.path.exists(args.truvcf + '.tbi'):
+        sys.stderr.write("truth VCF does not appear to be indexed. bgzip + tabix index required.\n")
+        sys.exit(1)
+
+    if args.mutype not in ('SV', 'SNV', 'INDEL'):
+        sys.stderr.write("-m/--mutype must be either SV, SNV, or INDEL\n")
+        sys.exit(1)
+
+    result = evaluate(args.subvcf, args.truvcf, vtype=args.mutype, ignorechroms=chromlist, ignorepass=args.nonpass)
+
+    print "precision, recall, F1 score: " + ','.join(map(str, result))
 
 if __name__ == '__main__':
-    if len(sys.argv) == 4 or len(sys.argv) == 5:
-        subvcf, truvcf, evtype = sys.argv[1:4]
-
-        chromlist = None
-        if len(sys.argv) == 5:
-            chromlist = sys.argv[4].split(',')
-
-        if not subvcf.endswith('.vcf') and not subvcf.endswith('.vcf.gz'):
-            sys.stderr.write("submission VCF filename does not enc in .vcf or .vcf.gz\n")
-            sys.exit(1)
-
-        if not os.path.exists(truvcf + '.tbi'):
-            sys.stderr.write("truth VCF does not appear to be indexed. bgzip + tabix index required.\n")
-            sys.exit(1)
-
-        if evtype not in ('SV', 'SNV', 'INDEL'):
-            sys.stderr.write("last arg must be either SV, SNV, or INDEL\n")
-            sys.exit(1)
-
-        result = evaluate(subvcf, truvcf, vtype=evtype, ignorechroms=chromlist)
-
-        print "sensitivity, specificity, balanced accuracy: " + ','.join(map(str, result))
-
-    else:
-        print "standalone usage for testing:", sys.argv[0], "<submission VCF> <truth VCF (tabix-indexed)> <SV, SNV, or INDEL> [ignore chrom list (comma-delimited, optional)]"
+    parser = argparse.ArgumentParser(description="check vcf output against a 'truth' vcf")
+    parser.add_argument('-v',  '--vcf',    dest='subvcf', required=True, help="VCF being submitted for evaluation")
+    parser.add_argument('-t',  '--truth',  dest='truvcf', required=True, help="'Truth' VCF containing true positives")
+    parser.add_argument('-m,', '--mutype', dest='mutype', required=True, help="Mutation type: must be either SNV, SV, or INDEL")
+    parser.add_argument('--ignore', dest='chromlist', default=None, help="(optional) comma-seperated list of chromosomes to ignore")
+    parser.add_argument('--nonpass', dest='nonpass', action="store_true", help="evaluate all records (not just PASS records) in VCF")
+    args = parser.parse_args()
+    main(args)
