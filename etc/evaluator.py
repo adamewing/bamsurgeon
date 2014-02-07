@@ -82,7 +82,7 @@ def svmask(rec, vcfh, truchroms):
     return False
 
 
-def evaluate(submission, truth, vtype='SNV', ignorechroms=None, ignorepass=False):
+def evaluate(submission, truth, vtype='SNV', ignorechroms=None, ignorepass=False, printfp=False):
     ''' return stats on sensitivity, specificity, balanced accuracy '''
 
     assert vtype in ('SNV', 'SV', 'INDEL')
@@ -136,7 +136,8 @@ def evaluate(submission, truth, vtype='SNV', ignorechroms=None, ignorepass=False
         else:
             if relevant(subrec, vtype, ignorechroms) and passfilter(subrec, disabled=ignorepass) and not svmask(subrec, truvcfh, truchroms): 
                 fpcount += 1 # FP counting method needs to change for real tumors
-                #print "FP:", subrec
+                if printfp:
+                    print "FP:", subrec
 
     print "tpcount, fpcount, subrecs, trurecs:"
     print tpcount, fpcount, subrecs, trurecs
@@ -166,7 +167,7 @@ def main(args):
         sys.stderr.write("-m/--mutype must be either SV, SNV, or INDEL\n")
         sys.exit(1)
 
-    result = evaluate(args.subvcf, args.truvcf, vtype=args.mutype, ignorechroms=chromlist, ignorepass=args.nonpass)
+    result = evaluate(args.subvcf, args.truvcf, vtype=args.mutype, ignorechroms=chromlist, ignorepass=args.nonpass, printfp=args.printfp)
 
     print "precision, recall, F1 score: " + ','.join(map(str, result))
 
@@ -177,5 +178,6 @@ if __name__ == '__main__':
     parser.add_argument('-m,', '--mutype', dest='mutype', required=True, help="Mutation type: must be either SNV, SV, or INDEL")
     parser.add_argument('--ignore', dest='chromlist', default=None, help="(optional) comma-seperated list of chromosomes to ignore")
     parser.add_argument('--nonpass', dest='nonpass', action="store_true", help="evaluate all records (not just PASS records) in VCF")
+    parser.add_argument('--printfp', dest='printfp', action="store_true", help="output false positive positions")
     args = parser.parse_args()
     main(args)
