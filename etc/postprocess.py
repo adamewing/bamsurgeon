@@ -29,7 +29,18 @@ def putRG(tags, rg):
 
 def samrec(read, bam, IDRG):
     ''' output sam formatted record from pysam.AlignedRead '''
-    fields = map(str, (read.qname, read.flag, bam.getrname(read.tid), read.pos, read.mapq))
+    fields = map(str, (read.qname, read.flag)) #, bam.getrname(read.tid), read.pos, read.mapq))
+
+    if read.is_unmapped:
+        if read.mate_is_unmapped:
+            fields.append('*')
+        else:
+            fields.append(bam.getrname(read.rnext))
+    else:
+        fields.append(bam.getrname(read.tid))
+
+    fields.append(str(read.pos))
+    fields.append(str(read.mapq))
 
     # unmapped reads should have '*' as CIGAR string
     if read.is_unmapped:
@@ -138,8 +149,14 @@ def main(args):
     fixed_unmap   = 0
     fixed_materef = 0
 
-    tick = int((bam.mapped + bam.unmapped) * 0.01)
-    sys.stderr.write("outputting status every " + str(tick) + " reads (1%) ...\n")
+    tick = 100000
+    try:
+        tick = int((bam.mapped + bam.unmapped) * 0.01)
+        if tick == 0:
+            tick = 1
+        sys.stderr.write("outputting status every " + str(tick) + " reads (1%) ...\n")
+    except ValueError as e:
+        sys.stderr.write("no index found, outputting status every " + str(tick) + " reads.\n")
 
     outsam = open(outsamfn, 'a')
 
@@ -151,15 +168,15 @@ def main(args):
                 # make sure paired read groups match
                 rg = getRG(read.tags)
                 if rg != getRG(paired[read.qname].tags):
-                    fixed_RG_pair += 1
+                    fixed_rg_pair += 1
                     read.tags = putRG(read.tags, rg)
                     paired[read.qname].tags = putRG(paired[read.qname].tags, rg)
 
-                # fix read pair attributes
+                # fix strand 
                 if read.mate_is_reverse != paired[read.qname].is_reverse or paired[read.qname].mate_is_reverse != read.is_reverse:
                     fixed_strand += 1
                     read.mate_is_reverse = paired[read.qname].is_reverse
-                    paired[read.qname].is_reverse = read.mate_is_reverse
+                    paired[read.qname].mate_is_reverse = read.is_reverse
 
                 # fix mate position
                 if read.pnext != paired[read.qname].pos or paired[read.qname].pnext != read.pos:

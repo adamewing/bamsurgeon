@@ -480,7 +480,8 @@ def makemut(args, bedline):
     
         print 'start, end, tgtstart, tgtend, refstart, refend:', start, end, tgtstart, tgtend, refstart, refend
 
-        fixedseq = check_asmvariants(args.bamFileName, maxcontig.seq, reffile, chrom, refstart, refend)
+        #fixedseq = check_asmvariants(args.bamFileName, maxcontig.seq, reffile, chrom, refstart, refend)
+        fixedseq = maxcontig.seq  # FIXME
 
         # is there anough room to make mutations?
         if maxcontig.len > 3*int(args.maxlibsize):
