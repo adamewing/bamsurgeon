@@ -39,8 +39,16 @@ def samrec(read, bam, IDRG):
     else:
         fields.append(bam.getrname(read.tid))
 
-    fields.append(str(read.pos))
-    fields.append(str(read.mapq))
+    if read.is_unmapped:
+        if read.mate_is_unmapped:
+            fields.append('0')
+        else:
+            fields.append(str(read.mpos))
+        fields.append('0')
+    else:
+        fields.append(str(read.pos))
+        fields.append(str(read.mapq))
+
 
     # unmapped reads should have '*' as CIGAR string
     if read.is_unmapped:
@@ -51,11 +59,23 @@ def samrec(read, bam, IDRG):
     if read.tid == read.rnext:
         fields.append('=')
     else:
-        fields.append(bam.getrname(read.rnext))
+        if read.is_unmapped or read.mate_is_unmapped:
+            fields.append('=')
+        else:
+            fields.append(bam.getrname(read.rnext))
 
-    fields.append(str(read.mpos))
+    if read.mate_is_unmapped:
+        if read.is_unmapped:
+            fields.append('0')
+        else:
+            fields.append(str(read.pos))
+    else:
+        fields.append(str(read.mpos))
 
-    fields.append(str(read.isize))
+    if read.is_unmapped or read.mate_is_unmapped:
+        fields.append('0')
+    else:
+        fields.append(str(read.isize))
     fields.append(read.seq)
     fields.append(read.qual)
     
