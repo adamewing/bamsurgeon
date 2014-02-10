@@ -59,9 +59,15 @@ def main(args):
             continue
 
         fraglen = int(random.uniform(minlen,maxlen))
-
         fragstart = rndloc
         fragend   = rndloc + int(fraglen)
+
+        # handle pmin/pmax args
+        if args.minpos is not None and fragstart < int(args.minpos):
+            continue
+
+        if args.maxpos is not None and fragend > int(args.maxpos):
+            continue
 
         # handle mappability option
         if maptabix:
@@ -138,6 +144,8 @@ if __name__ == '__main__':
     parser.add_argument('--minmap', dest='minmap', default=0.8, help='only select regions above mappability threshold (default 0.8)')
     parser.add_argument('--lmin', dest='minlen', default=1, help='minimum fragment length (default=1)')
     parser.add_argument('--lmax', dest='maxlen', default=1, help='maximum fragment length (default=1)')
+    parser.add_argument('--pmin', dest='minpos', default=None, help='minimum position')
+    parser.add_argument('--pmax', dest='maxpos', default=None, help='maximum position')
     parser.add_argument('--requireseq', action="store_true", help="do not select hits in unsequenced regions, requires fasta file")
     parser.add_argument('--nocontigs', action="store_true", help="exclude contigs")
     args = parser.parse_args()
