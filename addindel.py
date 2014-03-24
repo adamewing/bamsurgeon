@@ -554,11 +554,15 @@ def main(args):
         if os.path.exists(bam):
             os.remove(bam)
 
-    print "done making mutations, merging mutations into", args.bamFileName, "-->", args.outBamFile
-    replace(args.bamFileName, outbam_mutsfile, args.outBamFile)
+    if args.skipmerge:
+        print "skipping merge, plase merge reads from", outbam_mutsfile, "manually."
+    else:
+        print "done making mutations, merging mutations into", args.bamFileName, "-->", args.outBamFile
+        replace(args.bamFileName, outbam_mutsfile, args.outBamFile)
 
-    #cleanup
-    os.remove(outbam_mutsfile)
+        #cleanup
+        os.remove(outbam_mutsfile)
+    
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='adds SNVs to reads, outputs modified reads as .bam along with mates')
@@ -577,5 +581,6 @@ if __name__ == '__main__':
     parser.add_argument('--force', action='store_true', default=False, help="force mutation to happen regardless of nearby SNP or low coverage")
     parser.add_argument('--single', action='store_true', default=False, help="input BAM is simgle-ended (default is paired-end)")
     parser.add_argument('--maxopen', dest='maxopen', default=1000, help="maximum number of open files during merge (default 1000)")
+    parser.add_argument('--skipmerge', action='store_true', default=False, help="final output is tmp file to be merged")
     args = parser.parse_args()
     main(args)
