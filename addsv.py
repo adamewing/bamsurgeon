@@ -657,23 +657,41 @@ def main(args):
         print "merging bams into", mergedtmp, "..."
         mergebams(tmpbams, mergedtmp)
 
-    print "swapping reads into original and writing to", args.outBamFile
-    replace(args.bamFileName, mergedtmp, args.outBamFile, excl_merged)
+    if args.skipmerge:
+        print "final merge skipped, please merge manually:",mergedtmp
+        print "exclude file to use:",excl_merged
+        print "cleaning up..."
 
-    os.remove(excl_merged)
-    os.remove(mergedtmp)
+        for exclfn in exclfns:
+            if os.path.isfile(exclfn):
+                os.remove(exclfn)
 
-    for exclfn in exclfns:
-        if os.path.isfile(exclfn):
-            os.remove(exclfn)
+        for tmpbam in tmpbams:
+            if os.path.isfile(tmpbam):
+                os.remove(tmpbam)
+            if os.path.isfile(tmpbam + '.bai'):
+                os.remove(tmpbam + '.bai')
 
-    for tmpbam in tmpbams:
-        if os.path.isfile(tmpbam):
-            os.remove(tmpbam)
-        if os.path.isfile(tmpbam + '.bai'):
-            os.remove(tmpbam + '.bai')
+    else:
+        print "swapping reads into original and writing to", args.outBamFile
+        replace(args.bamFileName, mergedtmp, args.outBamFile, excl_merged)
 
-    print "done."
+        os.remove(excl_merged)
+        os.remove(mergedtmp)
+
+        for exclfn in exclfns:
+            if os.path.isfile(exclfn):
+                os.remove(exclfn)
+
+        for tmpbam in tmpbams:
+            if os.path.isfile(tmpbam):
+                os.remove(tmpbam)
+            if os.path.isfile(tmpbam + '.bai'):
+                os.remove(tmpbam + '.bai')
+
+        print "done."
+
+    
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='adds SNVs to reads, outputs modified reads as .bam along with mates')
@@ -702,6 +720,7 @@ if __name__ == '__main__':
     parser.add_argument('--noref', action='store_true', default=False, 
                         help="do not perform reference based assembly")
     parser.add_argument('--recycle', action='store_true', default=False)
+    parser.add_argument('--skipmerge', action='store_true', default=False)
     args = parser.parse_args()
     main(args)
 

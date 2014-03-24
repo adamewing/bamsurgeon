@@ -240,22 +240,22 @@ def replace(origbamfile, mutbamfile, outbamfile):
 
 def makeins(read, start, ins):
     assert len(read.seq) > len(ins) + 2
-    print "DEBUG: INS: read.pos:", read.pos
-    print "DEBUG: INS: start:   ", start
-    print "DEBUG: INS: ins:     ", ins
+#    print "DEBUG: INS: read.pos:", read.pos
+#    print "DEBUG: INS: start:   ", start
+#    print "DEBUG: INS: ins:     ", ins
     orig_len = len(read.seq)
     pos_in_read = start - read.pos    
 
 
     if pos_in_read > 0: # insertion start in read span
-        print "DEBUG: INS: pos_in_read:", pos_in_read
+#        print "DEBUG: INS: pos_in_read:", pos_in_read
         left  = read.seq[:pos_in_read]
         right = read.seq[pos_in_read:]
 
         newseq = left + ins + right
 
-        print "DEBUG: INS: read.seq:", read.seq
-        print "DEBUG: INS: newseq:  ", newseq[:orig_len]
+#        print "DEBUG: INS: read.seq:", read.seq
+#        print "DEBUG: INS: newseq:  ", newseq[:orig_len]
 
         return newseq[:orig_len]
 
@@ -266,33 +266,33 @@ def makeins(read, start, ins):
 
 def makedel(read, chrom, start, end, ref): #FIXME
     assert len(read.seq) > end-start-2
-    print "DEBUG: DEL: read.pos:", read.pos
-    print "DEBUG: DEL: start:   ", start
-    print "DEBUG: DEL: ins:     ", end
+#    print "DEBUG: DEL: read.pos:", read.pos
+#    print "DEBUG: DEL: start:   ", start
+#    print "DEBUG: DEL: ins:     ", end
     orig_len = len(read.seq)
     orig_end = read.pos + orig_len
     start_in_read = start - read.pos
     end_in_read = end - read.pos
 
-    print "DEBUG: DEL: start_in_read:", start_in_read
-    print "DEBUG: DEL: end_in_read:  ", end_in_read
+#    print "DEBUG: DEL: start_in_read:", start_in_read
+#    print "DEBUG: DEL: end_in_read:  ", end_in_read
 
     if start_in_read < 0: # deletion begins to the left of the read
-        print "DEBUG: DEL: del begins to left of read." 
+#        print "DEBUG: DEL: del begins to left of read." 
         assert end_in_read < orig_len
         right = read.seq[end_in_read:]
         left  = ref.fetch(chrom, start-(len(read.seq) - len(right)), start)
         return left + right
 
     elif end_in_read > orig_len: # deletion ends to the right of the read
-        print "DEBUG: DEL: del ends to right of read." 
+#        print "DEBUG: DEL: del ends to right of read." 
         assert start_in_read > 0
         left  = read.seq[:start_in_read]
         right = ref.fetch(chrom, end, end+(len(read.seq) - len(left)))
         return left + right
 
     else:
-        print "DEBUG: DEL: del starts and ends within read." 
+#        print "DEBUG: DEL: del starts and ends within read." 
         assert end_in_read <= orig_len and start_in_read >= 0 # deletion contained within the read
         left  = read.seq[:start_in_read]
         right = read.seq[end_in_read:]
@@ -374,6 +374,13 @@ def makemut(args, chrom, start, end, vaf, ins):
                             log.write(" ".join(('read',extqname,mutreads[extqname],"\n")))
                         else:
                             numunmap += 1
+                        print "len(mutreads):",len(mutreads.keys())
+
+                        # abort if mutation list getting too long
+                        if len(mutreads) > 200: # FIXME maxdepth should be a parameter
+                            print "ABORT: depth at site is greater than cutoff"
+                            outbam_muts.close()
+                            return None
 
             # make sure region doesn't have any changes that are likely SNPs
             # (trying to avoid messing with haplotypes)
@@ -536,10 +543,15 @@ def main(args):
             ntried += 1
 
     for result in results:
-        tmpbamlist = result.get()
-        if tmpbamlist is not None:
-            for tmpbam in tmpbamlist:
-                tmpbams.append(tmpbam)
+        try:
+            tmpbamlist = result.get()
+            if tmpbamlist is not None:
+                for tmpbam in tmpbamlist:
+                    tmpbams.append(tmpbam)
+        except AssertionError:
+            print "****************************************************"
+            print "* WARNING: assertion failed somewhere, check logs. *"
+            print "****************************************************"
 
     # merge tmp bams
     if len(tmpbams) == 1:
