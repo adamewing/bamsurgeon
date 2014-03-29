@@ -27,9 +27,16 @@ def putRG(tags, rg):
             out.append((tag, val))
     return out
 
-def samrec(read, bam, IDRG):
+def samrec(read, bam, IDRG, newname=None):
     ''' output sam formatted record from pysam.AlignedRead '''
-    fields = map(str, (read.qname, read.flag)) #, bam.getrname(read.tid), read.pos, read.mapq))
+    fields = []
+
+    if newname is not None:
+        fields.append(newname)
+    else:
+        fields.append(read.qname)
+
+    fields.append(str(read.flag))
 
     if read.is_unmapped:
         if read.mate_is_unmapped:
@@ -157,11 +164,11 @@ def main(args):
     paired = {} # track read pairs
 
     # counters for debug
-    n = 0
-    p = 0
-    u = 0
-    w = 0
-    m = 0
+    n = 0 # number of reads
+    p = 0 # numbar of paired reads
+    u = 0 # number of unpaired reads
+    w = 0 # reads written
+    m = 0 # mates found
 
     fixed_strand  = 0
     fixed_rg_pair = 0
@@ -216,8 +223,12 @@ def main(args):
                     read.rnext = paired[read.qname].tid
                     paired[read.qname].rnext = read.tid
 
-                outsam.write(samrec(read, bam, IDRG) + '\n')               # output read
-                outsam.write(samrec(paired[read.qname], bam, IDRG) + '\n') # output mate
+                newname = None 
+                if args.rename:
+                    newname = str(uuid4())
+
+                outsam.write(samrec(read, bam, IDRG, newname=newname) + '\n')               # output read
+                outsam.write(samrec(paired[read.qname], bam, IDRG, newname=newname) + '\n') # output mate
                 del paired[read.qname]
                 w += 1
                 m += 1
@@ -226,7 +237,12 @@ def main(args):
                 w += 1
         else:
             u += 1
-            outsam.write(samrec(read, bam, IDRG) + '\n')
+
+            newname = None
+            if args.rename:
+                newname = str(uuid4())
+
+            outsam.write(samrec(read, bam, IDRG, newname=newname) + '\n')
             w += 1
 
         if n % tick == 0:
@@ -246,5 +262,6 @@ if __name__ == '__main__':
     parser.add_argument('-f', '--fai', dest='fai', required=True, help='.fai index, generated with samtools faidx on reference FASTA')
     parser.add_argument('-t', '--sort-threads', dest='threads', default=1, help='threads for sorting with samtools (-@)')
     parser.add_argument('-m', '--sort-mem', dest='mem', default='4G', help='memory for sorting with samtools (-m)')
+    parser.add_argument('--rename', action='store_true', default=False, help='rename reads to uuids')
     args = parser.parse_args()
     main(args)
