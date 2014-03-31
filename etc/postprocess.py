@@ -56,7 +56,6 @@ def samrec(read, bam, IDRG, newname=None):
         fields.append(str(read.pos))
         fields.append(str(read.mapq))
 
-
     # unmapped reads should have '*' as CIGAR string
     if read.is_unmapped:
         fields.append('*')
@@ -106,7 +105,6 @@ def samrec(read, bam, IDRG, newname=None):
 
         if tagtype is not None:
             fields.append(':'.join((tagname, tagtype, str(tagval))))
-
 
     return '\t'.join(fields)
 

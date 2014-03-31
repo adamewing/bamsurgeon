@@ -2,10 +2,10 @@
 
 import sys
 import os
-import random
 import subprocess
 import pysam
 import textwrap
+
 
 def print_header():
     print textwrap.dedent("""\
@@ -25,10 +25,11 @@ def print_header():
     ##ALT=<ID=DUP,Description="Duplication">
     ##ALT=<ID=DEL,Description="Deletion">
     ##ALT=<ID=INS,Description="Insertion">
+    ##ALT=<ID=IGN,Description="Ignore SNVs in Interval">
     ##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
     #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tSPIKEIN""")
 
-def printvcflines(chrom, bnd1, bnd2, precise, ref, n, type, svlen):
+def printvcf(chrom, bnd1, bnd2, precise, type, svlen, ref):
     base1 = ref.fetch(chrom, bnd1, bnd1+1) 
     base2 = ref.fetch(chrom, bnd2, bnd2+1)
 
@@ -59,96 +60,50 @@ def printvcflines(chrom, bnd1, bnd2, precise, ref, n, type, svlen):
         alt2 = base1 + '[' + chrom + ':' + str(bnd1) + '['
     '''
 
-def process_block(lines, ref):
-    before_str, before_seq, mut_str, after_str, after_seq = lines
-    assert before_seq.startswith(after_seq[:100])
-    mut = mut_str.split()
-
-    m = mut_str.split()
+def precise_interval(mutline, ref):
+    m = mutline.split()
     chrom, refstart, refend = m[1:4]
     refstart = int(refstart)
     refend   = int(refend)
-    refseq   = ref.fetch(chrom, refstart, refend)
 
-    '''
-    rnd = str(random.random())
-    tgtfa = 'tmp.' + rnd + '.tgt.fa'
-    qryfa = 'tmp.' + rnd + '.qry.fa'
+    if m[0] == 'ins':
+        contigstart = int(m[6])
+        contigend   = int(m[6])+1
+    else:
+        contigstart = int(m[6])
+        contigend   = int(m[7])
 
-    tgt = open(tgtfa, 'w')
-    qry = open(qryfa, 'w')
+    precise = True 
+    bnd1 = refstart + contigstart
+    bnd2 = refstart + contigend
 
-    tgt.write('>ref' + '\n' + refseq + '\n')
-    qry.write('>qry' + '\n' + before_seq[:100] + '\n')
+    assert bnd1 < bnd2
 
-    tgt.close()
-    qry.close()
+    printvcf(chrom, bnd1, bnd2, precise, m[0], bnd2-bnd1, ref)
 
-    cmd = ['exonerate', '--bestn', '1', '--showalignment','0', '--ryo', 'SUMMARY\t%s\t%qab\t%qae\t%tab\t%tae\n', qryfa, tgtfa]
-    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    best = []
-    topscore = 0
 
-    for pline in p.stdout.readlines():
-        if pline.startswith('SUMMARY'):
-            c = pline.strip().split()
-            if int(c[1]) > topscore:
-                topscore = int(c[1])
-                best = c
+def ignore_interval(mutline, ref):
+    m = mutline.split()
+    chrom, refstart, refend = m[1:4]
+    refstart = int(refstart)
+    refend   = int(refend)
 
-    bnd1 = None
-    bnd2 = None
-    precise = False
+    assert refstart < refend
 
-    if best:
-        asmstart = refstart + int(best[4])
-        bnd1 = asmstart + int(mut[6])
+    printvcf(chrom, refstart, refend, True, 'IGN', refend-refstart, ref)
 
-        if mut[0] != 'ins':
-            bnd2 = asmstart + int(mut[7])
-
-        else:
-            bnd2 = bnd1
-            bnd1 -= int(mut[8])
-
-        if topscore == 500:
-            precise = True
-
-    p.stdout.close()
-
-    os.remove(tgtfa)
-    os.remove(qryfa)
-
-    if None in (bnd1, bnd2):
-        precise = False
-        bnd1 = refstart
-        bnd2 = refend
-    '''
-
-    precise = False
-    bnd1 = refstart
-    bnd2 = refend
-
-    return chrom, bnd1, bnd2, precise, mut[0], len(before_seq)-len(after_seq)
 
 if len(sys.argv) == 3:
-    assert sys.argv[1].endswith('.log')
-    assert os.path.exists(sys.argv[2] + '.fai')
+    print_header()
 
     ref = pysam.Fastafile(sys.argv[2])
 
-    ln = 0
-    lines = []
-    print_header()
-
     with open(sys.argv[1], 'r') as log:
         for line in log:
-            ln += 1
-            lines.append(line.strip())
-            if ln % 5 == 0:
-                chrom, bnd1, bnd2, precise, type, svlen = process_block(lines, ref)
-                if None not in (bnd1, bnd2):
-                    printvcflines(chrom, bnd1, bnd2, precise, ref, ln, type, svlen)
-                lines = []
+            for mutype in ('ins', 'del', 'inv', 'dup'):
+                if line.startswith(mutype):
+                    precise_interval(line.strip(), ref)
+                    ignore_interval(line.strip(), ref)
+
 else:
-    print "usage:",sys.argv[0],"<bamsurgeon SV .log file> <samtools faidx indexed ref fasta>"
+    print "usage:",sys.argv[0],"<bamsurgeon SV .log file> <samtools indexed fasta reference>"
