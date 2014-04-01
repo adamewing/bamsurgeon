@@ -48,12 +48,12 @@ def samrec(read, bam, IDRG, newname=None):
 
     if read.is_unmapped:
         if read.mate_is_unmapped:
-            fields.append('0')
+            fields.append('0') # was 0
         else:
-            fields.append(str(read.mpos))
-        fields.append('0')
+            fields.append(str(read.mpos+1)) #avoid OBOE, pysam is always 0-based, SAM is 1-based, BAM is 0-based.
+        fields.append('0') # was 0
     else:
-        fields.append(str(read.pos))
+        fields.append(str(read.pos+1)) #avoid OBOE
         fields.append(str(read.mapq))
 
     # unmapped reads should have '*' as CIGAR string
@@ -72,11 +72,11 @@ def samrec(read, bam, IDRG, newname=None):
 
     if read.mate_is_unmapped:
         if read.is_unmapped:
-            fields.append('0')
+            fields.append('0') # was 0
         else:
-            fields.append(str(read.pos))
+            fields.append(str(read.pos+1)) # avoid OBOE
     else:
-        fields.append(str(read.mpos))
+        fields.append(str(read.mpos+1)) # avoid OBOE
 
     if read.is_unmapped or read.mate_is_unmapped:
         fields.append('0')
