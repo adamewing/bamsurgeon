@@ -5,7 +5,7 @@ import os
 import subprocess
 import pysam
 import textwrap
-
+import argparse
 
 def print_header():
     print textwrap.dedent("""\
@@ -93,17 +93,23 @@ def ignore_interval(mutline, ref):
     printvcf(chrom, refstart, refend, True, 'IGN', refend-refstart, ref)
 
 
-if len(sys.argv) == 3:
+def main(args):
     print_header()
 
-    ref = pysam.Fastafile(sys.argv[2])
+    ref = pysam.Fastafile(args.ref)
 
-    with open(sys.argv[1], 'r') as log:
+    with open(args.log, 'r') as log:
         for line in log:
             for mutype in ('ins', 'del', 'inv', 'dup'):
                 if line.startswith(mutype):
                     precise_interval(line.strip(), ref)
-                    ignore_interval(line.strip(), ref)
+                    if args.mask:
+                        ignore_interval(line.strip(), ref)
 
-else:
-    print "usage:",sys.argv[0],"<bamsurgeon SV .log file> <samtools indexed fasta reference>"
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description="make VCF 'truth' file given log file (hint: concatenate them) from addsv.py")
+    parser.add_argument('-r', '--ref', dest='ref', required=True, help="reference indexed with samtools faidx")
+    parser.add_argument('-l', '--log', dest='log', required=True, help="log file from addsv.py")
+    parser.add_argument('--mask', action="store_true", default=False, help="output contig intervals, used to mask accidental SNVs if combining mutation types in one BAM")
+    args = parser.parse_args()
+    main(args)
