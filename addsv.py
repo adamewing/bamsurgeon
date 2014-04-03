@@ -23,8 +23,8 @@ def remap(fq1, fq2, threads, bwaref, outbam, deltmp=True):
     tmpbam = basefn + ".bam"
     tmpsrt = basefn + ".sort"
 
-    sai1args = ['bwa', 'aln', bwaref, '-q', '5', '-l', '32', '-k', '2', '-t', str(threads), '-o', '1', '-f', sai1fn, fq1]
-    sai2args = ['bwa', 'aln', bwaref, '-q', '5', '-l', '32', '-k', '2', '-t', str(threads), '-o', '1', '-f', sai2fn, fq2]
+    sai1args = ['bwa', 'aln', '-q', '5', '-l', '32', '-k', '2', '-t', str(threads), '-o', '1', '-f', sai1fn, bwaref, fq1]
+    sai2args = ['bwa', 'aln', '-q', '5', '-l', '32', '-k', '2', '-t', str(threads), '-o', '1', '-f', sai2fn, bwaref, fq2]
     samargs  = ['bwa', 'sampe', '-P', '-f', samfn, bwaref, sai1fn, sai2fn, fq1, fq2]
     bamargs  = ['samtools', 'view', '-bt', refidx, '-o', tmpbam, samfn]
     sortargs = ['samtools', 'sort', tmpbam, tmpsrt]
