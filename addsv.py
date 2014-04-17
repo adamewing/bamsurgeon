@@ -691,9 +691,7 @@ def main(args):
 
         print "done."
 
-    
-
-if __name__ == '__main__':
+def run():
     parser = argparse.ArgumentParser(description='adds SNVs to reads, outputs modified reads as .bam along with mates')
     parser.add_argument('-v', '--varfile', dest='varFileName', required=True,
                         help='whitespace-delimited target regions to try and add a SNV: chrom,start,stop,action,seqfile if insertion,TSDlength if insertion')
@@ -724,3 +722,5 @@ if __name__ == '__main__':
     args = parser.parse_args()
     main(args)
 
+if __name__ == '__main__':
+    run()
