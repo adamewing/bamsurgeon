@@ -8,9 +8,12 @@ import pysam
 import bs.replacereads as rr
 import bs.asmregion as ar
 import bs.mutableseq as ms
+
+from math import sqrt
 from itertools import izip
 from collections import Counter
 from multiprocessing import Pool
+
 
 def remap(fq1, fq2, threads, bwaref, outbam, deltmp=True):
     """ call bwa/samtools to remap .bam and merge with existing .bam
@@ -66,6 +69,7 @@ def remap(fq1, fq2, threads, bwaref, outbam, deltmp=True):
 
     return bamreads(outbam)
 
+
 def bamreads(bamfn):
     assert os.path.exists(bamfn) and bamfn.endswith('.bam')
     if not os.path.exists(bamfn + '.bai'):
@@ -75,7 +79,8 @@ def bamreads(bamfn):
     bam = pysam.Samfile(bamfn, 'rb')
     return bam.mapped
 
-def runwgsim(contig,newseq,svfrac,exclude):
+
+def runwgsim(contig, newseq, svfrac, exclude, pemean, pesd):
     ''' wrapper function for wgsim
     '''
     namecount = Counter(contig.reads.reads)
@@ -105,22 +110,24 @@ def runwgsim(contig,newseq,svfrac,exclude):
         else:
             discard += 1
 
-    print "paired : " + str(paired)
-    print "single : " + str(single)
-    print "discard: " + str(discard)
-    print "total  : " + str(totalreads)
+    print "paired :", paired
+    print "single :", single
+    print "discard:", discard
+    print "total  :", totalreads
 
     # adjustment factor for length of new contig vs. old contig
     lenfrac = float(len(newseq))/float(len(contig.seq))
 
-    print "old ctg len: " + str(len(contig.seq))
-    print "new ctg len: " + str(len(newseq))
-    print "adj. factor: " + str(lenfrac)
+    print "old ctg len:", len(contig.seq)
+    print "new ctg len:", len(newseq)
+    print "adj. factor:", lenfrac
 
     # number of paried reads to simulate
     nsimreads = int((paired + (single/2)) * svfrac * lenfrac)
 
-    print "num. sim. reads: " + str(nsimreads) 
+    print "num. sim. reads:", nsimreads 
+    print "PE mean outer distance:", pemean
+    print "PE outer distance SD:", pesd
 
     # length of quality score comes from original read, used here to set length of read
     maxqlen = 0
@@ -128,7 +135,7 @@ def runwgsim(contig,newseq,svfrac,exclude):
         if len(qual) > maxqlen:
             maxqlen = len(qual)
 
-    args = ['wgsim','-e','0','-N',str(nsimreads),'-1',str(maxqlen),'-2','100','-r','0','-R','0',fasta,fq1,fq2]
+    args = ['wgsim','-e','0','-d',str(pemean),'-s',str(pesd),'-N',str(nsimreads),'-1',str(maxqlen),'-2','100','-r','0','-R','0',fasta,fq1,fq2]
     print args
     subprocess.call(args)
 
@@ -138,6 +145,7 @@ def runwgsim(contig,newseq,svfrac,exclude):
     fqReplaceList(fq2,pairednames,contig.mquals,svfrac,exclude)
 
     return (fq1,fq2)
+
 
 def fqReplaceList(fqfile,names,quals,svfrac,exclude):
     '''
@@ -211,6 +219,7 @@ def fqReplaceList(fqfile,names,quals,svfrac,exclude):
 
     fqout.close()
 
+
 def singleseqfa(file):
     with open(file, 'r') as fasta:
         header = None
@@ -224,6 +233,7 @@ def singleseqfa(file):
             else:
                 seq += line
     return seq
+
 
 def mergebams(bamlist, outbamfn, maxopen=100):
     ''' call samtools to merge a list of bams hierarchically '''
@@ -275,6 +285,7 @@ def mergebams(bamlist, outbamfn, maxopen=100):
             os.remove(bamfile)
             os.remove(bamfile + '.bai')
 
+
 def align(qryseq, refseq):
     rnd = str(random.random())
     tgtfa = 'tmp.' + rnd + '.tgt.fa'
@@ -306,6 +317,7 @@ def align(qryseq, refseq):
     os.remove(qryfa)
 
     return best
+
 
 def check_asmvariants(bamfile, contigseq, reffile, chrom, refstart, refend):
     ''' check contig for variants, add full depth variants if they're present in the original bam but not the local assembly '''
@@ -360,6 +372,7 @@ def check_asmvariants(bamfile, contigseq, reffile, chrom, refstart, refend):
     print "change positions: " + ','.join(map(str, changepos))
     return ''.join(ctgbases) 
 
+
 def replace(origbamfile, mutbamfile, outbamfile, excludefile):
     ''' open .bam file and call replacereads
     '''
@@ -372,6 +385,7 @@ def replace(origbamfile, mutbamfile, outbamfile, excludefile):
     origbam.close()
     mutbam.close()
     outbam.close()
+
 
 def discordant_fraction(bamfile, chrom, start, end):
     r = 0
@@ -387,9 +401,34 @@ def discordant_fraction(bamfile, chrom, start, end):
     else:
         return 0.0
 
-def makemut(args, bedline):
-    #varfile = open(args.varFileName, 'r')
 
+def mean(d):
+    return float(sum(d)) / float(len(d))
+
+
+def sd(d):
+    return sqrt(mean(map(lambda x: (x - mean(d))**2.0, d)))
+
+
+def estimate_pedist(bamfile, chrom, start, end, window=10000, setmean=None, setsd=None):
+    start -= window
+    end   += window
+
+    if start < 0:
+        start = 0
+
+    if setmean is not None and setsd is not None:
+        return float(setmean), float(setsd)
+
+    outerlen = [read.tlen + 2*len(read.seq) for read in bamfile.fetch(chrom, start-window, end+window) if read.is_proper_pair]
+    if setmean is None:
+        setmean = mean(outerlen)
+    if setsd is None:
+        setsd = sd(outerlen)
+    return float(setmean), float(setsd)
+
+
+def makemut(args, bedline):
     try:
         bamfile = pysam.Samfile(args.bamFileName, 'rb')
         reffile = pysam.Fastafile(args.refFasta)
@@ -570,8 +609,11 @@ def makemut(args, bedline):
 
                 logfile.write(">" + chrom + ":" + str(refstart) + "-" + str(refend) +" AFTER\n" + str(mutseq) + "\n")
 
+            # estimate paired-end distribution
+            print "estimating paired-end insert size mean, stdev..."
+            pemean, pesd = estimate_pedist(bamfile, chrom, start, end, window=10000, setmean=args.ismean, setsd=args.issd)
             # simulate reads
-            (fq1, fq2) = runwgsim(maxcontig, mutseq.seq, svfrac, exclude)
+            (fq1, fq2) = runwgsim(maxcontig, mutseq.seq, svfrac, exclude, pemean, pesd)
 
             # remap reads
             outreads = remap(fq1, fq2, 4, args.refFasta, outbam_mutsfile)
@@ -714,6 +756,8 @@ if __name__ == '__main__':
                         help="maximum number of mutations to make")
     parser.add_argument('-c', '--cnvfile', dest='cnvfile', default=None, 
                         help="tabix-indexed list of genome-wide absolute copy number values (e.g. 2 alleles = no change)")
+    parser.add_argument('--ismean', dest='ismean', default=None, help="mean insert size (default = estimate from region)")
+    parser.add_argument('--issd', dest='issd', default=None, help="insert size standard deviation (default = estimate from region)")
     parser.add_argument('-p', '--procs', dest='procs', default=1, help="split into multiple processes (default=1)")
     parser.add_argument('--nomut', action='store_true', default=False, help="dry run")
     parser.add_argument('--noremap', action='store_true', default=False, help="dry run")
