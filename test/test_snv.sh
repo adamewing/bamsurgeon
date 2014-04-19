@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # adds up to 100 SNPs to a ~770 kb region around the LARGE gene
 # requires samtools/bcftools
@@ -48,7 +48,7 @@ fi
 ../addsnv.py -v ../test_data/random_snvs.txt -f ../test_data/testregion.bam -r $3 -o ../test_data/testregion_mut.bam -n $1 -c ../test_data/test_cnvlist.txt.gz -p $2
 if [ $? -ne 0 ]
 then
- echo "addsnv.py failed."
+ echo "addsnv.py failed. Are all the prequisites installed?"
  exit 65
 else
   samtools mpileup -ugf $3 ../test_data/testregion_mut.bam | bcftools view -bvcg - > result.raw.bcf
