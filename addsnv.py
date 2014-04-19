@@ -485,7 +485,7 @@ def main(args):
     #cleanup
     os.remove(outbam_mutsfile)
 
-if __name__ == '__main__':
+def run():
     parser = argparse.ArgumentParser(description='adds SNVs to reads, outputs modified reads as .bam along with mates')
     parser.add_argument('-v', '--varfile', dest='varFileName', required=True, help='Target regions to try and add a SNV, as BED')
     parser.add_argument('-f', '--sambamfile', dest='bamFileName', required=True, help='sam/bam file from which to obtain reads')
@@ -504,3 +504,6 @@ if __name__ == '__main__':
     parser.add_argument('--maxopen', dest='maxopen', default=1000, help="maximum number of open files during merge (default 1000)")
     args = parser.parse_args()
     main(args)
+
+if __name__ == '__main__':
+    run()
