@@ -77,15 +77,19 @@ def bamreads(bamfn):
     return bam.mapped
 
 def set_isize(isizedistr):
+    print(isizedistr)
     if isizedistr == ['']: #use default wgsim isize
         return None
     else:
         isizeopt=[]  #each file distr is consisted of components [mixrate,mean,sd] triples
         for distr in isizedistr:
+            distr=distr.split(',')
             distropt=[]
-            for component in distr:
-                distropt.append([float(v) for v in component.split('_')])
-            isizeopt.append(distr_opt)
+            for mode in distr:
+                #print mode, distr
+                distropt.append([float(v) for v in mode.split('_')])
+            isizeopt.append(distropt)
+    #print isizeopt
     return isizeopt            
 
 def runwgsim(contig,newseq,svfrac,exclude,readnames=None,isizedistr=None):
