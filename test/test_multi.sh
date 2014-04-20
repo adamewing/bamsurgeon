@@ -27,7 +27,7 @@ then
     exit 65
 fi
 
-../addsv.py -p 4 -v ../test_data/test_multibam_sv.txt -f ../test_data/test_multi.lib1.bam:../test_data/test_multi.lib2.bam:../test_data/test_multi.lib3.bam -r $1 -o ../test_data/test_multi.lib1.sv.bam:../test_data/test_multi.lib2.sv.bam:../test_data/test_multi.lib3.sv.bam -c ../test_data/test_multi.cnv.txt.gz
+../addsv.py -p 4 -i 1_259_22:1_371_28:0.4_540_50,0.6_143_50 -v ../test_data/test_multibam_sv.txt -f ../test_data/test_multi.lib1.bam:../test_data/test_multi.lib2.bam:../test_data/test_multi.lib3.bam -r $1 -o ../test_data/test_multi.lib1.sv.bam:../test_data/test_multi.lib2.sv.bam:../test_data/test_multi.lib3.sv.bam -c ../test_data/test_multi.cnv.txt.gz
 if [ $? -ne 0 ]
 then
   echo "addsv.py failed."
