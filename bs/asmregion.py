@@ -123,6 +123,8 @@ def runVelvet(reads,refseqname,refseq,kmer,isPaired=True,long=False, inputContig
     else:
         argsvelvetg = ['velvetg', tmpdir, '-unused_reads', 'yes', '-read_trkg', 'yes', '-amos_file', 'yes']
         
+    print argsvelveth
+    print argsvelvetg
     subprocess.call(argsvelveth)
     subprocess.call(argsvelvetg)
 
@@ -165,16 +167,18 @@ class ReadPair:
         output = " ".join(("read1:", self.read1.qname, self.read1.seq, r1map, "read2:", self.read2.qname, self.read2.seq, r2map))
         return output
 
-def asm(chr, start, end, bamfilename, reffile, kmersize, noref=False, recycle=False):
+def asm(chrom, start, end, bamfilename, reffile, kmersize, noref=False, recycle=False):
     #bamfile  = pysam.Samfile(bamfilename,'rb')
     #matefile = pysam.Samfile(bamfilename,'rb')
+    nbf = len(bamfilename)
     if type(bamfilename) is list:
       bamfile = [ pysam.Samfile(bfn, 'rb') for bfn in bamfilename ]
     else: #handle's compatibility with adam's original code
-      bamfile = [ bamfile ]
+      bamfile = [ pysam.Samfile(bamfilename) ]
     matefile = bamfile
+    print matefile, bamfile
     #charlie: bamfile is a list of bamfile and bamfilename is actually bamfilenames
-    #charlie: matefile is a duplicate of bamfile
+    #charlie: matefile is a duplicated list of bamfile
 
     readpairs = {}
     nreads = 0
@@ -183,8 +187,8 @@ def asm(chr, start, end, bamfilename, reffile, kmersize, noref=False, recycle=Fa
     mquals = []
 
     #for read in bamfile.fetch(chr,start,end):
-    for bi in range(0,len(bamfile)):
-        for read in bamfile[bi].fetch(chr,start,end):
+    for bi in xrange(nbf):
+        for read in bamfile[bi].fetch(chrom,start,end):
     #charlie: here we need to check fetched from all bamfile, index it by bi
             if not read.mate_is_unmapped and read.is_paired:
                 # FIXME add try/except to prevent crash if mate doesn't exist
@@ -222,9 +226,9 @@ def asm(chr, start, end, bamfilename, reffile, kmersize, noref=False, recycle=Fa
 
     refseq = None
     if reffile:
-        refseq = reffile.fetch(chr,start,end)
+        refseq = reffile.fetch(chrom,start,end)
 
-    region = chr + ":" + str(start) + "-" + str(end)
+    region = chrom + ":" + str(start) + "-" + str(end)
 
     contigs = runVelvet(readpairs, region, refseq, kmersize, cov_cutoff=True, noref=noref)
     newcontigs = None
@@ -235,7 +239,7 @@ def asm(chr, start, end, bamfilename, reffile, kmersize, noref=False, recycle=Fa
 
         if newcontigs and n50(newcontigs) > n50(contigs):
             contigs = newcontigs
-
+  
     for contig in contigs:
         contig.rquals = rquals
         contig.mquals = mquals
@@ -252,14 +256,14 @@ def main(args):
             raise ValueError("no reference given and --noref not set")
         reffile  = pysam.Fastafile(args.refFasta)
 
-    (chr,coords) = args.regionString.split(':')
+    (chrom,coords) = args.regionString.split(':')
     (start,end) = coords.split('-')
     start = re.sub(',','',start)
     end   = re.sub(',','',end)
     start = int(start)
     end   = int(end)
 
-    contigs = asm(chr, start, end, args.bamFileName, reffile, int(args.kmersize), args.noref, args.recycle)
+    contigs = asm(chrom, start, end, args.bamFileName, reffile, int(args.kmersize), args.noref, args.recycle)
 
     maxlen = 0
     maxeid = None

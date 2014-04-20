@@ -77,7 +77,7 @@ def bamreads(bamfn):
     return bam.mapped
 
 def set_isize(isizedistr):
-    if isizedistr == None: #use default wgsim isize
+    if isizedistr == ['']: #use default wgsim isize
         return None
     else:
         isizeopt=[]  #each file distr is consisted of components [mixrate,mean,sd] triples
@@ -92,15 +92,18 @@ def runwgsim(contig,newseq,svfrac,exclude,readnames=None,isizedistr=None):
     ''' wrapper function for wgsim
     '''
     assert len(exclude) == len(readnames)
-    assert len(isizeopt) == len(readnames)
     nbf=len(exclude) #number of bamfiles
 
     try:
+        print isizedistr
         isizeopt = set_isize(isizedistr)
-        if isizeopt is None:
-            isizeopt = [ [1.0, 500, 50] for x in xrange(nbf) ]
-    except:
-        print >>sys.stder,"parsing isizedistr error!"
+        if isizeopt == None: #thst means only one default distr for each bam
+            isizeopt = [ [ [1.0, 500, 50] ] for x in xrange(nbf) ]
+    except Exception, e:
+        print >>sys.stderr,"parsing isizedistr error!"
+
+    assert len(isizeopt) == len(readnames)
+    #print readnames
 
     namecount = Counter(contig.reads.reads)
 
@@ -113,8 +116,12 @@ def runwgsim(contig,newseq,svfrac,exclude,readnames=None,isizedistr=None):
     # names with count 2 had both pairs in the contig
     for name,count in namecount.items():
         #print name,count
-        origin = [ rni for rni in range(len(readnames)) if name in readnames[rni] ]
-        assert len(origin) == 1 #otherwise need to fix the read naming in bams
+        origin = [ rni for rni in xrange(len(readnames)) if name in readnames[rni] ]
+        try:
+            assert len(origin) == 1 #otherwise where this read come from?
+        except AssertionError:
+            print "warning: some read in contig not in bam!"
+            continue
         origin = origin[0]
         if count == 1:
             single[origin] += 1
@@ -142,7 +149,7 @@ def runwgsim(contig,newseq,svfrac,exclude,readnames=None,isizedistr=None):
     print "paired : " + str(sum(paired))
     print "single : " + str(sum(single))
     print "discard: " + str(sum(discard))
-    print "total  : " + str(sum(totalreads))
+    print "total  : " + str(totalreads)
 
     # adjustment factor for length of new contig vs. old contig
     lenfrac = float(len(newseq))/float(len(contig.seq))
@@ -162,11 +169,16 @@ def runwgsim(contig,newseq,svfrac,exclude,readnames=None,isizedistr=None):
         if len(qual) > maxqlen:
             maxqlen = len(qual)
 
+    print "paired reads per bam:", paired
+    print "single reads per bam:", single
+    print "isize option per bam:", isizeopt
+
     for bi in xrange(nbf):
-        bireads = int((paired[bi] * 2 + single[bi])/(sum(paired) * 2 + sum(single)))
-        nfq = len(isizeopt[bi])
+        bireads = nsimreads*(float(paired[bi] + single[bi]/2)/float(sum(paired)+sum(single)/2))
+        print "sim reads in", bi, "-th bam:", bireads
+        nfq = len(isizeopt[bi]) #number of modes in isize
         for fqi in xrange(nfq):
-            fqreads = int(isizeopt[bi][fqi][0] * bireads)
+            fqreads = round(isizeopt[bi][fqi][0] * bireads)
             fqisize = isizeopt[bi][fqi][1]
             fqisizesd = isizeopt[bi][fqi][2]
             tfq1out = tfq1[bi][fqi]
@@ -177,20 +189,21 @@ def runwgsim(contig,newseq,svfrac,exclude,readnames=None,isizedistr=None):
 
     os.remove(fasta)
 
-    merge_fq(fq1,tfq1) #temporary fq files are merged to one
-    merge_fq(fq2,tfq2)
-
     for bi in xrange(nbf):
+        merge_fq(fq1[bi],tfq1[bi]) #temporary fq files are merged to one
+        merge_fq(fq2[bi],tfq2[bi])
         fqReplaceList(fq1[bi],pairednames[bi],contig.rquals,svfrac,exclude[bi])
         fqReplaceList(fq2[bi],pairednames[bi],contig.mquals,svfrac,exclude[bi])
 
     return (fq1,fq2)
 
 def merge_fq(dest,source):
-    for idx in xrange(length(dest)):
-        args = ['cat',str(source[idx]),'>'+str(dest[idx])]
-        print args
-        subprocess.call(args)
+    if os.path.exists(dest):
+        os.remove(dest)
+    for idx in xrange(len(source)):
+        args = ['cat',source[idx],'>>'+dest ]
+        #subprocess.Popen(" ".join(args),shell=True)
+        os.system(" ".join(args))
 
 def fqReplaceList(fqfile,names,quals,svfrac,exclude):
     '''
@@ -201,6 +214,8 @@ def fqReplaceList(fqfile,names,quals,svfrac,exclude):
     not appear in the final output BAM
 
     '''
+    print fqfile
+    print os.path.exists(fqfile)
     fqin = open(fqfile,'r')
 
     ln = 0
@@ -330,6 +345,8 @@ def mergebams(bamlist, outbamfn, maxopen=100):
             os.remove(bamfile + '.bai')
 
 def align(qryseq, refseq):
+    #print qryseq
+    #print refseq
     rnd = str(random.random())
     tgtfa = 'tmp.' + rnd + '.tgt.fa'
     qryfa = 'tmp.' + rnd + '.qry.fa'
@@ -459,7 +476,6 @@ def makemut(args, bedline):
         exclfile = [ 'exclude.' + str(random.random()) + '.txt' for bfn in bamfilenames ]
         exclude = [ open(ef, 'w') for ef in exclfile ]
         assert len(bamfile) == len(outbamfilenames)
-        assert len(bamfile) == len(isizedistr) 
         nbf = len(bamfile)
         #charlie: bamfile is a list now
 
@@ -515,8 +531,8 @@ def makemut(args, bedline):
 
         #need to keep track of all read names in the region
         readnames=[ [] for x in xrange(nbf) ]
-        for bf in xrange(nbf):
-            for read in bamfile[bi].fetch(chr,start,end):
+        for bi in xrange(nbf):
+            for read in bamfile[bi].fetch(chrom,start,end):
                 readnames[bi].append(read.qname)
 
         #contigs = ar.asm(chrom, start, end, args.bamFileName, reffile, int(args.kmersize), args.noref, args.recycle)
@@ -653,7 +669,7 @@ def makemut(args, bedline):
                     raise ValueError(bedline.strip() + ": mutation not one of: INS,INV,DEL,DUP")
 
                 for lgf in logfile:
-                    logfile.write(">" + chrom + ":" + str(refstart) + "-" + str(refend) +" AFTER\n" + str(mutseq) + "\n")
+                    lgf.write(">" + chrom + ":" + str(refstart) + "-" + str(refend) +" AFTER\n" + str(mutseq) + "\n")
 
             # simulate reads
             (fq1, fq2) = runwgsim(maxcontig, mutseq.seq, svfrac, exclude, readnames, isizedistr)
@@ -663,7 +679,7 @@ def makemut(args, bedline):
 
             # remap reads
             for bi in xrange(nbf):
-                outreads = remap(fq1[bi], fq2[bi], 4, args.refFasta, outbam_mutsfile[bi])
+                outreads = remap(fq1[bi], fq2[bi], 4, args.refFasta, outbam_mutsfile[bi], deltmp=False)
             # charlie: this remap function also need update to reflect multi bams
                 if outreads == 0:
                     print "outbam", outbam_mutsfile[bi], "has no mapped reads!"
@@ -726,17 +742,17 @@ def main(args):
 
         tmpbam, exclfn = result.get()
 
+        print tmpbam
+        print exclfn
         if tmpbam is not None and exclfn is not None:
             for bi in xrange(nbf):
+                #print tmpbams[bi],tmpbam[bi]
                 tmpbams[bi].append(tmpbam[bi])
                 exclfns[bi].append(exclfn[bi])
     ########
 
     print "bams:",str(tmpbams)
     print "excl:",str(exclfns)
-
-    for bi in xrange(nbf):
-        final_merge(tmpbams[bi],exclfns[bi],bamfilenames[bi],outbamfilenames[bi])
 
     def final_merge(tmpbams,exclfns,bamfile,outbamfile):
 
@@ -776,6 +792,7 @@ def main(args):
 
         else:
             print "swapping reads into original and writing to", outbamfile
+            print bamfile, mergedtmp, outbamfile, excl_merged
             replace(bamfile, mergedtmp, outbamfile, excl_merged)
 
             os.remove(excl_merged)
@@ -790,8 +807,11 @@ def main(args):
                     os.remove(tmpbam)
                 if os.path.isfile(tmpbam + '.bai'):
                     os.remove(tmpbam + '.bai')
-
             print "done."
+
+    for bi in xrange(nbf):
+        final_merge(tmpbams[bi],exclfns[bi],bamfilenames[bi],outbamfilenames[bi])
+
 
 def run():
     parser = argparse.ArgumentParser(description='adds SNVs to reads, outputs modified reads as .bam along with mates')
@@ -799,7 +819,7 @@ def run():
                         help='whitespace-delimited target regions to try and add a SNV: chrom,start,stop,action,seqfile if insertion,TSDlength if insertion')
     parser.add_argument('-f', '--sambamfile', dest='bamFileName', required=True,
                         help='sam/bam files from which to obtain reads, f1.bam:f2.bam:...')
-    parser.add_argument('-i', '--isizedistr', dest='isizeDistr', required=True,
+    parser.add_argument('-i', '--isizedistr', dest='isizeDistr', required=False, default="",
                         help='insert size distribution for each bam files, d11_p111_p112,d12_p121_p122:d21_p211_p222:...')
     parser.add_argument('-r', '--reference', dest='refFasta', required=True,
                         help='reference genome, fasta indexed with bwa index -a stdsw _and_ samtools faidx')

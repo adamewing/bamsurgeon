@@ -51,8 +51,11 @@ def compare_ref(targetbam, donorbam):
     ''' if targetbam and donorbam are aligned to different references 
         and the references are in a different order it's a problem
     '''
-    for ref in targetbam.references:
-        if ref not in donorbam.references or donorbam.gettid(ref) != targetbam.gettid(ref):
+    #print targetbam.references
+    #print donorbam.references
+    #charlie: need to relax this because of appearant minor difference in refseq used such as herpes
+    for ref in targetbam.references[1:24]:
+        if ref not in donorbam.references[1:24] or donorbam.gettid(ref) != targetbam.gettid(ref):
             return False
     return True
     
