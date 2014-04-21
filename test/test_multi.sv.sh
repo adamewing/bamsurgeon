@@ -9,12 +9,6 @@ then
     exit 65
 fi
 
-if [ ! -e ../addsnv.py ]
-then
-    echo "addsnv.py isn't one directory level down (../addsnv.py) as expected"
-    exit 65
-fi
-
 if [ ! -e $1 ]
 then
     echo "can't find reference .fasta: $1, please supply a bwa-indexed .fasta"
@@ -27,7 +21,7 @@ then
     exit 65
 fi
 
-../addsv.py -p 4 -i 1_259_22:1_371_28:0.4_540_50,0.6_143_50 -v ../test_data/test_multi.sv.txt -f ../test_data/test_multi.lib1.bam:../test_data/test_multi.lib2.bam:../test_data/test_multi.lib3.bam -r $1 -o ../test_data/test_multi.lib1.sv.bam:../test_data/test_multi.lib2.sv.bam:../test_data/test_multi.lib3.sv.bam -c ../test_data/test_multi.cnv.txt.gz
+../addsv.py -p 4 -i 1_259_22:1_371_28:0.4_540_50,0.6_143_50 -v ../test_data/test_multi.sv.txt -t ../test_data/test_multi.sv.pct -f ../test_data/test_multi.lib1.bam:../test_data/test_multi.lib2.bam:../test_data/test_multi.lib3.bam -r $1 -o ../test_data/test_multi.lib1.sv.bam:../test_data/test_multi.lib2.sv.bam:../test_data/test_multi.lib3.sv.bam
 if [ $? -ne 0 ]
 then
   echo "addsv.py failed."

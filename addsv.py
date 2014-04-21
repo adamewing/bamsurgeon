@@ -462,7 +462,7 @@ def discordant_fraction(bamfile, chrom, start, end):
     else:
         return 0.0
 
-def makemut(args, bedline):
+def makemut(args, bedline, pct=1):
     #varfile = open(args.varFileName, 'r')
 
     try:
@@ -483,11 +483,6 @@ def makemut(args, bedline):
         nbf = len(bamfile)
         #charlie: bamfile is a list now
 
-        # optional CNV file
-        cnv = None
-        if (args.cnvfile):
-            cnv = pysam.Tabixfile(args.cnvfile, 'r')
-
         # temporary file to hold mutated reads
         #outbam_mutsfile = "tmp." + str(random.random()) + ".muts.bam"
         outbam_mutsfile = [ "tmp." + str(random.random()) + ".muts.bam" for bfn in bamfilenames ]
@@ -496,19 +491,16 @@ def makemut(args, bedline):
         chrom    = c[0]
         start  = int(c[1])
         end    = int(c[2])
-        araw   = c[3:len(c)] # INV, DEL, INS seqfile.fa TSDlength, DUP
+        araw   = c[3:len(c)] # INV, DEL delen, INS seq/seqfile.fa, DUP times
  
         actions = map(lambda x: x.strip(),' '.join(araw).split(','))
 
-        svfrac = float(args.svfrac) # default, can be overridden by cnv file
+        if pct is not None:
+            svfrac = float(pct)
+        else:
+            svfrac = float(args.svfrac) # default, can be overridden by cnv file
+        assert svfrac>0
 
-        if cnv: # CNV file is present
-            if chrom in cnv.contigs:
-                for cnregion in cnv.fetch(chrom,start,end):
-                    cn = float(cnregion.strip().split()[3]) # expect chrom,start,end,CN
-                    sys.stderr.write(' '.join(("copy number in snp region:",chrom,str(start),str(end),"=",str(cn))) + "\n")
-                    svfrac = 1.0/float(cn) #charlie: what is svfrac? is this the same as MAF?
-                    sys.stderr.write("adjusted MAF: " + str(svfrac) + "\n")
 
         print "interval:", c
         print "length:", end-start
@@ -635,14 +627,14 @@ def makemut(args, bedline):
                         mutseq.insertion(mutseq.length()/2,insseq,tsdlen)
 
                     for lgf in logfile:
-                        lgf.write("\t".join(('ins',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(mutseq.length()/2),str(insseqfile),str(tsdlen))) + "\n")
+                        lgf.write("\t".join(('ins',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(mutseq.length()/2),str(insseqfile),str(tsdlen),str(svfrac)))+ "\n")
 
                 elif action == 'INV':
                     invstart = int(args.maxlibsize)
                     invend = mutseq.length() - invstart
                     mutseq.inversion(invstart,invend)
                     for lgf in logfile:
-                        lgf.write("\t".join(('inv',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(invstart),str(invend))) + "\n")
+                        lgf.write("\t".join(('inv',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(invstart),str(invend),str(invend-invstart),str(svfrac))) + "\n")
 
                 elif action == 'DEL':
                     delstart = int(args.maxlibsize)
@@ -660,14 +652,14 @@ def makemut(args, bedline):
 
                     mutseq.deletion(delstart,delend)
                     for lgf in logfile:
-                        lgf.write("\t".join(('del',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(delstart),str(delend),str(dlen))) + "\n")
+                        lgf.write("\t".join(('del',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(delstart),str(delend),str(dlen),str(svfrac))) + "\n")
 
                 elif action == 'DUP':
                     dupstart = int(args.maxlibsize)
                     dupend = mutseq.length() - dupstart
                     mutseq.duplication(dupstart,dupend,ndups)
                     for lgf in logfile:
-                        lgf.write("\t".join(('dup',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(dupstart),str(dupend),str(ndups))) + "\n")
+                        lgf.write("\t".join(('dup',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(dupstart),str(dupend),str(ndups),str(svfrac))) + "\n")
 
                 else:
                     raise ValueError(bedline.strip() + ": mutation not one of: INS,INV,DEL,DUP")
@@ -725,19 +717,63 @@ def main(args):
         if not os.path.exists('addsv_logs_' + os.path.basename(outbamfilenames[bi])):
             os.mkdir('addsv_logs_' + os.path.basename(outbamfilenames[bi]))
             print "created log directory: addsv_logs_" + os.path.basename(outbamfilenames[bi])
+    
+    pct=[]; npct=0
+    if args.varPctFile is not None:
+        with open(args.varPctFile, 'r') as pctfile:
+            for pctline in pctfile:
+                if re.search('^#',pctline):
+                    continue
+                if args.maxmuts and npct >= int(args.maxmuts):
+                    break
+                pct.append(pctline.rstrip())
+                npct += 1
 
     with open(args.varFileName, 'r') as varfile:
+        warnstring=None
         for bedline in varfile:
             if re.search('^#',bedline):
                 continue
             if args.maxmuts and nmuts >= int(args.maxmuts):
                 break
             #tmpbam, exclude = makemut(args, bedline)
-            result = pool.apply_async(makemut, [args, bedline]) #MT
+            try:
+                bedpct=pct[nmuts]
+            except Exception,e:
+                warnstring="WARNING: running out of percentage for some mutations, forcing None!"
+                bedpct=None
+            result = pool.apply_async(makemut, [args, bedline, bedpct]) #MT
             results.append(result)                              #MT
             #tmpbams.append(tmpbam)
             #exclfns.append(exclude)
             nmuts += 1
+        if warnstring is not None:
+            print warnstring
+    
+    # charlie:
+    # optional CNV file, this basically covered by DUP
+    # guess no longer needed
+    # should mark bosolete later
+    # or we need to generate a bedline of DUP and feed into makemut here 
+    #cnv = None
+    #if (args.cnvfile):
+    #    cnv = pysam.Tabixfile(args.cnvfile, 'r')
+
+    #if cnv: # CNV file is present
+    #    if chrom in cnv.contigs:
+    #        for cnregion in cnv.fetch(chrom,start,end):
+    #            cn = float(cnregion.strip().split()[3]) # expect chrom,start,end,CN,pct
+    #            try:
+    #                pct = float(cnregion.strip().split()[4]) # expect chrom,start,end,CN,pct
+    #                pct = cn * pct 
+    #            except Exception,e: #not specified
+    #                pct = float(args.svfrac) * cn
+    #            sys.stderr.write(' '.join(("copy number in snp region:",chrom,str(start),str(end),"=",str(cn))),"pct=", str(pct)+ "\n")
+    #            #charlie: what is svfrac?
+    #            #charlie: is this a bug?
+    #            #a CNV of 3 should have 3 times more reads in the same region
+    #            #so the svfrace should be 3 not 1/3?
+    #            sys.stderr.write("adjusted MAF: " + str(svfrac) + "\n")
 
     ## MT ##
     for result in results:
@@ -825,6 +861,8 @@ def run():
                         help='sam/bam files from which to obtain reads, f1.bam:f2.bam:...')
     parser.add_argument('-i', '--isizedistr', dest='isizeDistr', required=False, default="",
                         help='insert size distribution for each bam files, d11_p111_p112,d12_p121_p122:d21_p211_p222:...')
+    parser.add_argument('-t', '--varpctfile', dest='varPctFile', required=False, default=None,
+                        help='a file to specify variants percentage')
     parser.add_argument('-r', '--reference', dest='refFasta', required=True,
                         help='reference genome, fasta indexed with bwa index -a stdsw _and_ samtools faidx')
     parser.add_argument('-o', '--outbam', dest='outBamFile', required=True,
