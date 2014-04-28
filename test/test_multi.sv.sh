@@ -21,27 +21,27 @@ then
     exit 65
 fi
 
-../addsv.py -p 4 -i 1_259_22:1_371_28:0.4_540_50,0.6_143_50 -v ../test_data/test_multi.sv.txt -t ../test_data/test_multi.sv.pct -f ../test_data/test_multi.lib1.bam:../test_data/test_multi.lib2.bam:../test_data/test_multi.lib3.bam -r $1 -o ../test_data/test_multi.lib1.sv.bam:../test_data/test_multi.lib2.sv.bam:../test_data/test_multi.lib3.sv.bam
+addsv.py -p 2 -v spikein.txt -i 1_259_22:1_371_28:0.4_540_50,0.6_143_50 -f VU000123.chr11.65M-75M.lib1.bam:VU000123.chr11.65M-75M.lib2.bam:VU000123.chr11.65M-75M.lib3.bam -r $1 -o VU000123.chr11.65M-75M.lib1.sv.bam:VU000123.chr11.65M-75M.lib2.sv.bam:VU000123.chr11.65M-75M.lib3.sv.bam
 if [ $? -ne 0 ]
 then
   echo "addsv.py failed."
   exit 65
 else
   echo "sorting output bam..."
-  samtools sort ../test_data/test_multi.lib1.sv.bam ../test_data/test_multi.lib1.sv.bam.sorted
-  samtools sort ../test_data/test_multi.lib2.sv.bam ../test_data/test_multi.lib2.sv.bam.sorted
-  samtools sort ../test_data/test_multi.lib3.sv.bam ../test_data/test_multi.lib3.sv.bam.sorted
+  samtools sort VU000123.chr11.65M-75M.lib1.sv.bam VU000123.chr11.65M-75M.lib1.sv.bam.sorted
+  samtools sort VU000123.chr11.65M-75M.lib2.sv.bam VU000123.chr11.65M-75M.lib2.sv.bam.sorted
+  samtools sort VU000123.chr11.65M-75M.lib3.sv.bam VU000123.chr11.65M-75M.lib3.sv.bam.sorted
   
-  mv ../test_data/test_multi.lib1.sv.bam.sorted.bam ../test_data/test_multi.lib1.sv.bam 
-  mv ../test_data/test_multi.lib2.sv.bam.sorted.bam ../test_data/test_multi.lib2.sv.bam 
-  mv ../test_data/test_multi.lib3.sv.bam.sorted.bam ../test_data/test_multi.lib3.sv.bam 
+  mv VU000123.chr11.65M-75M.lib1.sv.bam.sorted.bam VU000123.chr11.65M-75M.lib1.sv.bam 
+  mv VU000123.chr11.65M-75M.lib2.sv.bam.sorted.bam VU000123.chr11.65M-75M.lib2.sv.bam 
+  mv VU000123.chr11.65M-75M.lib3.sv.bam.sorted.bam VU000123.chr11.65M-75M.lib3.sv.bam 
 
   echo "indexing output bam..."
-  samtools index ../test_data/test_multi.lib1.sv.bam
-  samtools index ../test_data/test_multi.lib2.sv.bam
-  samtools index ../test_data/test_multi.lib3.sv.bam
+  samtools index VU000123.chr11.65M-75M.lib1.sv.bam
+  samtools index VU000123.chr11.65M-75M.lib2.sv.bam
+  samtools index VU000123.chr11.65M-75M.lib3.sv.bam
   
   echo "making pileups..."
-  samtools mpileup $2 ../test_data/test_multi.lib1.bam ../test_data/test_multi.lib2.bam ../test_data/test_multi.lib3.bam ../test_data/test_multi.lib1.sv.bam ../test_data/test_multi.lib2.sv.bam ../test_data/test_multi.lib3.sv.bam > test_multi.sv.pileup.txt
+  samtools mpileup $2 VU000123.chr11.65M-75M.lib1.bam VU000123.chr11.65M-75M.lib2.bam VU000123.chr11.65M-75M.lib3.bam VU000123.chr11.65M-75M.lib1.sv.bam VU000123.chr11.65M-75M.lib2.sv.bam VU000123.chr11.65M-75M.lib3.sv.bam > VU000123.chr11.65M-75Mbam_sv.pileup.txt
   echo "done. output in test_sv.pileup.txt"
 fi
