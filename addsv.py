@@ -401,13 +401,13 @@ def discordant_fraction(bamfile, chrom, start, end):
     else:
         return 0.0
 
+#TODO: replace with median ... mean is almost always driven by a few read pairs with wacky distances marked proper...
+#def mean(d):
+#    return float(sum(d)) / float(len(d))
 
-def mean(d):
-    return float(sum(d)) / float(len(d))
 
-
-def sd(d):
-    return sqrt(mean(map(lambda x: (x - mean(d))**2.0, d)))
+#def sd(d):
+#    return sqrt(mean(map(lambda x: (x - mean(d))**2.0, d)))
 
 
 def estimate_pedist(bamfile, chrom, start, end, window=10000, setmean=None, setsd=None):
@@ -756,8 +756,8 @@ if __name__ == '__main__':
                         help="maximum number of mutations to make")
     parser.add_argument('-c', '--cnvfile', dest='cnvfile', default=None, 
                         help="tabix-indexed list of genome-wide absolute copy number values (e.g. 2 alleles = no change)")
-    parser.add_argument('--ismean', dest='ismean', default=None, help="mean insert size (default = estimate from region)")
-    parser.add_argument('--issd', dest='issd', default=None, help="insert size standard deviation (default = estimate from region)")
+    parser.add_argument('--ismean', dest='ismean', default=300, help="mean insert size (default = estimate from region)")
+    parser.add_argument('--issd', dest='issd', default=70, help="insert size standard deviation (default = estimate from region)")
     parser.add_argument('-p', '--procs', dest='procs', default=1, help="split into multiple processes (default=1)")
     parser.add_argument('--nomut', action='store_true', default=False, help="dry run")
     parser.add_argument('--noremap', action='store_true', default=False, help="dry run")

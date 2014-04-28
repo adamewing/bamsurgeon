@@ -145,7 +145,7 @@ def evaluate(submission, truth, vtype='SNV', ignorechroms=None, ignorepass=False
     recall    = float(tpcount) / float(trurecs)
     precision = float(tpcount) / float(tpcount + fpcount)
     fdr       = 1.0 - float(fpcount) / float(subrecs)
-    f1score   = 2.0*(precision*recall)/(precision+recall)
+    f1score   = 0.0 if tpcount == 0 else 2.0*(precision*recall)/(precision+recall)
 
     return precision, recall, f1score
 
