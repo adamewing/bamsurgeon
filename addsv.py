@@ -500,6 +500,12 @@ def makemut(args, bedline):
         # trim contig to get best ungapped aligned region to ref.
         refseq = reffile.fetch(chrom,start,end)
         alignstats = align(maxcontig.seq, refseq)
+        
+        if len(alignstats) < 6:
+            print "alignstats:", alignstats
+            print "No good alignment between mutated contig and original, aborting mutation!"
+            return None, None
+        
         qrystart, qryend = map(int, alignstats[2:4])
         tgtstart, tgtend = map(int, alignstats[4:6])
 
