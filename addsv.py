@@ -349,8 +349,8 @@ def mergebams(bamlist, outbamfn, maxopen=100):
             os.remove(bamfile + '.bai')
 
 def align(qryseq, refseq):
-    #print qryseq
-    #print refseq
+    print qryseq
+    print refseq
     rnd = str(random.random())
     tgtfa = 'tmp.' + rnd + '.tgt.fa'
     qryfa = 'tmp.' + rnd + '.qry.fa'
@@ -365,7 +365,7 @@ def align(qryseq, refseq):
     qry.close()
 
     cmd = ['exonerate', '--bestn', '1', '-m', 'ungapped', '--showalignment','0', '--ryo', 'SUMMARY\t%s\t%qab\t%qae\t%tab\t%tae\n', '--query', qryfa, '--target', tgtfa]
-    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,shell=True)
 
     best = []
     topscore = 0
