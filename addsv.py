@@ -856,7 +856,7 @@ def main(args):
             print "done."
 
     for bi in xrange(nbf):
-        if tmpbams[bi] is not None:
+        if tmpbams[bi] != []:
             final_merge(tmpbams[bi],exclfns[bi],bamfilenames[bi],outbamfilenames[bi])
         else:
             print "no bam to merge for",bi,"-th lib bam, all sv spike-in failed on it?\n" 
