@@ -349,8 +349,8 @@ def mergebams(bamlist, outbamfn, maxopen=100):
             os.remove(bamfile + '.bai')
 
 def align(qryseq, refseq):
-    print qryseq
-    print refseq
+    #print qryseq
+    #print refseq
     rnd = str(random.random())
     tgtfa = 'tmp.' + rnd + '.tgt.fa'
     qryfa = 'tmp.' + rnd + '.qry.fa'
@@ -856,8 +856,10 @@ def main(args):
             print "done."
 
     for bi in xrange(nbf):
-        final_merge(tmpbams[bi],exclfns[bi],bamfilenames[bi],outbamfilenames[bi])
-
+        if tmpbams[bi] is not None:
+            final_merge(tmpbams[bi],exclfns[bi],bamfilenames[bi],outbamfilenames[bi])
+        else:
+            print "no bam to merge for",bi,"-th lib bam, all sv spike-in failed on it?\n" 
 
 def run():
     parser = argparse.ArgumentParser(description='adds SNVs to reads, outputs modified reads as .bam along with mates')
