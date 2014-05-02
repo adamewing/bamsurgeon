@@ -372,7 +372,7 @@ def align(qryseq, refseq):
     topscore = 0
 
     for pline in p.stdout.readlines():
-        #print pline
+        print pline
         if pline.startswith('SUMMARY'):
             c = pline.strip().split()
             if int(c[1]) > topscore:
