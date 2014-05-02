@@ -50,9 +50,9 @@ if len(sys.argv) == 3:
                     ref = fa.fetch(chrom, int(start)-1, int(start))
                     alt = ref + seq
 
-            assert ref != '' and alt != '' and start != ''
+                assert ref != '' and alt != '' and start != ''
 
-            print '\t'.join((chrom, start, '.', ref, alt, '100', 'PASS', ';'.join(info), 'GT', '0/1'))
+                print '\t'.join((chrom, start, '.', ref, alt, '100', 'PASS', ';'.join(info), 'GT', '0/1'))
 
 else:
     print "usage:",sys.argv[0],"<bamsurgeon indel .log file> <samtools faidx indexed reference>"
