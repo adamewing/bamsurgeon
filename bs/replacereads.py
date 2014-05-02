@@ -3,6 +3,11 @@
 import sys,pysam,argparse
 from random import randint
 
+def rc(dna):
+    ''' reverse complement '''
+    complements = maketrans('acgtrymkbdhvACGTRYMKBDHV', 'tgcayrkmvhdbTGCAYRKMVHDB')
+    return dna.translate(complements)[::-1]
+
 def cleanup(read,RG):
     '''
     fixes unmapped reads that are marked as 'reverse'
@@ -10,11 +15,13 @@ def cleanup(read,RG):
     RG tags are present in .bam header 
     '''
 
-    # may need more testing
     if read.is_unmapped and read.is_reverse:
         read.is_reverse = False
+        read.seq  = rc(read.seq)
+        read.qual = read.qual[::-1]
     if read.mate_is_unmapped and read.mate_is_reverse:
         read.mate_is_reverse = False
+        # mate seq/qual should be caught by the above logic
 
     if RG:
         hasRG = False
