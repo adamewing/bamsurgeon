@@ -349,11 +349,11 @@ def mergebams(bamlist, outbamfn, maxopen=100):
             os.remove(bamfile + '.bai')
 
 def align(qryseq, refseq):
-    #print qryseq
-    #print refseq
     rnd = str(random.random())
     tgtfa = 'tmp.' + rnd + '.tgt.fa'
     qryfa = 'tmp.' + rnd + '.qry.fa'
+    #print tgtfa
+    #print qryfa
 
     tgt = open(tgtfa, 'w')
     qry = open(qryfa, 'w')
@@ -365,20 +365,22 @@ def align(qryseq, refseq):
     qry.close()
 
     cmd = ['exonerate', '--bestn', '1', '-m', 'ungapped', '--showalignment','0', '--ryo', 'SUMMARY\t%s\t%qab\t%qae\t%tab\t%tae\n', '--query', qryfa, '--target', tgtfa]
-    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,shell=True)
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    print " ".join(cmd)
 
     best = []
     topscore = 0
 
     for pline in p.stdout.readlines():
+        #print pline
         if pline.startswith('SUMMARY'):
             c = pline.strip().split()
             if int(c[1]) > topscore:
                 topscore = int(c[1])
                 best = c
 
-    os.remove(tgtfa)
-    os.remove(qryfa)
+    #os.remove(tgtfa)
+    #os.remove(qryfa)
 
     return best
 
@@ -551,6 +553,7 @@ def makemut(args, bedline, pct=1):
         # trim contig to get best ungapped aligned region to ref.
         refseq = reffile.fetch(chrom,start,end)
         alignstats = align(maxcontig.seq, refseq)
+        print alignstats
 
         if len(alignstats) < 6:
             print "alignstats:", alignstats

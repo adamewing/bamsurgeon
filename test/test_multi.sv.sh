@@ -21,27 +21,27 @@ then
     exit 65
 fi
 
-addsv.py -p 2 -v ../test_data/test_multi.sv.txt -i 1_259_22:1_371_28:0.4_540_50,0.6_143_50 -f ../test_data/test_multi.lib1.bam:../test_data/test_multi.lib2.bam:../test_data/test_multi.lib3.bam -r $1 -o ../test_data/test_multi.lib1.sv.bam:../test_data/test_multi.lib2.sv.bam:../test_data/test_multi.lib3.sv.bam
+addsv.py -p 2 -v ../test_data/test_multi.sv.txt -i 1_259_22:1_371_28:0.4_540_50,0.6_143_50 -f ../test_data/test_multi.lib1.bam:../test_data/test_multi.lib2.bam:../test_data/test_multi.lib3.bam -r $1 -o ../test_data/test_multi.sv.lib1.bam:../test_data/test_multi.sv.lib2.bam:../test_data/test_multi.sv.lib3.bam
 if [ $? -ne 0 ]
 then
   echo "addsv.py failed."
   exit 65
 else
   echo "sorting output bam..."
-  samtools sort ../test_data/test_multi.lib1.sv.bam ../test_data/test_multi.lib1.sv.bam.sorted
-  samtools sort ../test_data/test_multi.lib2.sv.bam ../test_data/test_multi.lib2.sv.bam.sorted
-  samtools sort ../test_data/test_multi.lib3.sv.bam ../test_data/test_multi.lib3.sv.bam.sorted
+  samtools sort ../test_data/test_multi.sv.lib1.bam ../test_data/test_multi.sv.lib1.bam.sorted
+  samtools sort ../test_data/test_multi.sv.lib2.bam ../test_data/test_multi.sv.lib2.bam.sorted
+  samtools sort ../test_data/test_multi.sv.lib3.bam ../test_data/test_multi.sv.lib3.bam.sorted
   
-  mv ../test_data/test_multi.lib1.sv.bam.sorted.bam ../test_data/test_multi.lib1.sv.bam 
-  mv ../test_data/test_multi.lib2.sv.bam.sorted.bam ../test_data/test_multi.lib2.sv.bam 
-  mv ../test_data/test_multi.lib3.sv.bam.sorted.bam ../test_data/test_multi.lib3.sv.bam 
+  mv ../test_data/test_multi.sv.lib1.bam.sorted.bam ../test_data/test_multi.sv.lib1.bam 
+  mv ../test_data/test_multi.sv.lib2.bam.sorted.bam ../test_data/test_multi.sv.lib2.bam 
+  mv ../test_data/test_multi.sv.lib3.bam.sorted.bam ../test_data/test_multi.sv.lib3.bam 
 
   echo "indexing output bam..."
-  samtools index ../test_data/test_multi.lib1.sv.bam
-  samtools index ../test_data/test_multi.lib2.sv.bam
-  samtools index ../test_data/test_multi.lib3.sv.bam
+  samtools index ../test_data/test_multi.sv.lib1.bam
+  samtools index ../test_data/test_multi.sv.lib2.bam
+  samtools index ../test_data/test_multi.sv.lib3.bam
   
   echo "making pileups..."
-  samtools mpileup $2 ../test_data/test_multi.lib1.bam ../test_data/test_multi.lib2.bam ../test_data/test_multi.lib3.bam ../test_data/test_multi.lib1.sv.bam ../test_data/test_multi.lib2.sv.bam ../test_data/test_multi.lib3.sv.bam > ../test_data/test_multibam_sv.pileup.txt
+  samtools mpileup $2 ../test_data/test_multi.lib1.bam ../test_data/test_multi.lib2.bam ../test_data/test_multi.lib3.bam ../test_data/test_multi.sv.lib1.bam ../test_data/test_multi.sv.lib2.bam ../test_data/test_multi.sv.lib3.bam > ../test_data/test_multi.svbam_sv.pileup.txt
   echo "done. output in test_sv.pileup.txt"
 fi
