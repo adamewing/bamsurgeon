@@ -552,6 +552,7 @@ def makemut(args, bedline, pct=1):
 
         # trim contig to get best ungapped aligned region to ref.
         refseq = reffile.fetch(chrom,start,end)
+        print "reference seq:", refseq
         alignstats = align(maxcontig.seq, refseq)
         print alignstats
 
