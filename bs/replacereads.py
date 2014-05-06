@@ -1,7 +1,10 @@
 #!/usr/bin/env python
 
-import sys,pysam,argparse
+import sys
+import pysam
+import argparse
 from random import randint
+from string import maketrans
 
 def rc(dna):
     ''' reverse complement '''
