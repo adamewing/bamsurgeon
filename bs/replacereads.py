@@ -20,8 +20,9 @@ def cleanup(read,RG):
 
     if read.is_unmapped and read.is_reverse:
         read.is_reverse = False
+        qual = read.qual
         read.seq  = rc(read.seq)
-        read.qual = read.qual[::-1]
+        read.qual = qual[::-1]
     if read.mate_is_unmapped and read.mate_is_reverse:
         read.mate_is_reverse = False
         # mate seq/qual should be caught by the above logic
