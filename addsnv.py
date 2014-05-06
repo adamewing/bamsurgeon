@@ -10,6 +10,9 @@ import bs.replacereads as rr
 from multiprocessing import Pool, Value, Lock
 from collections import Counter
 
+sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)
+sys.stderr = os.fdopen(sys.stderr.fileno(), 'w', 0)
+
 def majorbase(basepile):
     """returns tuple: (major base, count)
     """

@@ -14,6 +14,8 @@ from itertools import izip
 from collections import Counter
 from multiprocessing import Pool
 
+sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)
+sys.stderr = os.fdopen(sys.stderr.fileno(), 'w', 0)
 
 def remap(fq1, fq2, threads, bwaref, outbam, deltmp=True):
     """ call bwa/samtools to remap .bam and merge with existing .bam
