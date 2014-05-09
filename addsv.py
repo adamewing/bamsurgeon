@@ -903,4 +903,5 @@ def run():
     main(args)
 
 if __name__ == '__main__':
+    print "Invoking commands:"," ".join(sys.argv)
     run()
