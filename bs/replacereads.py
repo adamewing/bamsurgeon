@@ -51,11 +51,12 @@ def compare_ref(targetbam, donorbam):
     ''' if targetbam and donorbam are aligned to different references 
         and the references are in a different order it's a problem
     '''
-    #print targetbam.references
-    #print donorbam.references
+    print "target seqs:", targetbam.references
+    print "donor seqs:", donorbam.references
     #charlie: need to relax this because of appearant minor difference in refseq used such as herpes
-    for ref in targetbam.references[1:24]:
-        if ref not in donorbam.references[1:24] or donorbam.gettid(ref) != targetbam.gettid(ref):
+    #target is what we can control and we always require the first 24 will be main chromosomes
+    for ref in donorbam.references[1:24]:
+        if ref not in targetbam.references or targetbam.gettid(ref) != donorbam.gettid(ref):
             return False
     return True
     
