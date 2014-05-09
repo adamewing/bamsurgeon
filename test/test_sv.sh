@@ -21,7 +21,7 @@ then
     exit 65
 fi
 
-../addsv.py -p 2 -v ../test_data/test_sv.txt -i 1_500_50 -f ../test_data/testregion.bam -r $1 -o ../test_data/testregion_sv_mut.bam
+addsv -p 2 -v ../test_data/test_sv.txt -i 1_500_50 -f ../test_data/testregion.bam -r $1 -o ../test_data/testregion_sv_mut.bam
 
 if [ $? -ne 0 ]
 then
