@@ -20,31 +20,20 @@ sys.stderr = os.fdopen(sys.stderr.fileno(), 'w', 0)
 def now():
     return str(datetime.datetime.now())
 
-def remap_bwamem(bamfn, threads, bwaref, samtofastq, mutid='null', paired=True):
+def remap_bwamem(bamfn, threads, bwaref, mutid='null'):
     """ call bwa mem and samtools to remap .bam
     """
-    assert os.path.exists(samtofastq)
 
     sam_out  = bamfn + '.realign.sam'
     sort_out = bamfn + '.realign.sorted'
 
-    print "INFO\t" + now() + "\t" + mutid + "\tconverting " + bamfn + " to fastq\n"
-    fastq = bamtofastq(bamfn, samtofastq, threads=threads, paired=paired)
-
-    sam_cmd = []
-
-    if paired:
-        sam_cmd  = ['bwa', 'mem', '-t', str(threads), '-M', '-p', bwaref, fastq] # interleaved
-    else:
-        sam_cmd  = ['bwa', 'mem', '-t', str(threads), '-M', bwaref, fastq] # single-end
-
-    assert len(sam_cmd) > 0
+    sam_cmd  = ['bwa', 'mem', '-t', str(threads), '-M', bwaref, fq1, fq2]
 
     bam_cmd  = ['samtools', 'view', '-bt', bwaref + '.fai', '-o', bamfn, sam_out]
     sort_cmd = ['samtools', 'sort', '-@', str(threads), '-m', '10000000000', bamfn, sort_out]
     idx_cmd  = ['samtools', 'index', bamfn]
 
-    print "INFO\t" + now() + "\t" + mutid + "\taligning " + fastq + " with bwa mem\n"
+    print "INFO\t" + now() + "\t" + mutid + "\taligning " + fq1 + ',' + fq2 + " with bwa mem\n"
     with open(sam_out, 'w') as sam:
         p = subprocess.Popen(sam_cmd, stdout=subprocess.PIPE)
         for line in p.stdout:
@@ -80,7 +69,7 @@ def remap_bwamem(bamfn, threads, bwaref, samtofastq, mutid='null', paired=True):
     os.remove(fq2)
 
 
-def remap(fq1, fq2, threads, bwaref, outbam, deltmp=True):
+def remap(fq1, fq2, threads, bwaref, outbam, deltmp=True, mutid='null'):
     """ call bwa/samtools to remap .bam and merge with existing .bam
     """
     basefn = "bwatmp" + str(random.random())

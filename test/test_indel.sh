@@ -33,6 +33,9 @@ then
  echo "addindel.py failed."
  exit 65
 else
-  samtools mpileup -ugf $2 ../test_data/testregion_mut.bam | bcftools view -bvcg - > result.raw.bcf
-  bcftools view result.raw.bcf
+    samtools sort ../test_data/testregion_mut.bam ../test_data/testregion_mut.sorted
+    mv ../test_data/testregion_mut.sorted.bam ../test_data/testregion_mut.bam
+    samtools index ../test_data/testregion_mut.bam
+    samtools mpileup -ugf $2 ../test_data/testregion_mut.bam | bcftools view -bvcg - > result.raw.bcf
+    bcftools view result.raw.bcf
 fi

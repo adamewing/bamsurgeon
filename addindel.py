@@ -164,7 +164,7 @@ def mergebams(bamlist, outbamfn, maxopen=1000):
             os.remove(bamfile)
             os.remove(bamfile + '.bai')
 
-def remap_paired(bamfn, threads, bwaref):
+def remap_paired(bamfn, threads, bwaref, mutid='null'):
     """ call bwa/samtools to remap .bam
     """
     sai1fn = bamfn + ".1.sai"
@@ -202,7 +202,7 @@ def remap_paired(bamfn, threads, bwaref):
     os.remove(sai2fn)
     os.remove(samfn)
 
-def remap_single(bamfn, threads, bwaref):
+def remap_single(bamfn, threads, bwaref, mutid='null'):
     """ call bwa/samtools to remap .bam
     """
     saifn = bamfn + ".sai"
