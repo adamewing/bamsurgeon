@@ -235,31 +235,31 @@ def remap_bwamem(bamfn, threads, bwaref, samtofastq, mutid='null', paired=True):
         for line in p.stdout:
             sam.write(line)
 
-    sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\twriting " + sam_out + " to BAM...\n")
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\twriting " + sam_out + " to BAM...\n")
     subprocess.call(bam_cmd)
 
-    sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\tdeleting SAM: " + sam_out + "\n")
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tdeleting SAM: " + sam_out + "\n")
     os.remove(sam_out)
 
-    sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\tsorting output: " + ' '.join(sort_cmd) + "\n")
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tsorting output: " + ' '.join(sort_cmd) + "\n")
     subprocess.call(sort_cmd)
 
     sort_out += '.bam'
 
-    sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\tremove original bam:" + bamfn + "\n")
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremove original bam:" + bamfn + "\n")
     os.remove(bamfn)
 
-    sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\trename sorted bam: " + sort_out + " to original name: " + bamfn + "\n")
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\trename sorted bam: " + sort_out + " to original name: " + bamfn + "\n")
     move(sort_out, bamfn)
 
-    sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\tindexing: " + ' '.join(idx_cmd) + "\n")
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tindexing: " + ' '.join(idx_cmd) + "\n")
     subprocess.call(idx_cmd)
 
     # check if BAM readcount looks sane
     if bamreadcount(bamfn) < fastqreadcount(fastq): 
         raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
 
-    sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fastq + "\n")
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fastq + "\n")
     os.remove(fastq)
 
 

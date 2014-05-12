@@ -43,31 +43,31 @@ def remap_bwamem(fq1, fq2, threads, bwaref, outbam, deltmp=True, mutid='null'):
         for line in p.stdout:
             sam.write(line)
 
-    sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\twriting " + sam_out + " to BAM...\n")
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\twriting " + sam_out + " to BAM...\n")
     subprocess.call(bam_cmd)
 
     if deltmp:
-        sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\tdeleting SAM: " + sam_out + "\n")
+        sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tdeleting SAM: " + sam_out + "\n")
         os.remove(sam_out)
 
-    sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\tsorting output: " + ' '.join(sort_cmd) + "\n")
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tsorting output: " + ' '.join(sort_cmd) + "\n")
     subprocess.call(sort_cmd)
 
     sort_out += '.bam'
 
-    sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\tremove original bam:" + outbam + "\n")
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremove original bam:" + outbam + "\n")
     os.remove(outbam)
 
-    sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\trename sorted bam: " + sort_out + " to original name: " + outbam + "\n")
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\trename sorted bam: " + sort_out + " to original name: " + outbam + "\n")
     move(sort_out, outbam)
 
-    sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\tindexing: " + ' '.join(idx_cmd) + "\n")
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tindexing: " + ' '.join(idx_cmd) + "\n")
     subprocess.call(idx_cmd)
 
     if deltmp:
-        sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fq1 + "\n")
+        sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fq1 + "\n")
         os.remove(fq1)
-        sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fq2 + "\n")
+        sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fq2 + "\n")
         os.remove(fq2)
 
     return bamreads(outbam)
@@ -90,31 +90,31 @@ def remap(fq1, fq2, threads, bwaref, outbam, deltmp=True, mutid='null'):
     bamargs  = ['samtools', 'view', '-bt', refidx, '-o', tmpbam, samfn]
     sortargs = ['samtools', 'sort', tmpbam, tmpsrt]
 
-    print "mapping 1st end, cmd: " + " ".join(sai2args)
+    print "INFO\t" + now() + "\t" + mutid + "\tmapping 1st end, cmd: " + " ".join(sai2args)
     p = subprocess.Popen(sai2args, stderr=subprocess.STDOUT)
     p.wait()
 
-    print "mapping 2nd end, cmd: " + " ".join(sai1args)
+    print "INFO\t" + now() + "\t" + mutid + "\tmapping 2nd end, cmd: " + " ".join(sai1args)
     p = subprocess.Popen(sai1args, stderr=subprocess.STDOUT)
     p.wait()
 
-    print "pairing ends, building .sam, cmd: " + " ".join(samargs)
+    print "INFO\t" + now() + "\t" + mutid + "\tpairing ends, building .sam, cmd: " + " ".join(samargs)
     p = subprocess.Popen(samargs, stderr=subprocess.STDOUT)
     p.wait()
 
-    print "sam --> bam, cmd: " + " ".join(bamargs)
+    print "INFO\t" + now() + "\t" + mutid + "\tsam --> bam, cmd: " + " ".join(bamargs)
     p = subprocess.Popen(bamargs, stderr=subprocess.STDOUT)
     p.wait()
 
-    print "sorting, cmd: " + " ".join(sortargs)
+    print "INFO\t" + now() + "\t" + mutid + "\tsorting, cmd: " + " ".join(sortargs)
     p = subprocess.Popen(sortargs, stderr=subprocess.STDOUT)
     p.wait()
 
-    print "rename " + tmpsrt + ".bam --> " + tmpbam
+    print "INFO\t" + now() + "\t" + mutid + "\trename " + tmpsrt + ".bam --> " + tmpbam
     os.remove(tmpbam)
     os.rename(tmpsrt + ".bam", tmpbam)
 
-    print "rename " + tmpbam + " --> " + outbam
+    print "INFO\t" + now() + "\t" + mutid + "\trename " + tmpbam + " --> " + outbam
     os.rename(tmpbam, outbam)
 
     # cleanup
@@ -138,7 +138,7 @@ def bamreads(bamfn):
     return bam.mapped
 
 
-def runwgsim(contig, newseq, svfrac, exclude, pemean, pesd):
+def runwgsim(contig, newseq, svfrac, exclude, pemean, pesd, mutid='null'):
     ''' wrapper function for wgsim
     '''
     namecount = Counter(contig.reads.reads)
@@ -168,24 +168,24 @@ def runwgsim(contig, newseq, svfrac, exclude, pemean, pesd):
         else:
             discard += 1
 
-    print "paired :", paired
-    print "single :", single
-    print "discard:", discard
-    print "total  :", totalreads
+    print "INFO\t" + now() + "\t" + mutid + "\tpaired  reads :", paired
+    print "INFO\t" + now() + "\t" + mutid + "\tsingle  reads :", single
+    print "INFO\t" + now() + "\t" + mutid + "\tdiscard reads :", discard
+    print "INFO\t" + now() + "\t" + mutid + "\ttotal   reads :", totalreads
 
     # adjustment factor for length of new contig vs. old contig
     lenfrac = float(len(newseq))/float(len(contig.seq))
 
-    print "old ctg len:", len(contig.seq)
-    print "new ctg len:", len(newseq)
-    print "adj. factor:", lenfrac
+    print "INFO\t" + now() + "\t" + mutid + "\told ctg len:", len(contig.seq)
+    print "INFO\t" + now() + "\t" + mutid + "\tnew ctg len:", len(newseq)
+    print "INFO\t" + now() + "\t" + mutid + "\tadj. factor:", lenfrac
 
     # number of paried reads to simulate
     nsimreads = int((paired + (single/2)) * svfrac * lenfrac)
 
-    print "num. sim. reads:", nsimreads 
-    print "PE mean outer distance:", pemean
-    print "PE outer distance SD:", pesd
+    print "INFO\t" + now() + "\t" + mutid + "\tnum. sim. reads:", nsimreads 
+    print "INFO\t" + now() + "\t" + mutid + "\tPE mean outer distance:", pemean
+    print "INFO\t" + now() + "\t" + mutid + "\tPE outer distance SD:", pesd
 
     # length of quality score comes from original read, used here to set length of read
     maxqlen = 0
@@ -199,13 +199,13 @@ def runwgsim(contig, newseq, svfrac, exclude, pemean, pesd):
 
     os.remove(fasta)
 
-    fqReplaceList(fq1,pairednames,contig.rquals,svfrac,exclude)
-    fqReplaceList(fq2,pairednames,contig.mquals,svfrac,exclude)
+    fqReplaceList(fq1,pairednames,contig.rquals,svfrac,exclude, mutid=mutid)
+    fqReplaceList(fq2,pairednames,contig.mquals,svfrac,exclude, mutid=mutid)
 
     return (fq1,fq2)
 
 
-def fqReplaceList(fqfile,names,quals,svfrac,exclude):
+def fqReplaceList(fqfile,names,quals,svfrac,exclude,mutid='null'):
     '''
     Replace seq names in paired fastq files from a list until the list runs out
     (then stick with original names). fqfile = fastq file, names = list
@@ -241,7 +241,7 @@ def fqReplaceList(fqfile,names,quals,svfrac,exclude):
         elif ln == 3: # quals are passed as a list
             ln = 0
         else:
-            raise ValueError("fastq iteration problem")
+            raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tfastq iteration problem\n")
 
     fqin.close()
     os.remove(fqfile)
@@ -265,7 +265,7 @@ def fqReplaceList(fqfile,names,quals,svfrac,exclude):
 
         fqout.write(seqs[i] + "\n+\n" + quals[i] + "\n")
         if newnames[i] in usednames:
-            print "warning, used read name: " + newnames[i] + " in multiple pairs"
+            print "INFO\t" + now() + "\t" + mutid + "\twarning, used read name: " + newnames[i] + " in multiple pairs"
         usednames[newnames[i]] = True
         
     # burn off excess
@@ -278,7 +278,7 @@ def fqReplaceList(fqfile,names,quals,svfrac,exclude):
     fqout.close()
 
 
-def singleseqfa(file):
+def singleseqfa(file,mutid='null'):
     with open(file, 'r') as fasta:
         header = None
         seq = ''
@@ -286,7 +286,7 @@ def singleseqfa(file):
             line = line.strip()
             if line.startswith('>'):
                 if header is not None:
-                    sys.stderr.write("multiple entries found in " + file + " only using the first\n")
+                    sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tmultiple entries found in " + file + " only using the first\n")
                 header = line.lstrip('>')
             else:
                 seq += line
@@ -297,10 +297,10 @@ def mergebams(bamlist, outbamfn, maxopen=100):
     ''' call samtools to merge a list of bams hierarchically '''
 
     assert outbamfn.endswith('.bam')
-    print "DEBUG: len(bamlist)", len(bamlist)
+    print "INFO\t" + now() + "\tlen(bamlist)", len(bamlist)
 
     if len(bamlist) == 1:
-        print "only one BAM to merge, renaming",bamlist[0],"-->",outbamfn
+        print "INFO\t" + now() + "\tonly one BAM to merge, renaming",bamlist[0],"-->",outbamfn
         os.rename(bamlist[0], outbamfn)
     else:
         nmerge = 1
@@ -320,18 +320,18 @@ def mergebams(bamlist, outbamfn, maxopen=100):
         for submergefn, tmpbams in merge_sublists.iteritems():
             if len(tmpbams) == 1:
                 os.rename(tmpbams[0], submergefn)
-                print "renamed:",tmpbams[0],"-->",submergefn
+                print "INFO\t" + now() + "\trenamed:",tmpbams[0], " --> ", submergefn
             else:
                 args = ['samtools','merge','-f',submergefn] + tmpbams 
-                print "merging, cmd: ",args
+                print "INFO\t" + now() + "\tmerging, cmd: ", args
                 subprocess.call(args)
 
         if len(merge_sublists.keys()) == 1:
-            print "merge finished, renaming:",merge_sublists.keys()[0],"-->",outbamfn
+            print "INFO\t" + now() + "\tmerge finished, renaming: ", merge_sublists.keys()[0]," --> ", outbamfn
             os.rename(merge_sublists.keys()[0], outbamfn)
         else:
-            args = ['samtools','merge','-f',outbamfn] + merge_sublists.keys() 
-            print "final merge, cmd: ",args
+            args = ['samtools','merge','-f',outbamfn] + merge_sublists.keys()
+            print "INFO\t" + now() + "\tfinal merge, cmd: ", args
             subprocess.call(args)
 
         for submergefn in merge_sublists.keys():
@@ -375,60 +375,6 @@ def align(qryseq, refseq):
     os.remove(qryfa)
 
     return best
-
-
-def check_asmvariants(bamfile, contigseq, reffile, chrom, refstart, refend):
-    ''' check contig for variants, add full depth variants if they're present in the original bam but not the local assembly '''
-
-    refbases = list(reffile.fetch(chrom, refstart, refend))
-    ctgbases = list(contigseq)
-
-    offset = 0
-    numchanges = 0
-    changepos = []
-
-    region = chrom + ':' + str(refstart) + '-' + str(refend)
-    lastpos  = refstart-1
-    mpargs = ['samtools', 'mpileup', '-q','10','-r', region, '-f', reffile.filename, bamfile]
-
-    print "pileup:", mpargs
-
-    p = subprocess.Popen(mpargs, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    for line in p.stdout.readlines():
-        mpileupstr=''
-        c = line.strip().split()
-        if len(c) == 6:
-            refpos     = int(c[1])
-            refbase    = c[2].upper()
-            depth      = int(c[3])
-            mpileupstr = c[4]
-
-            assert refpos > lastpos
-
-            baselist = []
-            for base in list(mpileupstr):
-                base = base.upper()
-                if base in ['A', 'T', 'G', 'C']:
-                    baselist.append(base)
-
-            basecount = Counter(baselist)
-
-            for base, count in basecount.items():
-                if count > depth/2:
-                    ctgbases[offset] = base
-                    numchanges += 1
-                    changepos.append(refpos)
-
-            offset += (refpos-lastpos)
-            lastpos = refpos
-
-    if numchanges > len(contigseq) * .10: # could set as a parameter
-        sys.stderr.write("*** Whoops, I mangled a contig! Returning original... *** " + region + "\n")
-        return contigseq 
-
-    print "contig editing successful, made", numchanges, "changes."
-    print "change positions: " + ','.join(map(str, changepos))
-    return ''.join(ctgbases) 
 
 
 def replace(origbamfile, mutbamfile, outbamfile, excludefile):
@@ -487,6 +433,7 @@ def estimate_pedist(bamfile, chrom, start, end, window=10000, setmean=None, sets
 
 
 def makemut(args, bedline):
+    mutid = ':'.join(map(str, bedline.strip().split()))
     try:
         bamfile = pysam.Samfile(args.bamFileName, 'rb')
         reffile = pysam.Fastafile(args.refFasta)
@@ -521,8 +468,8 @@ def makemut(args, bedline):
                     svfrac = 1.0/float(cn)
                     sys.stderr.write("adjusted MAF: " + str(svfrac) + "\n")
 
-        print "interval:", c
-        print "length:", end-start
+        print "INFO\t" + now() + "\t" + mutid + "\tinterval:", c
+        print "INFO\t" + now() + "\t" + mutid + "\tlength:", end-start
         # modify start and end if interval is too long
         maxctglen = int(args.maxctglen)
         assert maxctglen > 3*int(args.maxlibsize) # maxctglen is too short
@@ -531,14 +478,14 @@ def makemut(args, bedline):
             rndpt = random.randint(0,adj)
             start = start + rndpt
             end   = end - (adj-rndpt)
-            print "note: interval size too long, adjusted:",chrom,start,end
+            print "INFO\t" + now() + "\t" + mutid + "\tnote: interval size too long, adjusted:",chrom,start,end
 
         dfrac = discordant_fraction(args.bamFileName, chrom, start, end)
-        print "discordant fraction:",dfrac
+        print "INFO\t" + now() + "\t" + mutid + "\tdiscordant fraction:", dfrac
 
         maxdfrac = 0.1 # FIXME make a parameter
         if dfrac > .1: 
-            print "discordant fraction >", maxdfrac, "aborting mutation!"
+            sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tdiscordant fraction > " + str(maxdfrac) + " aborting mutation!\n")
             return None, None
 
         contigs = ar.asm(chrom, start, end, args.bamFileName, reffile, int(args.kmersize), args.noref, args.recycle)
@@ -552,7 +499,7 @@ def makemut(args, bedline):
                 maxcontig = contig
 
         if maxcontig is None:
-            print "maxcontig has length 0, aborting mutation!"
+            sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tmaxcontig has length 0, aborting mutation!\n")
             return None, None
 
         # trim contig to get best ungapped aligned region to ref.
@@ -560,8 +507,8 @@ def makemut(args, bedline):
         alignstats = align(maxcontig.seq, refseq)
         
         if len(alignstats) < 6:
-            print "alignstats:", alignstats
-            print "No good alignment between mutated contig and original, aborting mutation!"
+            sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\talignstats:" + str(alignstats) + "\n")
+            sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tNo good alignment between mutated contig and original, aborting mutation!\n")
             return None, None
         
         qrystart, qryend = map(int, alignstats[2:4])
@@ -569,11 +516,11 @@ def makemut(args, bedline):
 
         refseq = refseq[tgtstart:tgtend]
 
-        print "best contig length:", maxlen
-        print "alignment result:", alignstats
+        print "INFO\t" + now() + "\t" + mutid + "\tbest contig length:", maxlen
+        print "INFO\t" + now() + "\t" + mutid + "\talignment result:", alignstats
 
         maxcontig.trimseq(qrystart, qryend)
-        print "trimmed contig length:", maxcontig.len
+        print "INFO\t" + now() + "\t" + mutid + "\ttrimmed contig length:", maxcontig.len
 
         refstart = start + tgtstart
         refend = start + tgtend
@@ -581,15 +528,12 @@ def makemut(args, bedline):
         if refstart > refend:
             refstart, refend = refend, refstart
     
-        print 'start, end, tgtstart, tgtend, refstart, refend:', start, end, tgtstart, tgtend, refstart, refend
-
-        #fixedseq = check_asmvariants(args.bamFileName, maxcontig.seq, reffile, chrom, refstart, refend)
-        fixedseq = maxcontig.seq  # FIXME
+        print "INFO\t" + now() + "\t" + mutid + "\tstart, end, tgtstart, tgtend, refstart, refend:", start, end, tgtstart, tgtend, refstart, refend
 
         # is there anough room to make mutations?
         if maxcontig.len > 3*int(args.maxlibsize):
             # make mutation in the largest contig
-            mutseq = ms.MutableSeq(fixedseq)
+            mutseq = ms.MutableSeq(maxcontig.seq)
 
             # support for multiple mutations
             for actionstr in actions:
@@ -634,7 +578,7 @@ def makemut(args, bedline):
 
                 if action == 'INS':
                     if insseqfile: # seq in file
-                        mutseq.insertion(mutseq.length()/2,singleseqfa(insseqfile),tsdlen)
+                        mutseq.insertion(mutseq.length()/2,singleseqfa(insseqfile),tsdlen, mutid=mutid)
                     else: # seq is input
                         mutseq.insertion(mutseq.length()/2,insseq,tsdlen)
                     logfile.write("\t".join(('ins',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(mutseq.length()/2),str(insseqfile),str(tsdlen))) + "\n")
@@ -654,7 +598,7 @@ def makemut(args, bedline):
                     dadj = delend-delstart-dlen
                     if dadj < 0:
                         dadj = 0
-                        print "warning: deletion of length 0"
+                        sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\twarning: deletion of length 0\n")
     
                     delstart += dadj/2
                     delend   -= dadj/2
@@ -669,31 +613,31 @@ def makemut(args, bedline):
                     logfile.write("\t".join(('dup',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(dupstart),str(dupend),str(ndups))) + "\n")
 
                 else:
-                    raise ValueError(bedline.strip() + ": mutation not one of: INS,INV,DEL,DUP")
+                    raise ValueError("ERROR\t" + now() + "\t" + mutid + "\t: mutation not one of: INS,INV,DEL,DUP\n")
 
                 logfile.write(">" + chrom + ":" + str(refstart) + "-" + str(refend) +" AFTER\n" + str(mutseq) + "\n")
 
             # estimate paired-end distribution
-            print "estimating paired-end insert size mean, stdev..."
+            print "INFO\t" + now() + "\t" + mutid + "\testimating paired-end insert size mean, stdev..."
             pemean, pesd = estimate_pedist(bamfile, chrom, start, end, window=10000, setmean=args.ismean, setsd=args.issd)
             # simulate reads
-            (fq1, fq2) = runwgsim(maxcontig, mutseq.seq, svfrac, exclude, pemean, pesd)
+            (fq1, fq2) = runwgsim(maxcontig, mutseq.seq, svfrac, exclude, pemean, pesd, mutid=mutid)
 
             # remap reads
             if args.bwamem:
-                outreads = remap_bwamem(fq1, fq2, 4, args.refFasta, outbam_mutsfile)
+                outreads = remap_bwamem(fq1, fq2, 4, args.refFasta, outbam_mutsfile, mutid=mutid)
             else:
-                outreads = remap(fq1, fq2, 4, args.refFasta, outbam_mutsfile)
+                outreads = remap(fq1, fq2, 4, args.refFasta, outbam_mutsfile, mutid=mutid)
 
             if outreads == 0:
-                print "outbam", outbam_mutsfile, "has no mapped reads!"
+                sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\toutbam " + outbam_mutsfile + " has no mapped reads!\n")
                 return None, None
 
         else:
-            print "best contig too short to make mutation: ",bedline.strip()
+            sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tbest contig too short to make mutation!\n")
             return None, None
 
-        sys.stderr.write("temporary bam: " + outbam_mutsfile + "\n")
+        print "INFO\t" + now() + "\t" + mutid + "\ttemporary bam: " + outbam_mutsfile
 
         exclude.close()
         bamfile.close()
@@ -707,8 +651,9 @@ def makemut(args, bedline):
         return None, None
 
 def main(args):
-    tmpbams = []
-    exclfns = [] # 'exclude' files
+    print "INFO\t" + now() + "\tstarting " + sys.argv[0] + " called with args: " + ' '.join(sys.argv) + "\n"
+    tmpbams = [] # temporary BAMs, each holds the realigned reads for one mutation
+    exclfns = [] # 'exclude' files store reads to be removed from the original BAM due to deletions
 
     results = []
     pool = Pool(processes=int(args.procs))
@@ -717,7 +662,7 @@ def main(args):
 
     if not os.path.exists('addsv_logs_' + os.path.basename(args.outBamFile)):
         os.mkdir('addsv_logs_' + os.path.basename(args.outBamFile))
-        print "created log directory: addsv_logs_" + os.path.basename(args.outBamFile)
+        print "INFO\t" + now() + "\tcreated log directory: addsv_logs_" + os.path.basename(args.outBamFile)
 
     with open(args.varFileName, 'r') as varfile:
         for bedline in varfile:
@@ -725,14 +670,14 @@ def main(args):
                 continue
             if args.maxmuts and nmuts >= int(args.maxmuts):
                 break
-            #tmpbam, exclude = makemut(args, bedline)
-            result = pool.apply_async(makemut, [args, bedline]) #MT
-            results.append(result)                              #MT
-            #tmpbams.append(tmpbam)
-            #exclfns.append(exclude)
+            
+            # submit each mutation as its own thread                
+            result = pool.apply_async(makemut, [args, bedline]) 
+            results.append(result)                              
+
             nmuts += 1
 
-    ## MT ##
+    ## process the results of multithreaded mutation jobs
     for result in results:
         tmpbam = None
         exclfn = None
@@ -742,15 +687,14 @@ def main(args):
         if tmpbam is not None and exclfn is not None:
             tmpbams.append(tmpbam)
             exclfns.append(exclfn)
-    ########
 
-    print "bams:",tmpbams
-    print "excl:",exclfns
+    print "INFO\t" + now() + "\ttmpbams:",tmpbams
+    print "INFO\t" + now() + "\texclude:",exclfns
 
     excl_merged = 'exclude.final.' + str(random.random()) + '.txt'
     mergedtmp = 'mergetmp.final.' + str(random.random()) + '.bam'
 
-    print "merging exclude files into", excl_merged, "..."
+    print "INFO\t" + now() + "\tmerging exclude files into", excl_merged, "..."
     exclout = open(excl_merged, 'w')
     for exclfn in exclfns:
         with open(exclfn, 'r') as excl:
@@ -759,17 +703,17 @@ def main(args):
     exclout.close()
 
     if len(tmpbams) == 1:
-        print "only one bam:", tmpbams[0], "renaming to", mergedtmp
+        print "INFO\t" + now() + "\tonly one bam:", tmpbams[0], "renaming to", mergedtmp
         os.rename(tmpbams[0], mergedtmp)
 
     elif len(tmpbams) > 1:
-        print "merging bams into", mergedtmp, "..."
+        print "INFO\t" + now() + "\tmerging bams into", mergedtmp, "..."
         mergebams(tmpbams, mergedtmp)
 
     if args.skipmerge:
-        print "final merge skipped, please merge manually:",mergedtmp
-        print "exclude file to use:",excl_merged
-        print "cleaning up..."
+        print "INFO\t" + now() + "\tfinal merge skipped, please merge manually:", mergedtmp
+        print "INFO\t" + now() + "\texclude file to use:", excl_merged
+        print "INFO\t" + now() + "\tcleaning up..."
 
         for exclfn in exclfns:
             if os.path.isfile(exclfn):
@@ -782,7 +726,7 @@ def main(args):
                 os.remove(tmpbam + '.bai')
 
     else:
-        print "swapping reads into original and writing to", args.outBamFile
+        print "INFO\t" + now() + "\tswapping reads into original and writing to", args.outBamFile
         replace(args.bamFileName, mergedtmp, args.outBamFile, excl_merged)
 
         os.remove(excl_merged)
@@ -798,7 +742,7 @@ def main(args):
             if os.path.isfile(tmpbam + '.bai'):
                 os.remove(tmpbam + '.bai')
 
-        print "done."
+        print "INFO\t" + now() + "\tdone."
 
     
 
