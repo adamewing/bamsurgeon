@@ -8,7 +8,9 @@ import pysam
 import bs.replacereads as rr
 import bs.asmregion as ar
 import bs.mutableseq as ms
+import datetime
 
+from shutil import move
 from math import sqrt
 from itertools import izip
 from collections import Counter
@@ -20,18 +22,20 @@ sys.stderr = os.fdopen(sys.stderr.fileno(), 'w', 0)
 def now():
     return str(datetime.datetime.now())
 
-def remap_bwamem(bamfn, threads, bwaref, mutid='null'):
+
+def remap_bwamem(fq1, fq2, threads, bwaref, outbam, deltmp=True, mutid='null'):
     """ call bwa mem and samtools to remap .bam
     """
 
-    sam_out  = bamfn + '.realign.sam'
-    sort_out = bamfn + '.realign.sorted'
+    basefn   = "bwatmp" + str(random.random())
+    sam_out  = basefn + '.sam'
+    sort_out = basefn + '.sorted'
 
     sam_cmd  = ['bwa', 'mem', '-t', str(threads), '-M', bwaref, fq1, fq2]
 
-    bam_cmd  = ['samtools', 'view', '-bt', bwaref + '.fai', '-o', bamfn, sam_out]
-    sort_cmd = ['samtools', 'sort', '-@', str(threads), '-m', '10000000000', bamfn, sort_out]
-    idx_cmd  = ['samtools', 'index', bamfn]
+    bam_cmd  = ['samtools', 'view', '-bt', bwaref + '.fai', '-o', outbam, sam_out]
+    sort_cmd = ['samtools', 'sort', '-@', str(threads), '-m', '10000000000', outbam, sort_out]
+    idx_cmd  = ['samtools', 'index', outbam]
 
     print "INFO\t" + now() + "\t" + mutid + "\taligning " + fq1 + ',' + fq2 + " with bwa mem\n"
     with open(sam_out, 'w') as sam:
@@ -42,31 +46,31 @@ def remap_bwamem(bamfn, threads, bwaref, mutid='null'):
     sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\twriting " + sam_out + " to BAM...\n")
     subprocess.call(bam_cmd)
 
-    sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\tdeleting SAM: " + sam_out + "\n")
-    os.remove(sam_out)
+    if deltmp:
+        sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\tdeleting SAM: " + sam_out + "\n")
+        os.remove(sam_out)
 
     sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\tsorting output: " + ' '.join(sort_cmd) + "\n")
     subprocess.call(sort_cmd)
 
     sort_out += '.bam'
 
-    sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\tremove original bam:" + bamfn + "\n")
-    os.remove(bamfn)
+    sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\tremove original bam:" + outbam + "\n")
+    os.remove(outbam)
 
-    sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\trename sorted bam: " + sort_out + " to original name: " + bamfn + "\n")
-    move(sort_out, bamfn)
+    sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\trename sorted bam: " + sort_out + " to original name: " + outbam + "\n")
+    move(sort_out, outbam)
 
     sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\tindexing: " + ' '.join(idx_cmd) + "\n")
     subprocess.call(idx_cmd)
 
-    # check if BAM readcount looks sane
-    if bamreadcount(bamfn) < fastqreadcount(fastq): 
-        raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
+    if deltmp:
+        sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fq1 + "\n")
+        os.remove(fq1)
+        sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fq2 + "\n")
+        os.remove(fq2)
 
-    sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fq1 + "\n")
-    os.remove(fq1)
-    sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fq2 + "\n")
-    os.remove(fq2)
+    return bamreads(outbam)
 
 
 def remap(fq1, fq2, threads, bwaref, outbam, deltmp=True, mutid='null'):
@@ -676,7 +680,10 @@ def makemut(args, bedline):
             (fq1, fq2) = runwgsim(maxcontig, mutseq.seq, svfrac, exclude, pemean, pesd)
 
             # remap reads
-            outreads = remap(fq1, fq2, 4, args.refFasta, outbam_mutsfile)
+            if args.bwamem:
+                outreads = remap_bwamem(fq1, fq2, 4, args.refFasta, outbam_mutsfile)
+            else:
+                outreads = remap(fq1, fq2, 4, args.refFasta, outbam_mutsfile)
 
             if outreads == 0:
                 print "outbam", outbam_mutsfile, "has no mapped reads!"
@@ -824,6 +831,7 @@ if __name__ == '__main__':
     parser.add_argument('--noref', action='store_true', default=False, 
                         help="do not perform reference based assembly")
     parser.add_argument('--recycle', action='store_true', default=False)
+    parser.add_argument('--bwamem', action='store_true', default='realign with bwa mem (original shuld be aligned with mem as well!)')
     parser.add_argument('--skipmerge', action='store_true', default=False)
     args = parser.parse_args()
     main(args)
