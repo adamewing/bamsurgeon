@@ -7,11 +7,18 @@ import random
 import subprocess
 import os
 import bs.replacereads as rr
+import datetime
+
+from re import sub
+from shutil import move
 from multiprocessing import Pool, Value, Lock
 from collections import Counter
 
 sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)
 sys.stderr = os.fdopen(sys.stderr.fileno(), 'w', 0)
+
+def now():
+    return str(datetime.datetime.now())
 
 def majorbase(basepile):
     """returns tuple: (major base, count)
@@ -228,6 +235,96 @@ def remap_single(bamfn, threads, bwaref):
     os.remove(saifn)
     os.remove(samfn)
 
+############
+
+def remap_bwamem(bamfn, threads, bwaref, samtofastq, mutid='null', paired=True):
+    """ call bwa mem and samtools to remap .bam
+    """
+    assert os.path.exists(samtofastq)
+
+    sam_out  = bamfn + '.realign.sam'
+    sort_out = bamfn + '.realign.sorted'
+
+    print "INFO\t" + now() + "\t" + mutid + "\tconverting " + bamfn + " to fastq\n"
+    fastq = bamtofastq(bamfn, samtofastq, threads=threads, paired=paired)
+
+    sam_cmd = []
+
+    if paired:
+        sam_cmd  = ['bwa', 'mem', '-t', str(threads), '-M', '-p', bwaref, fastq] # interleaved
+    else:
+        sam_cmd  = ['bwa', 'mem', '-t', str(threads), '-M', bwaref, fastq] # single-end
+
+    assert len(sam_cmd) > 0
+
+    bam_cmd  = ['samtools', 'view', '-bt', bwaref + '.fai', '-o', bamfn, sam_out]
+    sort_cmd = ['samtools', 'sort', '-@', str(threads), '-m', '10000000000', bamfn, sort_out]
+    idx_cmd  = ['samtools', 'index', bamfn]
+
+    print "INFO\t" + now() + "\t" + mutid + "\taligning " + fastq + " with bwa mem\n"
+    with open(sam_out, 'w') as sam:
+        p = subprocess.Popen(sam_cmd, stdout=subprocess.PIPE)
+        for line in p.stdout:
+            sam.write(line)
+
+    sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\twriting " + sam_out + " to BAM...\n")
+    subprocess.call(bam_cmd)
+
+    sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\tdeleting SAM: " + sam_out + "\n")
+    os.remove(sam_out)
+
+    sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\tsorting output: " + ' '.join(sort_cmd) + "\n")
+    subprocess.call(sort_cmd)
+
+    sort_out += '.bam'
+
+    sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\tremove original bam:" + bamfn + "\n")
+    os.remove(bamfn)
+
+    sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\trename sorted bam: " + sort_out + " to original name: " + bamfn + "\n")
+    move(sort_out, bamfn)
+
+    sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\tindexing: " + ' '.join(idx_cmd) + "\n")
+    subprocess.call(idx_cmd)
+
+    # check if BAM readcount looks sane
+    if bamreadcount(bamfn) < fastqreadcount(fastq): 
+        raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
+
+    sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fastq + "\n")
+    os.remove(fastq)
+
+
+def bamtofastq(bam, samtofastq, threads=1, paired=True):
+    assert os.path.exists(samtofastq)
+    assert bam.endswith('.bam')
+
+    outfq = sub('bam$', 'fastq', bam)
+
+    cmd = ['java', '-XX:ParallelGCThreads=' + str(threads), '-Xmx4g', '-jar', samtofastq, 'INPUT=' + bam, 'FASTQ=' + outfq]
+    if paired:
+        cmd.append('INTERLEAVE=true')
+
+    sys.stderr.write("INFO\t" + now() + "\tconverting BAM " + bam + " to FASTQ\n")
+    subprocess.call(cmd)
+
+    assert os.path.exists(outfq) # conversion failed
+
+    return outfq
+
+
+def bamreadcount(bamfile):
+    bam = pysam.Samfile(bamfile, 'rb')
+    return bam.mapped + bam.unmapped
+
+
+def fastqreadcount(fastqfile):
+    assert not fastqfile.endswith('gz') # not supported yet
+    return sum(1 for line in open(fastqfile))/4
+
+
+#########
+
 def replace(origbamfile, mutbamfile, outbamfile):
     ''' open .bam file and call replacereads
     '''
@@ -307,6 +404,13 @@ def get_mutstr(chrom, start, end, ins, ref):
 
 def makemut(args, chrom, start, end, vaf, ins):
     ''' is ins is a sequence, it will is inserted at start, otherwise delete from start to end'''
+
+    mutid = chrom + ':' + str(start) + '-' + str(end) + ':' + str(vaf)
+    if ins is None:
+        mutid += ':DEL'
+    else:
+        mutid += ':INS:' + ins
+
     try:
         bamfile = pysam.Samfile(args.bamFileName, 'rb')
         bammate = pysam.Samfile(args.bamFileName, 'rb') # use for mates to avoid iterator problems
@@ -378,7 +482,7 @@ def makemut(args, chrom, start, end, vaf, ins):
                                 log.write(" ".join(('read',extqname,mutreads[extqname],"\n")))
                             else:
                                 numunmap += 1
-                            print "len(mutreads):",len(mutreads.keys())
+                            #print "len(mutreads):",len(mutreads.keys())
 
                             # abort if mutation list getting too long
                             if len(mutreads) > 200: # FIXME maxdepth should be a parameter
@@ -422,7 +526,7 @@ def makemut(args, chrom, start, end, vaf, ins):
             return None
 
         if vaf is None:
-            vaf = float(args.mutfrac) # default minor allele freq if not otherwise specifi
+            vaf = float(args.mutfrac) # default minor allele freq if not otherwise specified
         if cnv: # cnv file is present
             if chrom in cnv.contigs:
                 for cnregion in cnv.fetch(chrom,start,end):
@@ -468,9 +572,15 @@ def makemut(args, chrom, start, end, vaf, ins):
         if not hasSNP or args.force:
             outbam_muts.close()
             if args.single:
-                remap_single(tmpoutbamname, 4, args.refFasta)
+                if args.bwamem:
+                    remap_bwamem(tmpoutbamname, 4, args.refFasta, args.samtofastq, mutid=mutid, paired=False)
+                else:
+                    remap_single(tmpoutbamname, 4, args.refFasta, mutid=mutid)
             else:
-                remap_paired(tmpoutbamname, 4, args.refFasta)
+                if args.bwamem:
+                    remap_bwamem(tmpoutbamname, 4, args.refFasta, args.samtofastq, mutid=mutid, paired=True)
+                else:
+                    remap_paired(tmpoutbamname, 4, args.refFasta, mutid=mutid)
 
             outbam_muts = pysam.Samfile(tmpoutbamname,'rb')
             coverwindow = 1
@@ -507,14 +617,19 @@ def makemut(args, chrom, start, end, vaf, ins):
         return tmpbams
         
     except Exception, e:
-        sys.stderr.write("*"*60 + "\nencountered error in mutation spikein: " + ' '.join(map(str, (chrom, start, end, vaf))) + "\n")
+        sys.stderr.write("*"*60 + "\nencountered error in mutation spikein: " + mutid + "\n")
         traceback.print_exc(file=sys.stdout)
         sys.stderr.write("*"*60 + "\n")
         return None
 
 def main(args):
+    print "INFO\t" + now() + "\tstarting " + sys.argv[0] + " called with args: " + ' '.join(sys.argv) + "\n"
     bedfile = open(args.varFileName, 'r')
     reffile = pysam.Fastafile(args.refFasta)
+
+    if args.bwamem and args.samtofastq is None:
+        sys.stderr.write("ERROR\t" + now() + "\t --samtofastq must be specified with --bwamem option")
+        sys.exit(1)
 
     # make a temporary file to hold mutated reads
     outbam_mutsfile = "tmp." + str(random.random()) + ".muts.bam"
@@ -597,11 +712,13 @@ def run():
     parser.add_argument('-c', '--cnvfile', dest='cnvfile', default=None, help="tabix-indexed list of genome-wide absolute copy number values (e.g. 2 alleles = no change)")
     parser.add_argument('-d', '--coverdiff', dest='coverdiff', default=0.1, help="allow difference in input and output coverage (default=0.1)")
     parser.add_argument('-p', '--procs', dest='procs', default=1, help="split into multiple processes (default=1)")
+    parser.add_argument('--samtofastq', default=None, help='path to picard SamToFastq.jar')
     parser.add_argument('--nomut', action='store_true', default=False, help="dry run")
     parser.add_argument('--det', action='store_true', default=False, help="deterministic base changes: make transitions only")
     parser.add_argument('--force', action='store_true', default=False, help="force mutation to happen regardless of nearby SNP or low coverage")
     parser.add_argument('--single', action='store_true', default=False, help="input BAM is simgle-ended (default is paired-end)")
     parser.add_argument('--maxopen', dest='maxopen', default=1000, help="maximum number of open files during merge (default 1000)")
+    parser.add_argument('--bwamem', action='store_true', default=False, help='realignment with BWA MEM (instead of backtrack)')
     parser.add_argument('--skipmerge', action='store_true', default=False, help="final output is tmp file to be merged")
     args = parser.parse_args()
     main(args)

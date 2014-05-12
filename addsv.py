@@ -17,6 +17,69 @@ from multiprocessing import Pool
 sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)
 sys.stderr = os.fdopen(sys.stderr.fileno(), 'w', 0)
 
+def now():
+    return str(datetime.datetime.now())
+
+def remap_bwamem(bamfn, threads, bwaref, samtofastq, mutid='null', paired=True):
+    """ call bwa mem and samtools to remap .bam
+    """
+    assert os.path.exists(samtofastq)
+
+    sam_out  = bamfn + '.realign.sam'
+    sort_out = bamfn + '.realign.sorted'
+
+    print "INFO\t" + now() + "\t" + mutid + "\tconverting " + bamfn + " to fastq\n"
+    fastq = bamtofastq(bamfn, samtofastq, threads=threads, paired=paired)
+
+    sam_cmd = []
+
+    if paired:
+        sam_cmd  = ['bwa', 'mem', '-t', str(threads), '-M', '-p', bwaref, fastq] # interleaved
+    else:
+        sam_cmd  = ['bwa', 'mem', '-t', str(threads), '-M', bwaref, fastq] # single-end
+
+    assert len(sam_cmd) > 0
+
+    bam_cmd  = ['samtools', 'view', '-bt', bwaref + '.fai', '-o', bamfn, sam_out]
+    sort_cmd = ['samtools', 'sort', '-@', str(threads), '-m', '10000000000', bamfn, sort_out]
+    idx_cmd  = ['samtools', 'index', bamfn]
+
+    print "INFO\t" + now() + "\t" + mutid + "\taligning " + fastq + " with bwa mem\n"
+    with open(sam_out, 'w') as sam:
+        p = subprocess.Popen(sam_cmd, stdout=subprocess.PIPE)
+        for line in p.stdout:
+            sam.write(line)
+
+    sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\twriting " + sam_out + " to BAM...\n")
+    subprocess.call(bam_cmd)
+
+    sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\tdeleting SAM: " + sam_out + "\n")
+    os.remove(sam_out)
+
+    sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\tsorting output: " + ' '.join(sort_cmd) + "\n")
+    subprocess.call(sort_cmd)
+
+    sort_out += '.bam'
+
+    sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\tremove original bam:" + bamfn + "\n")
+    os.remove(bamfn)
+
+    sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\trename sorted bam: " + sort_out + " to original name: " + bamfn + "\n")
+    move(sort_out, bamfn)
+
+    sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\tindexing: " + ' '.join(idx_cmd) + "\n")
+    subprocess.call(idx_cmd)
+
+    # check if BAM readcount looks sane
+    if bamreadcount(bamfn) < fastqreadcount(fastq): 
+        raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
+
+    sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fq1 + "\n")
+    os.remove(fq1)
+    sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fq2 + "\n")
+    os.remove(fq2)
+
+
 def remap(fq1, fq2, threads, bwaref, outbam, deltmp=True):
     """ call bwa/samtools to remap .bam and merge with existing .bam
     """
