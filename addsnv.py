@@ -7,11 +7,19 @@ import random
 import subprocess
 import os
 import bs.replacereads as rr
+import datetime
+
+from shutil import move
+from re import sub
 from multiprocessing import Pool, Value, Lock
 from collections import Counter
 
+
 sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)
 sys.stderr = os.fdopen(sys.stderr.fileno(), 'w', 0)
+
+def now():
+    return str(datetime.datetime.now())
 
 def majorbase(basepile):
     """returns tuple: (major base, count)
@@ -36,7 +44,7 @@ def mut(base,det=False):
     bases = ('A','T','C','G')
     base = base.upper()
     if base not in bases:
-        raise ValueError("base passed to mut(): " + str(base) + " not one of (A,T,C,G)")
+        raise ValueError("ERROR\t" + now() + "\tbase passed to mut(): " + str(base) + " not one of (A,T,C,G)")
 
     if det:
         if base == 'A':
@@ -78,7 +86,7 @@ def countReadCoverage(bam,chrom,start,end):
     return coverage
 
 
-def countBaseAtPos(bamfile,chrom,pos):
+def countBaseAtPos(bamfile, chrom, pos, mutid='null'):
     """ return list of bases at position chrom,pos
     """
     locstr = chrom + ":" + str(pos) + "-" + str(pos)
@@ -96,7 +104,7 @@ def countBaseAtPos(bamfile,chrom,pos):
             assert len(c) > 5
             pileup = c[4].upper()
         except AssertionError:
-            print "mpileup failed, no coverage for base:",chrom,pos
+            sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tmpileup failed, no coverage for base: " + chrom + ":" + str(pos))
             return []
     bases = []
     if pileup:
@@ -111,11 +119,11 @@ def mergebams(bamlist, outbamfn, maxopen=1000):
     """
 
     assert outbamfn.endswith('.bam')
-    print "DEBUG: len(bamlist)", len(bamlist)
+    print "INFO\t" + now() + "\tlen(bamlist)", len(bamlist)
 
     if len(bamlist) == 1:
-        print "only one BAM to merge, renaming",bamlist[0],"-->",outbamfn
-        os.rename(bamlist[0], outbamfn)
+        print "INFO\t" + now() + "\tonly one BAM to merge, renaming",bamlist[0],"-->",outbamfn
+        move(bamlist[0], outbamfn)
     else:
         nmerge = 1
         mergenum = 0
@@ -133,19 +141,19 @@ def mergebams(bamlist, outbamfn, maxopen=1000):
 
         for submergefn, tmpbams in merge_sublists.iteritems():
             if len(tmpbams) == 1:
-                os.rename(tmpbams[0], submergefn)
-                print "renamed:",tmpbams[0],"-->",submergefn
+                move(tmpbams[0], submergefn)
+                print "INFO\t" + now() + "\trenamed:",tmpbams[0],"-->",submergefn
             else:
                 args = ['samtools','merge','-f',submergefn] + tmpbams 
-                print "merging, cmd: ",args
+                print "INFO\t" + now() + "\tmerging, cmd: ",args
                 subprocess.call(args)
 
         if len(merge_sublists.keys()) == 1:
-            print "merge finished, renaming:",merge_sublists.keys()[0],"-->",outbamfn
-            os.rename(merge_sublists.keys()[0], outbamfn)
+            print "INFO\t" + now() + "\tmerge finished, renaming:",merge_sublists.keys()[0],"-->",outbamfn
+            move(merge_sublists.keys()[0], outbamfn)
         else:
             args = ['samtools','merge','-f',outbamfn] + merge_sublists.keys() 
-            print "final merge, cmd: ",args
+            print "INFO\t" + now() + "\tfinal merge, cmd: ",args
             subprocess.call(args)
 
         for submergefn in merge_sublists.keys():
@@ -157,7 +165,7 @@ def mergebams(bamlist, outbamfn, maxopen=1000):
             os.remove(bamfile)
             os.remove(bamfile + '.bai')
 
-def remap_paired(bamfn, threads, bwaref):
+def remap_paired(bamfn, threads, bwaref, mutid='null'):
     """ call bwa/samtools to remap .bam
     """
     sai1fn = bamfn + ".1.sai"
@@ -170,24 +178,24 @@ def remap_paired(bamfn, threads, bwaref):
     samargs  = ['bwa', 'sampe', '-P', '-f', samfn, bwaref, sai1fn, sai2fn, bamfn, bamfn]
     bamargs  = ['samtools', 'view', '-bt', refidx, '-o', bamfn, samfn] 
 
-    print "mapping 1st end, cmd: " + " ".join(sai1args)
+    print "INFO\t" + now() + "\t" + mutid + "\tmapping 1st end, cmd: " + " ".join(sai1args)
     subprocess.call(sai1args)
-    print "mapping 2nd end, cmd: " + " ".join(sai2args)
+    print "INFO\t" + now() + "\t" + mutid + "\tmapping 2nd end, cmd: " + " ".join(sai2args)
     subprocess.call(sai2args)
-    print "pairing ends, building .sam, cmd: " + " ".join(samargs)
+    print "INFO\t" + now() + "\t" + mutid + "\tpairing ends, building .sam, cmd: " + " ".join(samargs)
     subprocess.call(samargs)
-    print "sam --> bam, cmd: " + " ".join(bamargs)
+    print "INFO\t" + now() + "\t" + mutid + "\tsam --> bam, cmd: " + " ".join(bamargs)
     subprocess.call(bamargs)
 
     sortbase = bamfn + ".sort"
     sortfn   = sortbase + ".bam"
     sortargs = ['samtools','sort','-m','10000000000',bamfn,sortbase]
-    print "sorting, cmd: " + " ".join(sortargs)
+    print "INFO\t" + now() + "\t" + mutid + "\tsorting, cmd: " + " ".join(sortargs)
     subprocess.call(sortargs)
-    os.rename(sortfn,bamfn)
+    move(sortfn,bamfn)
 
     indexargs = ['samtools','index',bamfn]
-    print "indexing, cmd: " + " ".join(indexargs)
+    print "INFO\t" + now() + "\t" + mutid + "\tindexing, cmd: " + " ".join(indexargs)
     subprocess.call(indexargs)
 
     # cleanup
@@ -195,7 +203,98 @@ def remap_paired(bamfn, threads, bwaref):
     os.remove(sai2fn)
     os.remove(samfn)
 
-def remap_single(bamfn, threads, bwaref):
+############
+
+def remap_bwamem(bamfn, threads, bwaref, samtofastq, mutid='null', paired=True):
+    """ call bwa mem and samtools to remap .bam
+    """
+    assert os.path.exists(samtofastq)
+
+    sam_out  = bamfn + '.realign.sam'
+    sort_out = bamfn + '.realign.sorted'
+
+    print "INFO\t" + now() + "\t" + mutid + "\tconverting " + bamfn + " to fastq\n"
+    fastq = bamtofastq(bamfn, samtofastq, threads=threads, paired=paired)
+
+    sam_cmd = []
+
+    if paired:
+        sam_cmd  = ['bwa', 'mem', '-t', str(threads), '-M', '-p', bwaref, fastq] # interleaved
+    else:
+        sam_cmd  = ['bwa', 'mem', '-t', str(threads), '-M', bwaref, fastq] # single-end
+
+    assert len(sam_cmd) > 0
+
+    bam_cmd  = ['samtools', 'view', '-bt', bwaref + '.fai', '-o', bamfn, sam_out]
+    sort_cmd = ['samtools', 'sort', '-@', str(threads), '-m', '10000000000', bamfn, sort_out]
+    idx_cmd  = ['samtools', 'index', bamfn]
+
+    print "INFO\t" + now() + "\t" + mutid + "\taligning " + fastq + " with bwa mem\n"
+    with open(sam_out, 'w') as sam:
+        p = subprocess.Popen(sam_cmd, stdout=subprocess.PIPE)
+        for line in p.stdout:
+            sam.write(line)
+
+    sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\twriting " + sam_out + " to BAM...\n")
+    subprocess.call(bam_cmd)
+
+    sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\tdeleting SAM: " + sam_out + "\n")
+    os.remove(sam_out)
+
+    sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\tsorting output: " + ' '.join(sort_cmd) + "\n")
+    subprocess.call(sort_cmd)
+
+    sort_out += '.bam'
+
+    sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\tremove original bam:" + bamfn + "\n")
+    os.remove(bamfn)
+
+    sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\trename sorted bam: " + sort_out + " to original name: " + bamfn + "\n")
+    move(sort_out, bamfn)
+
+    sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\tindexing: " + ' '.join(idx_cmd) + "\n")
+    subprocess.call(idx_cmd)
+
+    # check if BAM readcount looks sane
+    if bamreadcount(bamfn) < fastqreadcount(fastq): 
+        raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
+
+    sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fastq + "\n")
+    os.remove(fastq)
+
+
+def bamtofastq(bam, samtofastq, threads=1, paired=True):
+    assert os.path.exists(samtofastq)
+    assert bam.endswith('.bam')
+
+    outfq = sub('bam$', 'fastq', bam)
+
+    cmd = ['java', '-XX:ParallelGCThreads=' + str(threads), '-Xmx4g', '-jar', samtofastq, 'INPUT=' + bam, 'FASTQ=' + outfq]
+    if paired:
+        cmd.append('INTERLEAVE=true')
+
+    sys.stderr.write("INFO\t" + now() + "\tconverting BAM " + bam + " to FASTQ\n")
+    subprocess.call(cmd)
+
+    assert os.path.exists(outfq) # conversion failed
+
+    return outfq
+
+
+def bamreadcount(bamfile):
+    bam = pysam.Samfile(bamfile, 'rb')
+    return bam.mapped + bam.unmapped
+
+
+def fastqreadcount(fastqfile):
+    assert not fastqfile.endswith('gz') # not supported yet
+    return sum(1 for line in open(fastqfile))/4
+
+
+#########
+
+
+def remap_single(bamfn, threads, bwaref, mutid='null'):
     """ call bwa/samtools to remap .bam
     """
     saifn = bamfn + ".sai"
@@ -206,27 +305,28 @@ def remap_single(bamfn, threads, bwaref):
     samargs  = ['bwa', 'samse', '-f', samfn, bwaref, saifn, bamfn]
     bamargs  = ['samtools', 'view', '-bt', refidx, '-o', bamfn, samfn] 
 
-    print "mapping, cmd: " + " ".join(saiargs)
+    print "INFO\t" + now() + "\t" + mutid + "\tmapping, cmd: " + " ".join(saiargs)
     subprocess.call(saiargs)
-    print "pairing ends, building .sam, cmd: " + " ".join(samargs)
+    print "INFO\t" + now() + "\t" + mutid + "\tpairing ends, building .sam, cmd: " + " ".join(samargs)
     subprocess.call(samargs)
-    print "sam --> bam, cmd: " + " ".join(bamargs)
+    print "INFO\t" + now() + "\t" + mutid + "\tsam --> bam, cmd: " + " ".join(bamargs)
     subprocess.call(bamargs)
 
     sortbase = bamfn + ".sort"
     sortfn   = sortbase + ".bam"
     sortargs = ['samtools','sort','-m','10000000000',bamfn,sortbase]
-    print "sorting, cmd: " + " ".join(sortargs)
+    print "INFO\t" + now() + "\t" + mutid + "\tsorting, cmd: " + " ".join(sortargs)
     subprocess.call(sortargs)
-    os.rename(sortfn,bamfn)
+    move(sortfn,bamfn)
 
     indexargs = ['samtools','index',bamfn]
-    print "indexing, cmd: " + " ".join(indexargs)
+    print "INFO\t" + now() + "\t" + mutid + "\tindexing, cmd: " + " ".join(indexargs)
     subprocess.call(indexargs)
 
     # cleanup
     os.remove(saifn)
     os.remove(samfn)
+
 
 def replace(origbamfile, mutbamfile, outbamfile):
     ''' open .bam file and call replacereads
@@ -242,6 +342,7 @@ def replace(origbamfile, mutbamfile, outbamfile):
     outbam.close()
 
 def makemut(args, chrom, start, end, vaf):
+    mutid = chrom + ':' + str(start) + '-' + str(end) + ':' + str(vaf)
     try:
         bamfile = pysam.Samfile(args.bamFileName, 'rb')
         bammate = pysam.Samfile(args.bamFileName, 'rb') # use for mates to avoid iterator problems
@@ -256,7 +357,7 @@ def makemut(args, chrom, start, end, vaf):
         try:
             mutbase = mut(refbase,args.det)
         except ValueError as e:
-            sys.stderr.write(' '.join(("skipped site:",chrom,str(start),str(end),"due to N base:",str(e),"\n")))
+            sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\t" + ' '.join(("skipped site:",chrom,str(start),str(end),"due to N base:",str(e),"\n")))
             return None
 
         mutstr = refbase + "-->" + mutbase
@@ -276,7 +377,7 @@ def makemut(args, chrom, start, end, vaf):
         numunmap = 0
         hasSNP = False
         tmpoutbamname = "tmpbam" + str(random.random()) + ".bam"
-        print "creating tmp bam: ",tmpoutbamname #DEBUG
+        print "INFO\t" + now() + "\t" + mutid + "\tcreating tmp bam: ",tmpoutbamname
         outbam_muts = pysam.Samfile(tmpoutbamname, 'wb', template=bamfile)
         maxfrac = 0.0
 
@@ -308,7 +409,7 @@ def makemut(args, chrom, start, end, vaf):
                                     try:
                                         mate = bammate.mate(pread.alignment)
                                     except:
-                                        print "warning: no mate for",pread.alignment.qname
+                                        print "INFO\t" + now() + "\t" + mutid + "\twarning: no mate for",pread.alignment.qname
                                 mutmates[extqname] = mate
                                 log.write(" ".join(('read',extqname,mutread,"\n")))
                             else:
@@ -317,7 +418,7 @@ def makemut(args, chrom, start, end, vaf):
                 # make sure region doesn't have any changes that are likely SNPs
                 # (trying to avoid messing with haplotypes)
                     
-                basepile = countBaseAtPos(args.bamFileName,chrom,pcol.pos)
+                basepile = countBaseAtPos(args.bamFileName,chrom,pcol.pos,mutid=mutid)
                 if basepile:
                     majb = majorbase(basepile)
                     minb = minorbase(basepile)
@@ -328,10 +429,10 @@ def makemut(args, chrom, start, end, vaf):
                     if frac > maxfrac:
                         maxfrac = frac
                     if frac > snvfrac:
-                        print "dropped for proximity to SNP, nearby SNP MAF:",frac,"maxfrac:",snvfrac
+                        print "INFO\t" + now() + "\t" + mutid + "\tdropped for proximity to SNP, nearby SNP MAF:",frac,"maxfrac:",snvfrac
                         hasSNP = True
                 else:
-                    print "could not pileup for region:",chrom,pcol.pos
+                    print "INFO\t" + now() + "\t" + mutid + "\tcould not pileup for region:",chrom,pcol.pos
                     hasSNP = True
 
         # pick reads to change
@@ -340,11 +441,11 @@ def makemut(args, chrom, start, end, vaf):
             if read.seq != mutreads[extqname]:
                 readlist.append(extqname)
 
-        print "len(readlist):",str(len(readlist))
+        print "INFO\t" + now() + "\t" + mutid + "\tlen(readlist): " + str(len(readlist))
         random.shuffle(readlist)
 
         if len(readlist) == 0:
-            print "no reads in region, skipping..."
+            print "INFO\t" + now() + "\t" + mutid + "\tno reads in region, skipping..."
             outbam_muts.close()
             os.remove(tmpoutbamname)
             return None
@@ -355,24 +456,24 @@ def makemut(args, chrom, start, end, vaf):
             if chrom in cnv.contigs:
                 for cnregion in cnv.fetch(chrom,start,end):
                     cn = float(cnregion.strip().split()[3]) # expect chrom,start,end,CN
-                    sys.stderr.write(' '.join(("copy number in snp region:",chrom,str(start),str(end),"=",str(cn))) + "\n")
+                    print "INFO\t" + now() + "\t" + mutid + "\t" + ' '.join(("copy number in snp region:",chrom,str(start),str(end),"=",str(cn))) + "\n"
                     if float(cn) > 0.0:
                         vaf = 1.0/float(cn)
                     else:
                         vaf = 0.0
-                    sys.stderr.write("adjusted VAF: " + str(vaf) + "\n")
+                    print "adjusted VAF: " + str(vaf) + "\n"
         else:
-            sys.stderr.write("selected VAF: " + str(vaf) + "\n")
+            print "INFO\t" + now() + "\t" + mutid + "\tselected VAF: " + str(vaf) + "\n"
 
         lastread = int(len(readlist)*vaf)
 
         # pick at least one read if possible
         if lastread == 0 and len(readlist) > 0:
-            sys.stderr.write("forced 1 read.\n")
+            sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tforced 1 read.\n")
             lastread = 1
 
         readlist = readlist[0:int(len(readlist)*vaf)] 
-        print "picked:",str(len(readlist))
+        print "INFO\t" + now() + "\t" + mutid + "\tpicked:",str(len(readlist))
 
         wrote = 0
         nmut = 0
@@ -391,14 +492,20 @@ def makemut(args, chrom, start, end, vaf):
                     outbam_muts.write(mutmates[extqname])
                 elif mutmates[extqname] is not None:
                     outbam_muts.write(mutmates[extqname])
-        print "wrote: ",wrote,"mutated:",nmut
+        print "INFO\t" + now() + "\t" + mutid + "\twrote: ",wrote,"mutated:",nmut
 
         if not hasSNP or args.force:
             outbam_muts.close()
             if args.single:
-                remap_single(tmpoutbamname, 4, args.refFasta)
+                if args.bwamem:
+                    remap_bwamem(tmpoutbamname, 4, args.refFasta, args.samtofastq, mutid=mutid, paired=False)
+                else:
+                    remap_single(tmpoutbamname, 4, args.refFasta, mutid=mutid)
             else:
-                remap_paired(tmpoutbamname, 4, args.refFasta)
+                if args.bwamem:
+                    remap_bwamem(tmpoutbamname, 4, args.refFasta, args.samtofastq, mutid=mutid, paired=True)
+                else:
+                    remap_paired(tmpoutbamname, 4, args.refFasta, mutid=mutid)
 
             outbam_muts = pysam.Samfile(tmpoutbamname,'rb')
             coverwindow = 1
@@ -429,14 +536,19 @@ def makemut(args, chrom, start, end, vaf):
         return tmpbams
 
     except Exception, e:
-        sys.stderr.write("*"*60 + "\nencountered error in mutation spikein: " + ' '.join(map(str, (chrom, start, end, vaf))) + "\n")
+        sys.stderr.write("*"*60 + "\nERROR\t" + now() + "\tencountered error in mutation spikein: " + mutid + "\n")
         traceback.print_exc(file=sys.stdout)
         sys.stderr.write("*"*60 + "\n")
         return None
 
 def main(args):
+    print "INFO\t" + now() + "\tstarting " + sys.argv[0] + " called with args: " + ' '.join(sys.argv) + "\n"
     bedfile = open(args.varFileName, 'r')
     reffile = pysam.Fastafile(args.refFasta)
+
+    if args.bwamem and args.samtofastq is None:
+        sys.stderr.write("ERROR\t" + now() + "\t --samtofastq must be specified with --bwamem option")
+        sys.exit(1)
 
     # make a temporary file to hold mutated reads
     outbam_mutsfile = "tmp." + str(random.random()) + ".muts.bam"
@@ -448,7 +560,7 @@ def main(args):
 
     if not os.path.exists('addsnv_logs_' + os.path.basename(args.outBamFile)):
         os.mkdir('addsnv_logs_' + os.path.basename(args.outBamFile))
-        print "created directory: addsnv_logs_" + os.path.basename(args.outBamFile)
+        print "INFO\t" + now() + "\tcreated directory: addsnv_logs_" + os.path.basename(args.outBamFile)
 
     pool = Pool(processes=int(args.procs))
     results = []
@@ -477,7 +589,7 @@ def main(args):
 
     # merge tmp bams
     if len(tmpbams) == 1:
-        os.rename(tmpbams[0],outbam_mutsfile)
+        move(tmpbams[0],outbam_mutsfile)
     elif len(tmpbams) > 1:
         mergebams(tmpbams,outbam_mutsfile,maxopen=int(args.maxopen))
 
@@ -488,7 +600,7 @@ def main(args):
         if os.path.exists(bam):
             os.remove(bam)
 
-    print "done making mutations, merging mutations into", args.bamFileName, "-->", args.outBamFile
+    print "INFO\t" + now() + "\tdone making mutations, merging mutations into " + args.bamFileName + " --> " + args.outBamFile
     replace(args.bamFileName, outbam_mutsfile, args.outBamFile)
 
     #cleanup
@@ -506,11 +618,13 @@ def run():
     parser.add_argument('-c', '--cnvfile', dest='cnvfile', default=None, help="tabix-indexed list of genome-wide absolute copy number values (e.g. 2 alleles = no change)")
     parser.add_argument('-d', '--coverdiff', dest='coverdiff', default=0.9, help="allow difference in input and output coverage (default=0.9)")
     parser.add_argument('-p', '--procs', dest='procs', default=1, help="split into multiple processes (default=1)")
+    parser.add_argument('--samtofastq', default=None, help='path to picard SamToFastq.jar')
     parser.add_argument('--nomut', action='store_true', default=False, help="dry run")
     parser.add_argument('--det', action='store_true', default=False, help="deterministic base changes: make transitions only")
     parser.add_argument('--force', action='store_true', default=False, help="force mutation to happen regardless of nearby SNP or low coverage")
     parser.add_argument('--single', action='store_true', default=False, help="input BAM is simgle-ended (default is paired-end)")
     parser.add_argument('--maxopen', dest='maxopen', default=1000, help="maximum number of open files during merge (default 1000)")
+    parser.add_argument('--bwamem', action='store_true', default=False, help='realignment with BWA MEM (instead of backtrack)')
     args = parser.parse_args()
     main(args)
 

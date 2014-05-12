@@ -11,7 +11,7 @@ def rc(dna):
     complements = maketrans('acgtrymkbdhvACGTRYMKBDHV', 'tgcayrkmvhdbTGCAYRKMVHDB')
     return dna.translate(complements)[::-1]
 
-def cleanup(read,RG):
+def cleanup(read,orig,RG):
     '''
     fixes unmapped reads that are marked as 'reverse'
     fill in read group at random from existing RGs if 
@@ -34,8 +34,16 @@ def cleanup(read,RG):
                 if tag[0] == 'RG':
                     hasRG = True
 
+        # use RG from original read if it exists
+        if orig is not None:
+            if not hasRG and orig.tags is not None:
+                for tag in orig.tags:
+                    if tag[0] == 'RG':
+                        read.tags = read.tags + [tag] 
+                        hasRG = True
+
         if not hasRG:
-            # add random read group from list in header
+            # give up and add random read group from list in header (e.g. for simulated reads)
             newRG = RG[randint(0,len(RG)-1)]
             read.tags = read.tags + [("RG",newRG)]
     return read
@@ -143,12 +151,13 @@ def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=No
                         sys.stderr.write("donor:  " + str(rdict[extqname]) + "\n")
                         sys.stderr.write("target: " + str(read) + "\n")
                         sys.exit(1)
-                rdict[extqname] = cleanup(rdict[extqname],RG)
+
+                rdict[extqname] = cleanup(rdict[extqname],read,RG)
                 outputbam.write(rdict[extqname])  # write read from donor .bam
                 used[extqname] = True
                 recount += 1
             else:
-                read = cleanup(read,RG)
+                read = cleanup(read,None,RG)
                 outputbam.write(read) # write read from target .bam
         else:
             excount += 1
@@ -160,7 +169,7 @@ def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=No
     if allreads:
         for extqname in rdict.keys():
             if extqname not in used and extqname not in exclude:
-                rdict[extqname] = cleanup(rdict[extqname],RG)
+                rdict[extqname] = cleanup(rdict[extqname],None,RG)
                 outputbam.write(rdict[extqname])
                 nadded += 1
         sys.stderr.write("added " + str(nadded) + " reads due to --all\n")
