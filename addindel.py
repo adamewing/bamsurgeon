@@ -17,13 +17,16 @@ from collections import Counter
 sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)
 sys.stderr = os.fdopen(sys.stderr.fileno(), 'w', 0)
 
+
 def now():
     return str(datetime.datetime.now())
+
 
 def majorbase(basepile):
     """returns tuple: (major base, count)
     """
     return Counter(basepile).most_common()[0]
+
 
 def minorbase(basepile):
     """returns tuple: (minor base, count)
@@ -34,37 +37,10 @@ def minorbase(basepile):
     else:
         return c.most_common()[0]
 
-def mut(base,det=False):
-    """ change base to something different
-        if 'det' (deterministic) is true, mutations will be made in a predictable pattern:
-        A-->G, G-->A, T-->C, C-->T (transitions)
-    """
-
-    bases = ('A','T','C','G')
-    base = base.upper()
-    if base not in bases:
-        raise ValueError("base passed to mut(): " + str(base) + " not one of (A,T,C,G)")
-
-    if det:
-        if base == 'A':
-            return 'T'
-        elif base == 'T':
-            return 'A'
-        elif base == 'G':
-            return 'C'
-        elif base == 'C':
-            return 'G'
-
-    else:
-        mut = base
-        while mut == base:
-            mut = bases[int(random.uniform(0,4))]
-        return mut
 
 def countReadCoverage(bam,chrom,start,end):
     """ calculate coverage of aligned reads over region
     """
-
     coverage = []
     start = int(start)
     end = int(end)
@@ -85,7 +61,7 @@ def countReadCoverage(bam,chrom,start,end):
     return coverage
 
 
-def countBaseAtPos(bamfile,chrom,pos):
+def countBaseAtPos(bamfile,chrom,pos,mutid='null'):
     """ return list of bases at position chrom,pos
     """
     locstr = chrom + ":" + str(pos) + "-" + str(pos)
@@ -103,7 +79,7 @@ def countBaseAtPos(bamfile,chrom,pos):
             assert len(c) > 5
             pileup = c[4].upper()
         except AssertionError:
-            print "mpileup failed, no coverage for base:",chrom,pos
+            sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\tmpileup failed, no coverage for base: " + chrom + ":" + str(pos) + "\n")
             return []
     bases = []
     if pileup:
@@ -121,7 +97,7 @@ def mergebams(bamlist, outbamfn, maxopen=1000):
     print "DEBUG: len(bamlist)", len(bamlist)
 
     if len(bamlist) == 1:
-        print "only one BAM to merge, renaming",bamlist[0],"-->",outbamfn
+        print "INFO\t" + now() + "\tonly one BAM to merge, renaming",bamlist[0], "-->", outbamfn
         os.rename(bamlist[0], outbamfn)
     else:
         nmerge = 1
@@ -141,18 +117,20 @@ def mergebams(bamlist, outbamfn, maxopen=1000):
         for submergefn, tmpbams in merge_sublists.iteritems():
             if len(tmpbams) == 1:
                 os.rename(tmpbams[0], submergefn)
-                print "renamed:",tmpbams[0],"-->",submergefn
+                print "INFO\t" + now() + "\trenamed:",tmpbams[0], "-->", submergefn
+
             else:
                 args = ['samtools','merge','-f',submergefn] + tmpbams 
-                print "merging, cmd: ",args
+                print "INFO\t" + now() + "\tmerging, cmd: ", args
                 subprocess.call(args)
 
         if len(merge_sublists.keys()) == 1:
-            print "merge finished, renaming:",merge_sublists.keys()[0],"-->",outbamfn
+            print "INFO\t" + now() + "\tmerge finished, renaming:",merge_sublists.keys()[0], "-->", outbamfn
             os.rename(merge_sublists.keys()[0], outbamfn)
+
         else:
             args = ['samtools','merge','-f',outbamfn] + merge_sublists.keys() 
-            print "final merge, cmd: ",args
+            print "INFO\t" + now() + "\tfinal merge, cmd: ",args
             subprocess.call(args)
 
         for submergefn in merge_sublists.keys():
@@ -177,24 +155,24 @@ def remap_paired(bamfn, threads, bwaref, mutid='null'):
     samargs  = ['bwa', 'sampe', '-P', '-f', samfn, bwaref, sai1fn, sai2fn, bamfn, bamfn]
     bamargs  = ['samtools', 'view', '-bt', refidx, '-o', bamfn, samfn] 
 
-    print "mapping 1st end, cmd: " + " ".join(sai1args)
+    print "INFO\t" + now() + "\t" + mutid + "\tmapping 1st end, cmd: " + " ".join(sai1args)
     subprocess.call(sai1args)
-    print "mapping 2nd end, cmd: " + " ".join(sai2args)
+    print "INFO\t" + now() + "\t" + mutid + "\tmapping 2nd end, cmd: " + " ".join(sai2args)
     subprocess.call(sai2args)
-    print "pairing ends, building .sam, cmd: " + " ".join(samargs)
+    print "INFO\t" + now() + "\t" + mutid + "\tpairing ends, building .sam, cmd: " + " ".join(samargs)
     subprocess.call(samargs)
-    print "sam --> bam, cmd: " + " ".join(bamargs)
+    print "INFO\t" + now() + "\t" + mutid + "\tsam --> bam, cmd: " + " ".join(bamargs)
     subprocess.call(bamargs)
 
     sortbase = bamfn + ".sort"
     sortfn   = sortbase + ".bam"
     sortargs = ['samtools','sort','-m','10000000000',bamfn,sortbase]
-    print "sorting, cmd: " + " ".join(sortargs)
+    print "INFO\t" + now() + "\t" + mutid + "\tsorting, cmd: " + " ".join(sortargs)
     subprocess.call(sortargs)
     os.rename(sortfn,bamfn)
 
     indexargs = ['samtools','index',bamfn]
-    print "indexing, cmd: " + " ".join(indexargs)
+    print "INFO\t" + now() + "\t" + mutid + "\tindexing, cmd: " + " ".join(indexargs)
     subprocess.call(indexargs)
 
     # cleanup
@@ -213,22 +191,22 @@ def remap_single(bamfn, threads, bwaref, mutid='null'):
     samargs  = ['bwa', 'samse', '-f', samfn, bwaref, saifn, bamfn]
     bamargs  = ['samtools', 'view', '-bt', refidx, '-o', bamfn, samfn] 
 
-    print "mapping, cmd: " + " ".join(saiargs)
+    print "INFO\t" + now() + "\t" + mutid + "\tmapping, cmd: " + " ".join(saiargs)
     subprocess.call(saiargs)
-    print "pairing ends, building .sam, cmd: " + " ".join(samargs)
+    print "INFO\t" + now() + "\t" + mutid + "\tpairing ends, building .sam, cmd: " + " ".join(samargs)
     subprocess.call(samargs)
-    print "sam --> bam, cmd: " + " ".join(bamargs)
+    print "INFO\t" + now() + "\t" + mutid + "\tsam --> bam, cmd: " + " ".join(bamargs)
     subprocess.call(bamargs)
 
     sortbase = bamfn + ".sort"
     sortfn   = sortbase + ".bam"
     sortargs = ['samtools','sort','-m','10000000000',bamfn,sortbase]
-    print "sorting, cmd: " + " ".join(sortargs)
+    print "INFO\t" + now() + "\t" + mutid + "\tsorting, cmd: " + " ".join(sortargs)
     subprocess.call(sortargs)
     os.rename(sortfn,bamfn)
 
     indexargs = ['samtools','index',bamfn]
-    print "indexing, cmd: " + " ".join(indexargs)
+    print "INFO\t" + now() + "\t" + mutid + "\tindexing, cmd: " + " ".join(indexargs)
     subprocess.call(indexargs)
 
     # cleanup
@@ -305,7 +283,7 @@ def bamtofastq(bam, samtofastq, threads=1, paired=True):
     if paired:
         cmd.append('INTERLEAVE=true')
 
-    sys.stderr.write("INFO\t" + now() + "\tconverting BAM " + bam + " to FASTQ\n")
+    sys.stdout.write("INFO\t" + now() + "\tconverting BAM " + bam + " to FASTQ\n")
     subprocess.call(cmd)
 
     assert os.path.exists(outfq) # conversion failed
@@ -338,24 +316,28 @@ def replace(origbamfile, mutbamfile, outbamfile):
     mutbam.close()
     outbam.close()
 
-def makeins(read, start, ins):
+def makeins(read, start, ins, debug=False):
     assert len(read.seq) > len(ins) + 2
-#    print "DEBUG: INS: read.pos:", read.pos
-#    print "DEBUG: INS: start:   ", start
-#    print "DEBUG: INS: ins:     ", ins
+    if debug:
+        print "DEBUG: INS: read.pos:", read.pos
+        print "DEBUG: INS: start:   ", start
+        print "DEBUG: INS: ins:     ", ins
+
     orig_len = len(read.seq)
     pos_in_read = start - read.pos    
 
 
     if pos_in_read > 0: # insertion start in read span
-#        print "DEBUG: INS: pos_in_read:", pos_in_read
+        if debug:
+            print "DEBUG: INS: pos_in_read:", pos_in_read
         left  = read.seq[:pos_in_read]
         right = read.seq[pos_in_read:]
 
         newseq = left + ins + right
 
-#        print "DEBUG: INS: read.seq:", read.seq
-#        print "DEBUG: INS: newseq:  ", newseq[:orig_len]
+        if debug:
+            print "DEBUG: INS: read.seq:", read.seq
+            print "DEBUG: INS: newseq:  ", newseq[:orig_len]
 
         return newseq[:orig_len]
 
@@ -364,35 +346,44 @@ def makeins(read, start, ins):
         newseq = ins + right
         return newseq[-orig_len:]
 
-def makedel(read, chrom, start, end, ref): #FIXME
+def makedel(read, chrom, start, end, ref, debug=False): #FIXME
     assert len(read.seq) > end-start-2
-#    print "DEBUG: DEL: read.pos:", read.pos
-#    print "DEBUG: DEL: start:   ", start
-#    print "DEBUG: DEL: ins:     ", end
+    if debug:
+        print "DEBUG: DEL: read.pos:", read.pos
+        print "DEBUG: DEL: start:   ", start
+        print "DEBUG: DEL: ins:     ", end
+
     orig_len = len(read.seq)
     orig_end = read.pos + orig_len
     start_in_read = start - read.pos
     end_in_read = end - read.pos
 
-#    print "DEBUG: DEL: start_in_read:", start_in_read
-#    print "DEBUG: DEL: end_in_read:  ", end_in_read
+    if debug:
+        print "DEBUG: DEL: start_in_read:", start_in_read
+        print "DEBUG: DEL: end_in_read:  ", end_in_read
 
     if start_in_read < 0: # deletion begins to the left of the read
-#        print "DEBUG: DEL: del begins to left of read." 
+        if debug:
+            print "DEBUG: DEL: del begins to left of read." 
+
         assert end_in_read < orig_len
         right = read.seq[end_in_read:]
         left  = ref.fetch(chrom, start-(len(read.seq) - len(right)), start)
         return left + right
 
     elif end_in_read > orig_len: # deletion ends to the right of the read
-#        print "DEBUG: DEL: del ends to right of read." 
+        if debug:
+            print "DEBUG: DEL: del ends to right of read."
+
         assert start_in_read > 0
         left  = read.seq[:start_in_read]
         right = ref.fetch(chrom, end, end+(len(read.seq) - len(left)))
         return left + right
 
     else:
-#        print "DEBUG: DEL: del starts and ends within read." 
+        if debug:
+            print "DEBUG: DEL: del starts and ends within read." 
+
         assert end_in_read <= orig_len and start_in_read >= 0 # deletion contained within the read
         left  = read.seq[:start_in_read]
         right = read.seq[end_in_read:]
@@ -445,7 +436,7 @@ def makemut(args, chrom, start, end, vaf, ins):
         numunmap = 0
         hasSNP = False
         tmpoutbamname = "tmpbam" + str(random.random()) + ".bam"
-        print "creating tmp bam: ",tmpoutbamname #DEBUG
+        print "INFO\t" + now() + "\t" + mutid + "\tcreating tmp bam: ",tmpoutbamname #DEBUG
         outbam_muts = pysam.Samfile(tmpoutbamname, 'wb', template=bamfile)
         maxfrac = 0.0
 
@@ -477,7 +468,7 @@ def makemut(args, chrom, start, end, vaf, ins):
                                     try:
                                         mate = bammate.mate(pread.alignment)
                                     except:
-                                        print "warning: no mate for",pread.alignment.qname
+                                        sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\twarning: no mate for " + pread.alignment.qname + "\n")
                                 mutmates[extqname] = mate
                                 log.write(" ".join(('read',extqname,mutreads[extqname],"\n")))
                             else:
@@ -486,14 +477,14 @@ def makemut(args, chrom, start, end, vaf, ins):
 
                             # abort if mutation list getting too long
                             if len(mutreads) > 200: # FIXME maxdepth should be a parameter
-                                print "ABORT: depth at site is greater than cutoff"
+                                sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tdepth at site is greater than cutoff, aborting mutation.\n")
                                 outbam_muts.close()
                                 return None
 
                 # make sure region doesn't have any changes that are likely SNPs
                 # (trying to avoid messing with haplotypes)
                     
-                basepile = countBaseAtPos(args.bamFileName,chrom,pcol.pos)
+                basepile = countBaseAtPos(args.bamFileName,chrom,pcol.pos,mutid=mutid)
                 if basepile:
                     majb = majorbase(basepile)
                     minb = minorbase(basepile)
@@ -504,10 +495,10 @@ def makemut(args, chrom, start, end, vaf, ins):
                     if frac > maxfrac:
                         maxfrac = frac
                     if frac > snvfrac:
-                        print "dropped for proximity to SNP, nearby SNP MAF:",frac,"maxfrac:",snvfrac
+                        sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tdropped for proximity to SNP, nearby SNP MAF: " + str(frac)  + " (maxfrac: " + str(snvfrac) + ")\n")
                         hasSNP = True
                 else:
-                    print "could not pileup for region:",chrom,pcol.pos
+                    sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tcould not pileup for region: " + chrom + ":" + str(pcol.pos) + "\n")
                     hasSNP = True
 
         # pick reads to change
@@ -520,7 +511,7 @@ def makemut(args, chrom, start, end, vaf, ins):
         random.shuffle(readlist)
 
         if len(readlist) == 0:
-            print "no reads in region, skipping..."
+            sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tno reads in region, skipping\n")
             outbam_muts.close()
             os.remove(tmpoutbamname)
             return None
@@ -531,24 +522,24 @@ def makemut(args, chrom, start, end, vaf, ins):
             if chrom in cnv.contigs:
                 for cnregion in cnv.fetch(chrom,start,end):
                     cn = float(cnregion.strip().split()[3]) # expect chrom,start,end,CN
-                    sys.stderr.write(' '.join(("copy number in snp region:",chrom,str(start),str(end),"=",str(cn))) + "\n")
+                    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\t" + ' '.join(("copy number in snp region:",chrom,str(start),str(end),"=",str(cn))) + "\n")
                     if float(cn) > 0.0:
                         vaf = 1.0/float(cn)
                     else:
                         vaf = 0.0
-                    sys.stderr.write("adjusted VAF: " + str(vaf) + "\n")
+                    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tadjusted VAF: " + str(vaf) + "\n")
         else:
-            sys.stderr.write("selected VAF: " + str(vaf) + "\n")
+            sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tselected VAF: " + str(vaf) + "\n")
 
         lastread = int(len(readlist)*vaf)
 
         # pick at least one read if possible
         if lastread == 0 and len(readlist) > 0:
-            sys.stderr.write("forced 1 read.\n")
+            sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tforced 1 read.\n")
             lastread = 1
 
         readlist = readlist[0:int(len(readlist)*vaf)] 
-        print "picked:",str(len(readlist))
+        print "INFO\t" + now() + "\t" + mutid + "\tpicked: " + str(len(readlist)) + " reads"
 
         wrote = 0
         nmut = 0
@@ -567,7 +558,7 @@ def makemut(args, chrom, start, end, vaf, ins):
                     outbam_muts.write(mutmates[extqname])
                 elif mutmates[extqname] is not None:
                     outbam_muts.write(mutmates[extqname])
-        print "wrote: ",wrote,"mutated:",nmut
+        print "INFO\t" + now() + "\t" + mutid + "\twrote: " + str(wrote) + " reads, mutated: " + str(nmut) + " reads"
 
         if not hasSNP or args.force:
             outbam_muts.close()
@@ -691,9 +682,9 @@ def main(args):
             os.remove(bam)
 
     if args.skipmerge:
-        print "skipping merge, plase merge reads from", outbam_mutsfile, "manually."
+        print "INFO\t" + now() + "\tskipping merge, plase merge reads from", outbam_mutsfile, "manually."
     else:
-        print "done making mutations, merging mutations into", args.bamFileName, "-->", args.outBamFile
+        print "INFO\t" + now() + "\tdone making mutations, merging mutations into", args.bamFileName, "-->", args.outBamFile
         replace(args.bamFileName, outbam_mutsfile, args.outBamFile)
 
         #cleanup

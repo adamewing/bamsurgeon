@@ -273,7 +273,7 @@ def bamtofastq(bam, samtofastq, threads=1, paired=True):
     if paired:
         cmd.append('INTERLEAVE=true')
 
-    sys.stderr.write("INFO\t" + now() + "\tconverting BAM " + bam + " to FASTQ\n")
+    sys.stdout.write("INFO\t" + now() + "\tconverting BAM " + bam + " to FASTQ\n")
     subprocess.call(cmd)
 
     assert os.path.exists(outfq) # conversion failed
