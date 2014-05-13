@@ -6,6 +6,10 @@ try to do ref-directed assembly for paired reads in a region of a .bam file
 
 import pysam,tempfile,argparse,subprocess,sys,shutil,os,re
 import parseamos
+import datetime
+
+def now():
+    return str(datetime.datetime.now())
 
 def velvetContigs(dir):
     assert os.path.exists(dir)
@@ -165,7 +169,7 @@ class ReadPair:
         output = " ".join(("read1:", self.read1.qname, self.read1.seq, r1map, "read2:", self.read2.qname, self.read2.seq, r2map))
         return output
 
-def asm(chr, start, end, bamfilename, reffile, kmersize, noref=False, recycle=False):
+def asm(chr, start, end, bamfilename, reffile, kmersize, noref=False, recycle=False, mutid='null'):
     bamfile  = pysam.Samfile(bamfilename,'rb')
     matefile = pysam.Samfile(bamfilename,'rb')
 
@@ -186,7 +190,7 @@ def asm(chr, start, end, bamfilename, reffile, kmersize, noref=False, recycle=Fa
                 if not read.is_proper_pair:
                     ndisc  += 1
                 if nreads % 1000 == 0:
-                    print "found mates for", nreads, "reads,", float(ndisc)/float(nreads), "discordant."
+                    print "INFO\t" + now() + "\t" + mutid + "\tfound mates for", nreads, "reads,", float(ndisc)/float(nreads), "discordant."
                 if read.is_read1:
                     if read.is_reverse:
                         rquals.append(read.qual[::-1])
@@ -202,9 +206,9 @@ def asm(chr, start, end, bamfilename, reffile, kmersize, noref=False, recycle=Fa
                         rquals.append(mate.qual[::-1])
                         mquals.append(read.qual)
             except ValueError:
-                sys.stderr.write("warning, cannot find mate for read marked paired: " + read.qname + "\n")
+                sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tcannot find mate for read marked paired: " + read.qname + "\n")
 
-    sys.stderr.write("found " + str(nreads) + " reads in region.\n")
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tfound " + str(nreads) + " reads in region.\n")
 
     if nreads == 0:
         return []
@@ -257,11 +261,6 @@ def main(args):
         if contig.len > maxlen:
             maxlen = contig.len
             maxeid = contig.eid
-
-    #print "read names in longest contig (" + str(maxeid) + "):"
-    #for contig in contigs:
-    #    if contig.eid == maxeid:
-    #        contig.reads.infodump()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='parse the output of pickreads.py')

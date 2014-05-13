@@ -37,7 +37,7 @@ def remap_bwamem(fq1, fq2, threads, bwaref, outbam, deltmp=True, mutid='null'):
     sort_cmd = ['samtools', 'sort', '-@', str(threads), '-m', '10000000000', outbam, sort_out]
     idx_cmd  = ['samtools', 'index', outbam]
 
-    print "INFO\t" + now() + "\t" + mutid + "\taligning " + fq1 + ',' + fq2 + " with bwa mem\n"
+    print "INFO\t" + now() + "\t" + mutid + "\taligning " + fq1 + ',' + fq2 + " with bwa mem"
     with open(sam_out, 'w') as sam:
         p = subprocess.Popen(sam_cmd, stdout=subprocess.PIPE)
         for line in p.stdout:
@@ -293,6 +293,34 @@ def singleseqfa(file,mutid='null'):
     return seq
 
 
+def pickseq(inslib, mutid='null'):
+    pick = random.choice(inslib.keys())
+    print "INFO\t" + now() + "\t" + mutid + "\tchose sequence from insertion library: " + pick
+    return inslib[pick]
+
+
+def load_inslib(infa):
+    seqdict = {}
+
+    with open(infa, 'r') as fa:
+        seqid = ''
+        seq   = ''
+        for line in fa:
+            if line.startswith('>'):
+                if seq != '':
+                    seqdict[seqid] = seq
+                seqid = line.lstrip('>').strip()
+                seq   = ''
+            else:
+                assert seqid != ''
+                seq = seq + line.strip()
+
+    if seqid not in seqdict and seq != '':
+        seqdict[seqid] = seq
+
+    return seqdict
+
+
 def mergebams(bamlist, outbamfn, maxopen=100):
     ''' call samtools to merge a list of bams hierarchically '''
 
@@ -464,9 +492,9 @@ def makemut(args, bedline):
             if chrom in cnv.contigs:
                 for cnregion in cnv.fetch(chrom,start,end):
                     cn = float(cnregion.strip().split()[3]) # expect chrom,start,end,CN
-                    sys.stderr.write(' '.join(("copy number in snp region:",chrom,str(start),str(end),"=",str(cn))) + "\n")
+                    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\t" + ' '.join(("copy number in snp region:",chrom,str(start),str(end),"=",str(cn))) + "\n")
                     svfrac = 1.0/float(cn)
-                    sys.stderr.write("adjusted MAF: " + str(svfrac) + "\n")
+                    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tadjusted MAF: " + str(svfrac) + "\n")
 
         print "INFO\t" + now() + "\t" + mutid + "\tinterval:", c
         print "INFO\t" + now() + "\t" + mutid + "\tlength:", end-start
@@ -488,7 +516,7 @@ def makemut(args, bedline):
             sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tdiscordant fraction > " + str(maxdfrac) + " aborting mutation!\n")
             return None, None
 
-        contigs = ar.asm(chrom, start, end, args.bamFileName, reffile, int(args.kmersize), args.noref, args.recycle)
+        contigs = ar.asm(chrom, start, end, args.bamFileName, reffile, int(args.kmersize), args.noref, args.recycle, mutid=mutid)
 
         # find the largest contig        
         maxlen = 0
@@ -540,7 +568,7 @@ def makemut(args, bedline):
                 a = actionstr.split()
                 action = a[0]
 
-                print actionstr,action
+                print "INFO\t" + now() + "\t" + mutid + "\taction: ", actionstr, action
 
                 insseqfile = None
                 insseq = ''
@@ -551,7 +579,7 @@ def makemut(args, bedline):
                 if action == 'INS':
                     assert len(a) > 1 # insertion syntax: INS <file.fa> [optional TSDlen]
                     insseqfile = a[1]
-                    if not os.path.exists(insseqfile): # not a file... is it a sequence? (support indel ins.)
+                    if not (os.path.exists(insseqfile) or insseqfile == 'RND'): # not a file... is it a sequence? (support indel ins.)
                         assert re.search('^[ATGCatgc]*$',insseqfile) # make sure it's a sequence
                         insseq = insseqfile.upper()
                         insseqfile = None
@@ -578,7 +606,11 @@ def makemut(args, bedline):
 
                 if action == 'INS':
                     if insseqfile: # seq in file
-                        mutseq.insertion(mutseq.length()/2,singleseqfa(insseqfile),tsdlen, mutid=mutid)
+                        if insseqfile == 'RND':
+                            assert args.inslib is not None # insertion library needs to exist
+                            mutseq.insertion(mutseq.length()/2,pickseq(args.inslib, mutid=mutid),tsdlen)
+                        else:
+                            mutseq.insertion(mutseq.length()/2,singleseqfa(insseqfile, mutid=mutid),tsdlen)
                     else: # seq is input
                         mutseq.insertion(mutseq.length()/2,insseq,tsdlen)
                     logfile.write("\t".join(('ins',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(mutseq.length()/2),str(insseqfile),str(tsdlen))) + "\n")
@@ -646,14 +678,26 @@ def makemut(args, bedline):
 
     except Exception, e:
         sys.stderr.write("*"*60 + "\nencountered error in mutation spikein: " + bedline + "\n")
-        traceback.print_exc(file=sys.stdout)
+        traceback.print_exc(file=sys.stderr)
         sys.stderr.write("*"*60 + "\n")
         return None, None
+
 
 def main(args):
     print "INFO\t" + now() + "\tstarting " + sys.argv[0] + " called with args: " + ' '.join(sys.argv) + "\n"
     tmpbams = [] # temporary BAMs, each holds the realigned reads for one mutation
     exclfns = [] # 'exclude' files store reads to be removed from the original BAM due to deletions
+
+    # load insertion library if present
+    try:
+        if args.inslib is not None:
+            print "INFO\t" + now() + "\tloading insertion library from " + args.inslib
+            args.inslib = load_inslib(args.inslib)
+    except Exception, e:
+        sys.stderr.write("ERROR\t" + now() + "\tfailed to load insertion library " + args.inslib + "\n")
+        traceback.print_exc(file=sys.stderr)
+        sys.stderr.write("\n")
+        sys.exit(1)
 
     results = []
     pool = Pool(processes=int(args.procs))
@@ -745,11 +789,10 @@ def main(args):
         print "INFO\t" + now() + "\tdone."
 
     
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='adds SNVs to reads, outputs modified reads as .bam along with mates')
     parser.add_argument('-v', '--varfile', dest='varFileName', required=True,
-                        help='whitespace-delimited target regions to try and add a SNV: chrom,start,stop,action,seqfile if insertion,TSDlength if insertion')
+                        help='whitespace-delimited target regions to try and add a SNV: chrom,start,stop,action,seqfile (if insertion),TSDlength (if insertion)')
     parser.add_argument('-f', '--sambamfile', dest='bamFileName', required=True,
                         help='sam/bam file from which to obtain reads')
     parser.add_argument('-r', '--reference', dest='refFasta', required=True,
@@ -770,6 +813,7 @@ if __name__ == '__main__':
     parser.add_argument('--ismean', dest='ismean', default=300, help="mean insert size (default = estimate from region)")
     parser.add_argument('--issd', dest='issd', default=70, help="insert size standard deviation (default = estimate from region)")
     parser.add_argument('-p', '--procs', dest='procs', default=1, help="split into multiple processes (default=1)")
+    parser.add_argument('--inslib', default=None, help='FASTA file containing library of possible insertions, use INS RND instead of INS filename to pick one')
     parser.add_argument('--nomut', action='store_true', default=False, help="dry run")
     parser.add_argument('--noremap', action='store_true', default=False, help="dry run")
     parser.add_argument('--noref', action='store_true', default=False, 
