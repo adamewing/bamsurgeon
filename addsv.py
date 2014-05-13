@@ -819,7 +819,7 @@ if __name__ == '__main__':
     parser.add_argument('--noref', action='store_true', default=False, 
                         help="do not perform reference based assembly")
     parser.add_argument('--recycle', action='store_true', default=False)
-    parser.add_argument('--bwamem', action='store_true', default='realign with bwa mem (original shuld be aligned with mem as well!)')
+    parser.add_argument('--bwamem', action='store_true', default=False, help='realign with bwa mem (original shuld be aligned with mem as well!)')
     parser.add_argument('--skipmerge', action='store_true', default=False)
     args = parser.parse_args()
     main(args)
