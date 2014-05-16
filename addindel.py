@@ -623,7 +623,7 @@ def main(args):
         sys.exit(1)
 
     # make a temporary file to hold mutated reads
-    outbam_mutsfile = "tmp." + str(random.random()) + ".muts.bam"
+    outbam_mutsfile = "addindel." + str(random.random()) + ".muts.bam"
     bamfile = pysam.Samfile(args.bamFileName, 'rb')
     outbam_muts = pysam.Samfile(outbam_mutsfile, 'wb', template=bamfile)
     outbam_muts.close()

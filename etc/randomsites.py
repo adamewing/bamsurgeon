@@ -17,12 +17,16 @@ def main(args):
 
     maptabix = None
     if args.maptabix:
-        maptabix = pysam.Tabixfile(args.maptabix, 'r')
+        maptabix = pysam.Tabixfile(args.maptabix)
 
     minlen = int(args.minlen)
     maxlen = int(args.maxlen)
 
     assert minlen <= maxlen
+
+    mask = None
+    if args.mask is not None:
+        mask = pysam.Tabixfile(args.mask)
 
     chrlen = {}
     for line in open(args.indexFile, 'r'):
@@ -56,6 +60,10 @@ def main(args):
 
         # handle single chromosome option
         if args.chrom and args.chrom != rndchr:
+            continue
+
+        # handle mask
+        if rndchr in mask.contigs and len(list(mask.fetch(chrom, rndloc, rndloc+1))) > 0:
             continue
 
         fraglen = int(random.uniform(minlen,maxlen))
@@ -146,6 +154,7 @@ if __name__ == '__main__':
     parser.add_argument('--lmax', dest='maxlen', default=1, help='maximum fragment length (default=1)')
     parser.add_argument('--pmin', dest='minpos', default=None, help='minimum position')
     parser.add_argument('--pmax', dest='maxpos', default=None, help='maximum position')
+    parser.add_argument('--mask', dest='mask', default=None, help='mask (tabix indexed BED-3)')
     parser.add_argument('--requireseq', action="store_true", help="do not select hits in unsequenced regions, requires fasta file")
     parser.add_argument('--nocontigs', action="store_true", help="exclude contigs")
     args = parser.parse_args()

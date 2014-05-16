@@ -50,32 +50,23 @@ def printvcf(chrom, bnd1, bnd2, precise, type, svlen, ref):
 
     print '\t'.join((chrom, str(bnd1), '.', base1, alt, '100', 'PASS', infostr, 'GT', './.'))
 
-    '''
-    Finish this later: we'd like to output breakends rather than events but it'll require special consideration of each SV type
-
-    if type == 'del':
-        id1 = '_'.join((type,str(n),'A'))
-        id2 = '_'.join((type,str(n),'B'))
-        alt1 = base2 + '[' + chrom + ':' + str(bnd2) + '['
-        alt2 = base1 + '[' + chrom + ':' + str(bnd1) + '['
-    '''
 
 def precise_interval(mutline, ref):
+    precise = True 
     m = mutline.split()
     chrom, refstart, refend = m[1:4]
     refstart = int(refstart)
     refend   = int(refend)
 
     if m[0] == 'ins':
-        contigstart = int(m[6])
-        contigend   = int(m[6])+1
+        bnd1 = (refstart+refend)/2 - 1
+        bnd2 = (refstart+refend)/2 + 1
     else:
         contigstart = int(m[6])
         contigend   = int(m[7])
 
-    precise = True 
-    bnd1 = refstart + contigstart
-    bnd2 = refstart + contigend
+        bnd1 = refstart + contigstart
+        bnd2 = refstart + contigend
 
     assert bnd1 < bnd2
 

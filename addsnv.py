@@ -551,7 +551,7 @@ def main(args):
         sys.exit(1)
 
     # make a temporary file to hold mutated reads
-    outbam_mutsfile = "tmp." + str(random.random()) + ".muts.bam"
+    outbam_mutsfile = "addsnv." + str(random.random()) + ".muts.bam"
     bamfile = pysam.Samfile(args.bamFileName, 'rb')
     outbam_muts = pysam.Samfile(outbam_mutsfile, 'wb', template=bamfile)
     outbam_muts.close()
@@ -600,11 +600,15 @@ def main(args):
         if os.path.exists(bam):
             os.remove(bam)
 
-    print "INFO\t" + now() + "\tdone making mutations, merging mutations into " + args.bamFileName + " --> " + args.outBamFile
-    replace(args.bamFileName, outbam_mutsfile, args.outBamFile)
+    if args.skipmerge:
+        print "INFO\t" + now() + "\tskipping merge, plase merge reads from", outbam_mutsfile, "manually."
+    else:
+        print "INFO\t" + now() + "\tdone making mutations, merging mutations into", args.bamFileName, "-->", args.outBamFile
+        replace(args.bamFileName, outbam_mutsfile, args.outBamFile)
 
-    #cleanup
-    os.remove(outbam_mutsfile)
+        #cleanup
+        os.remove(outbam_mutsfile)
+
 
 def run():
     parser = argparse.ArgumentParser(description='adds SNVs to reads, outputs modified reads as .bam along with mates')
@@ -624,6 +628,7 @@ def run():
     parser.add_argument('--force', action='store_true', default=False, help="force mutation to happen regardless of nearby SNP or low coverage")
     parser.add_argument('--single', action='store_true', default=False, help="input BAM is simgle-ended (default is paired-end)")
     parser.add_argument('--maxopen', dest='maxopen', default=1000, help="maximum number of open files during merge (default 1000)")
+    parser.add_argument('--skipmerge', action='store_true', default=False, help="final output is tmp file to be merged")
     parser.add_argument('--bwamem', action='store_true', default=False, help='realignment with BWA MEM (instead of backtrack)')
     args = parser.parse_args()
     main(args)

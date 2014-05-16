@@ -10,6 +10,7 @@ import bs.asmregion as ar
 import bs.mutableseq as ms
 import datetime
 
+from time import sleep
 from shutil import move
 from math import sqrt
 from itertools import izip
@@ -720,6 +721,8 @@ def main(args):
             results.append(result)                              
 
             nmuts += 1
+            if args.delay is not None:
+                sleep(int(args.delay))
 
     ## process the results of multithreaded mutation jobs
     for result in results:
@@ -735,8 +738,8 @@ def main(args):
     print "INFO\t" + now() + "\ttmpbams:",tmpbams
     print "INFO\t" + now() + "\texclude:",exclfns
 
-    excl_merged = 'exclude.final.' + str(random.random()) + '.txt'
-    mergedtmp = 'mergetmp.final.' + str(random.random()) + '.bam'
+    excl_merged = 'addsv.exclude.final.' + str(random.random()) + '.txt'
+    mergedtmp = 'addsv.mergetmp.final.' + str(random.random()) + '.bam'
 
     print "INFO\t" + now() + "\tmerging exclude files into", excl_merged, "..."
     exclout = open(excl_merged, 'w')
@@ -814,6 +817,7 @@ if __name__ == '__main__':
     parser.add_argument('--issd', dest='issd', default=70, help="insert size standard deviation (default = estimate from region)")
     parser.add_argument('-p', '--procs', dest='procs', default=1, help="split into multiple processes (default=1)")
     parser.add_argument('--inslib', default=None, help='FASTA file containing library of possible insertions, use INS RND instead of INS filename to pick one')
+    parser.add_argument('--delay', default=None, help='time delay between jobs (try to avoid thrashing disks)')
     parser.add_argument('--nomut', action='store_true', default=False, help="dry run")
     parser.add_argument('--noremap', action='store_true', default=False, help="dry run")
     parser.add_argument('--noref', action='store_true', default=False, 
