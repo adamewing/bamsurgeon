@@ -58,7 +58,7 @@ def main(args):
             continue
 
         # handle mask
-        if rndchr in mask.contigs and len(list(mask.fetch(chrom, rndloc, rndloc+1))) > 0:
+        if mask is not None and rndchr in mask.contigs and len(list(mask.fetch(chrom, rndloc, rndloc+1))) > 0:
             continue
 
         fraglen = int(random.uniform(minlen,maxlen))
