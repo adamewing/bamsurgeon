@@ -220,6 +220,9 @@ def remap_bwamem(bamfn, threads, bwaref, samtofastq, mutid='null', paired=True):
     """ call bwa mem and samtools to remap .bam
     """
     assert os.path.exists(samtofastq)
+    assert bamreadcount(bamfn) > 0
+    if paired:
+        assert bamreadcount(bamfn) > 1 
 
     sam_out  = bamfn + '.realign.sam'
     sort_out = bamfn + '.realign.sorted'
@@ -277,6 +280,7 @@ def remap_bwamem(bamfn, threads, bwaref, samtofastq, mutid='null', paired=True):
 def bamtofastq(bam, samtofastq, threads=1, paired=True):
     assert os.path.exists(samtofastq)
     assert bam.endswith('.bam')
+    assert bamreadcount(bam) > 0
 
     outfq = sub('bam$', 'fastq', bam)
 
@@ -294,7 +298,10 @@ def bamtofastq(bam, samtofastq, threads=1, paired=True):
 
 def bamreadcount(bamfile):
     bam = pysam.Samfile(bamfile, 'rb')
-    return bam.mapped + bam.unmapped
+    if os.path.exists(bamfile + '.bai'):
+        return bam.mapped + bam.unmapped
+    else:
+        return(list(bam.fetch(until_eof=True)))        
 
 
 def fastqreadcount(fastqfile):
@@ -470,6 +477,10 @@ def makemut(args, chrom, start, end, vaf, ins):
                                         mate = bammate.mate(pread.alignment)
                                     except:
                                         sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\twarning: no mate for " + pread.alignment.qname + "\n")
+                                        if args.requirepaired:
+                                            print "WARN\t" + now() + "\t" + mutid + "\tskipped mutation due to --requirepaired"
+                                            return None
+
                                 mutmates[extqname] = mate
                                 log.write(" ".join(('read',extqname,mutreads[extqname],"\n")))
                             else:
@@ -599,6 +610,8 @@ def makemut(args, chrom, start, end, vaf, ins):
             else:
                 outbam_muts.close()
                 os.remove(tmpoutbamname)
+                if os.path.exists(tmpoutbamname + '.bai'):
+                    os.remove(tmpoutbamname + '.bai')
                 return None
 
         outbam_muts.close()
@@ -612,6 +625,10 @@ def makemut(args, chrom, start, end, vaf, ins):
         sys.stderr.write("*"*60 + "\nencountered error in mutation spikein: " + mutid + "\n")
         traceback.print_exc(file=sys.stdout)
         sys.stderr.write("*"*60 + "\n")
+        if os.path.exists(tmpoutbamname):
+            os.remove(tmpoutbamname)
+        if os.path.exists(tmpoutbamname + '.bai'):
+            os.remove(tmpoutbamname + '.bai')
         return None
 
 def main(args):
@@ -681,6 +698,8 @@ def main(args):
     for bam in tmpbams:
         if os.path.exists(bam):
             os.remove(bam)
+        if os.path.exists(bam + '.bai'):
+            os.remove(bam + '.bai')
 
     if args.skipmerge:
         print "INFO\t" + now() + "\tskipping merge, plase merge reads from", outbam_mutsfile, "manually."
@@ -710,6 +729,7 @@ def run():
     parser.add_argument('--force', action='store_true', default=False, help="force mutation to happen regardless of nearby SNP or low coverage")
     parser.add_argument('--single', action='store_true', default=False, help="input BAM is simgle-ended (default is paired-end)")
     parser.add_argument('--maxopen', dest='maxopen', default=1000, help="maximum number of open files during merge (default 1000)")
+    parser.add_argument('--requirepaired', action='store_true', default=False, help='skip mutations if unpaired reads are present')
     parser.add_argument('--bwamem', action='store_true', default=False, help='realignment with BWA MEM (instead of backtrack)')
     parser.add_argument('--skipmerge', action='store_true', default=False, help="final output is tmp file to be merged")
     args = parser.parse_args()

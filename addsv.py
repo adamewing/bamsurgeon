@@ -434,32 +434,6 @@ def discordant_fraction(bamfile, chrom, start, end):
     else:
         return 0.0
 
-#TODO: replace with median ... mean is almost always driven by a few read pairs with wacky distances marked proper...
-#def mean(d):
-#    return float(sum(d)) / float(len(d))
-
-
-#def sd(d):
-#    return sqrt(mean(map(lambda x: (x - mean(d))**2.0, d)))
-
-
-def estimate_pedist(bamfile, chrom, start, end, window=10000, setmean=None, setsd=None):
-    start -= window
-    end   += window
-
-    if start < 0:
-        start = 0
-
-    if setmean is not None and setsd is not None:
-        return float(setmean), float(setsd)
-
-    outerlen = [read.tlen + 2*len(read.seq) for read in bamfile.fetch(chrom, start-window, end+window) if read.is_proper_pair]
-    if setmean is None:
-        setmean = mean(outerlen)
-    if setsd is None:
-        setsd = sd(outerlen)
-    return float(setmean), float(setsd)
-
 
 def makemut(args, bedline):
     mutid = ':'.join(map(str, bedline.strip().split()))
@@ -651,9 +625,10 @@ def makemut(args, bedline):
 
                 logfile.write(">" + chrom + ":" + str(refstart) + "-" + str(refend) +" AFTER\n" + str(mutseq) + "\n")
 
-            # estimate paired-end distribution
-            print "INFO\t" + now() + "\t" + mutid + "\testimating paired-end insert size mean, stdev..."
-            pemean, pesd = estimate_pedist(bamfile, chrom, start, end, window=10000, setmean=args.ismean, setsd=args.issd)
+            pemean, pesd = float(args.ismean), float(args.issd) 
+            print "INFO\t" + now() + "\t" + mutid + "\tset paired end mean distance: " + str(args.ismean)
+            print "INFO\t" + now() + "\t" + mutid + "\tset paired end distance stddev: " + str(args.issd)
+
             # simulate reads
             (fq1, fq2) = runwgsim(maxcontig, mutseq.seq, svfrac, exclude, pemean, pesd, mutid=mutid)
 

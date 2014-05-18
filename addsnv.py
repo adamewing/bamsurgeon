@@ -285,7 +285,10 @@ def bamtofastq(bam, samtofastq, threads=1, paired=True):
 
 def bamreadcount(bamfile):
     bam = pysam.Samfile(bamfile, 'rb')
-    return bam.mapped + bam.unmapped
+    if os.path.exists(bamfile + '.bai'):
+        return bam.mapped + bam.unmapped
+    else:
+        return(list(bam.fetch(until_eof=True)))`
 
 
 def fastqreadcount(fastqfile):

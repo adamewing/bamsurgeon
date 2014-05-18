@@ -19,24 +19,27 @@ if len(sys.argv) == 2:
     lastread = None
     paired = False
     for read in inbam.fetch(until_eof=True):
-        if read.qname == lastname:
-            paired=True
+        if not read.is_secondary:
+            if read.qname == lastname:
+                paired=True
 
-        if paired:
-            rnd = random()
-            if rnd > 0.5:
-                outbam1.write(read)
-                outbam1.write(lastread)
+            if paired:
+                rnd = random()
+                if rnd > 0.5:
+                    outbam1.write(read)
+                    outbam1.write(lastread)
+                else:
+                    outbam2.write(read)
+                    outbam2.write(lastread)
+                lastname = None
+                lastread = None
+                paired = False
+
             else:
-                outbam2.write(read)
-                outbam2.write(lastread)
-            lastname = None
-            lastread = None
-            paired = False
-
+                lastname = read.qname
+                lastread = read
         else:
-            lastname = read.qname
-            lastread = read
+            print "skipped secondary alignment: ", read.qname
 
     outbam1.close()
     outbam2.close()
