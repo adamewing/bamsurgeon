@@ -210,6 +210,7 @@ def remap_bwamem(bamfn, threads, bwaref, samtofastq, mutid='null', paired=True):
     """ call bwa mem and samtools to remap .bam
     """
     assert os.path.exists(samtofastq)
+    assert bamreadcount(bamfn) > 0 
 
     sam_out  = bamfn + '.realign.sam'
     sort_out = bamfn + '.realign.sorted'
