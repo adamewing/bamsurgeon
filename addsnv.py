@@ -8,6 +8,7 @@ import subprocess
 import os
 import bs.replacereads as rr
 import datetime
+import traceback
 
 from shutil import move
 from re import sub
@@ -44,7 +45,7 @@ def mut(base,det=False):
     bases = ('A','T','C','G')
     base = base.upper()
     if base not in bases:
-        raise ValueError("ERROR\t" + now() + "\tbase passed to mut(): " + str(base) + " not one of (A,T,C,G)")
+        raise ValueError("ERROR\t" + now() + "\tbase passed to mut(): " + str(base) + " not one of (A,T,C,G)\n")
 
     if det:
         if base == 'A':
@@ -269,7 +270,7 @@ def bamtofastq(bam, samtofastq, threads=1, paired=True):
 
     outfq = sub('bam$', 'fastq', bam)
 
-    cmd = ['java', '-XX:ParallelGCThreads=' + str(threads), '-Xmx4g', '-jar', samtofastq, 'INPUT=' + bam, 'FASTQ=' + outfq]
+    cmd = ['java', '-XX:ParallelGCThreads=' + str(threads), '-Xmx4g', '-jar', samtofastq, 'VALIDATION_STRINGENCY=SILENT', 'INPUT=' + bam, 'FASTQ=' + outfq]
     if paired:
         cmd.append('INTERLEAVE=true')
 
@@ -409,7 +410,10 @@ def makemut(args, chrom, start, end, vaf):
                                     try:
                                         mate = bammate.mate(pread.alignment)
                                     except:
-                                        print "INFO\t" + now() + "\t" + mutid + "\twarning: no mate for",pread.alignment.qname
+                                        print "WARN\t" + now() + "\t" + mutid + "\twarning: no mate for",pread.alignment.qname
+                                        if args.requirepaired:
+                                            print "WARN\t" + now() + "\t" + mutid + "\tskipped mutation due to --requirepaired"
+                                            return None
                                 mutmates[extqname] = mate
                                 log.write(" ".join(('read',extqname,mutread,"\n")))
                             else:
@@ -514,6 +518,9 @@ def makemut(args, chrom, start, end, vaf):
 
             avgincover  = float(sum(incover))/float(len(incover)) 
             avgoutcover = float(sum(outcover))/float(len(outcover))
+
+            print "INFO\t" + now() + "\t" + mutid + "\tavgincover: " + str(avgincover) + " avgoutcover: " + str(avgoutcover)
+
             spikein_snvfrac = 0.0
             if wrote > 0:
                 spikein_snvfrac = float(nmut)/float(wrote)
@@ -526,6 +533,9 @@ def makemut(args, chrom, start, end, vaf):
             else:
                 outbam_muts.close()
                 os.remove(tmpoutbamname)
+                if os.path.exists(tmpoutbamname + '.bai'):
+                    os.remove(tmpoutbamname + '.bai')
+
                 return None
 
         outbam_muts.close()
@@ -539,6 +549,10 @@ def makemut(args, chrom, start, end, vaf):
         sys.stderr.write("*"*60 + "\nERROR\t" + now() + "\tencountered error in mutation spikein: " + mutid + "\n")
         traceback.print_exc(file=sys.stdout)
         sys.stderr.write("*"*60 + "\n")
+        if os.path.exists(tmpoutbamname):
+            os.remove(tmpoutbamname)
+        if os.path.exists(tmpoutbamname + '.bai'):
+            os.remove(tmpoutbamname + '.bai')
         return None
 
 def main(args):
@@ -599,6 +613,8 @@ def main(args):
     for bam in tmpbams:
         if os.path.exists(bam):
             os.remove(bam)
+        if os.path.exists(bam + '.bai'):
+            os.remove(bam + '.bai')
 
     if args.skipmerge:
         print "INFO\t" + now() + "\tskipping merge, plase merge reads from", outbam_mutsfile, "manually."
@@ -628,6 +644,7 @@ def run():
     parser.add_argument('--force', action='store_true', default=False, help="force mutation to happen regardless of nearby SNP or low coverage")
     parser.add_argument('--single', action='store_true', default=False, help="input BAM is simgle-ended (default is paired-end)")
     parser.add_argument('--maxopen', dest='maxopen', default=1000, help="maximum number of open files during merge (default 1000)")
+    parser.add_argument('--requirepaired', action='store_true', default=False, help='skip mutations if unpaired reads are present')
     parser.add_argument('--skipmerge', action='store_true', default=False, help="final output is tmp file to be merged")
     parser.add_argument('--bwamem', action='store_true', default=False, help='realignment with BWA MEM (instead of backtrack)')
     args = parser.parse_args()

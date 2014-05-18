@@ -8,6 +8,7 @@ import subprocess
 import os
 import bs.replacereads as rr
 import datetime
+import traceback
 
 from re import sub
 from shutil import move
@@ -279,7 +280,7 @@ def bamtofastq(bam, samtofastq, threads=1, paired=True):
 
     outfq = sub('bam$', 'fastq', bam)
 
-    cmd = ['java', '-XX:ParallelGCThreads=' + str(threads), '-Xmx4g', '-jar', samtofastq, 'INPUT=' + bam, 'FASTQ=' + outfq]
+    cmd = ['java', '-XX:ParallelGCThreads=' + str(threads), '-Xmx4g', '-jar', samtofastq, 'VALIDATION_STRINGENCY=SILENT', 'INPUT=' + bam, 'FASTQ=' + outfq]
     if paired:
         cmd.append('INTERLEAVE=true')
 

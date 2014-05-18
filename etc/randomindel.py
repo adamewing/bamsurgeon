@@ -3,10 +3,8 @@
 from random import *
 import sys
 
-vaf = '0.5'
-
 def randomindel(loc):
-    chrom, start, end = loc.strip().split()
+    chrom, start, end, vaf = loc.strip().split()
     i = randint(0,1)
     l = int(expovariate(10)*100)+1 # indel size, exponential dist to bias towards shorter indels
     if i == 0: # DEL
@@ -24,4 +22,4 @@ if len(sys.argv) > 1:
     for line in f:
         print randomindel(line)
 else:
-    print "usage:",sys.argv[0],"<BED-3>"
+    print "usage:",sys.argv[0],"<BED-3 plus VAF (4 columns)>"
