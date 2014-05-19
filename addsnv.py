@@ -288,7 +288,7 @@ def bamreadcount(bamfile):
     if os.path.exists(bamfile + '.bai'):
         return bam.mapped + bam.unmapped
     else:
-        return(list(bam.fetch(until_eof=True)))`
+        return(list(bam.fetch(until_eof=True)))
 
 
 def fastqreadcount(fastqfile):
