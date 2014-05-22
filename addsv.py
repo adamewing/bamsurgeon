@@ -772,7 +772,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='adds SNVs to reads, outputs modified reads as .bam along with mates')
     parser.add_argument('-v', '--varfile', dest='varFileName', required=True,
                         help='whitespace-delimited target regions to try and add a SNV: chrom,start,stop,action,seqfile (if insertion),TSDlength (if insertion)')
-    parser.add_argument('-f', '--sambamfile', dest='bamFileName', required=True,
+    parser.add_argument('-f', '--bamfile', dest='bamFileName', required=True,
                         help='sam/bam file from which to obtain reads')
     parser.add_argument('-r', '--reference', dest='refFasta', required=True,
                         help='reference genome, fasta indexed with bwa index -a stdsw _and_ samtools faidx')
