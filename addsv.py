@@ -194,7 +194,7 @@ def runwgsim(contig, newseq, svfrac, exclude, pemean, pesd, mutid='null'):
         if len(qual) > maxqlen:
             maxqlen = len(qual)
 
-    args = ['wgsim','-e','0','-d',str(pemean),'-s',str(pesd),'-N',str(nsimreads),'-1',str(maxqlen),'-2','100','-r','0','-R','0',fasta,fq1,fq2]
+    args = ['wgsim','-e','0','-d',str(pemean),'-s',str(pesd),'-N',str(nsimreads),'-1',str(maxqlen),'-2','101','-r','0','-R','0',fasta,fq1,fq2]
     print args
     subprocess.call(args)
 

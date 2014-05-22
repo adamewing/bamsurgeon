@@ -522,8 +522,8 @@ def makemut(args, chrom, start, end, vaf, ins):
         print "len(readlist):",str(len(readlist))
         random.shuffle(readlist)
 
-        if len(readlist) == 0:
-            sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tno reads in region, skipping\n")
+        if len(readlist) < int(args.mindepth):
+            sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tskipped, too few reads in region: " + str(len(readlist)) + "\n")
             outbam_muts.close()
             os.remove(tmpoutbamname)
             return None
@@ -724,6 +724,7 @@ def run():
     parser.add_argument('-d', '--coverdiff', dest='coverdiff', default=0.1, help="allow difference in input and output coverage (default=0.1)")
     parser.add_argument('-p', '--procs', dest='procs', default=1, help="split into multiple processes (default=1)")
     parser.add_argument('--samtofastq', default=None, help='path to picard SamToFastq.jar')
+    parser.add_argument('--mindepth', default=5, help='minimum read depth to make mutation')
     parser.add_argument('--nomut', action='store_true', default=False, help="dry run")
     parser.add_argument('--det', action='store_true', default=False, help="deterministic base changes: make transitions only")
     parser.add_argument('--force', action='store_true', default=False, help="force mutation to happen regardless of nearby SNP or low coverage")
