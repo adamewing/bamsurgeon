@@ -36,13 +36,13 @@ One of the primary use cases for BAMSurgeon is to test somatic mutation calling 
 \item Postprocessing (BAM repair, GATK IndelRealigner, BQSR)
 \end{enumerate}
 
-\paragraph{Preprocessing}
+\paragraph{1. Preprocessing}
 TODO
 
-\paragraph{Mutating}
+\paragraph{2. Mutating}
 TODO
 
-\paragraph{Postprocessing}
+\paragraph{3. Postprocessing}
 TODO
 
 \subsection{Known bugs and limitations}
@@ -294,10 +294,10 @@ optional arguments:
 22 34071043 34084754 INV
 22 34171043 34184754 INS ACTATCGTGGGCTTATGGCTTAGCATTACGGTTATTTTTGCACTGATCGCGGGGGCTACATCATTCATGCTATTACTTGCGTATCGTA
 22 34271043 34284754 DUP 3
-22 34271043 34284754 INS RND
+22 34371043 34384754 INS RND
 \end{verbatim}
 
-    For insertions, \texttt{INS} should be followed by either a FASTA file containing the sequence to be inserted, or by the nucleotide sequence itself. For example, \texttt{INS ATG} would insert the sequence \texttt{``ATG''} in the middle of the largest contig obtained from the specified region, while \texttt{INS LINE1.fa} would insert the sequence in the FASTA-formatted file \texttt{LINE1.fa} into the largest contig. For deletions, \texttt{DEL} should be followed by the fraction of the largest contig to be deleted, where 1.0 indicates a deletion of the largest assembled region minus one library length on each end. e.g. {DEL 0.5}. Inversions (\texttt{INV}) have no further options - the region inside the largest contig will be inverted. Duplications (\texttt{DUP}) have one optional parameter, an integer specifying the number of times the sequence of the largest contig should be duplicated, e.g. \texttt{DUP 2} specifies the region is duplicated twice. In general, we recommend that short insertions and deletions (those shorter than one read length) be created with addindel.py instead of addsv.py as addindel.py does not require reconstruction of the region through sequence assembly and is thus less error-prone.
+    For insertions, \texttt{INS} should be followed by either a FASTA file containing the sequence to be inserted, by the nucleotide sequence itself, or by RND if a library of potential insertion sequences is passed in FASTA format via the --inslib option. For example, \texttt{INS ATG} would insert the sequence \texttt{``ATG''} in the middle of the largest contig obtained from the specified region, while \texttt{INS LINE1.fa} would insert the sequence in the FASTA-formatted file \texttt{LINE1.fa} into the largest contig. For deletions, \texttt{DEL} should be followed by the fraction of the largest contig to be deleted, where 1.0 indicates a deletion of the largest assembled region minus one library length on each end. e.g. {DEL 0.5}. Inversions (\texttt{INV}) have no further options - the region inside the largest contig will be inverted. Duplications (\texttt{DUP}) have one optional parameter, an integer specifying the number of times the sequence of the largest contig should be duplicated, e.g. \texttt{DUP 2} specifies the region is duplicated twice. In general, we recommend that short insertions and deletions (those shorter than one read length) be created with addindel.py instead of addsv.py as addindel.py does not require reconstruction of the region through sequence assembly and is thus less error-prone.
 
     Compound variants are also possible by chaining a number of mutations together in a comma-delimited list, e.g. \texttt{DUP 1, DEL 0.5, INS AAATCC, INV} would duplicate the region inside the largest contig once, delete half the width of the region, insert the sequence \texttt{AAATCC}, and invert the region. Good luck!
 
@@ -332,7 +332,7 @@ optional arguments:
 \end{figure}
 
 \section{Testing}
-The \texttt{test/} directory contains two scripts useful for testing bamsurgeon installations, one for SNVs and one for SVs.
+The \texttt{test/} directory contains scripts useful for testing bamsurgeon installations, one for SNVs and one for SVs.
 \subsection{Testing addsnv.py}
 The script {test/test\_snv.sh} may be run with no parameters to display a usage statement:
 \begin{verbatim}
@@ -341,16 +341,26 @@ usage: ./test_snv.sh <number of SNPs> <number of threads> <reference indexed wit
 
 The number of SNPs can be up to 100 and are selected from the file \texttt{test\_data/random\_snvs.txt}, number of threads must be specified, use 1 to run on a single core, and the final argument must be a path to a human genome (GRCh37) reference indexed with \texttt{bwa index -a bwtsw}. The reference \textbf{should not} use the 'chr' prefix on the chromosome names.
 
+\subsection{Testing addindel.py}
+The script {test/test\_sv.sh} may be run with no parameters to display a usage statement:
+\begin{verbatim}
+usage: ./test_indel.sh <number of threads> <reference indexed with bwa index>
+\end{verbatim}
+
 \subsection{Testing addsv.py}
 The script {test/test\_sv.sh} may be run with no parameters to display a usage statement:
 \begin{verbatim}
-usage: ./test_sv.sh <reference indexed with bwa index>
+usage: ./test_sv.sh <number of threads> <reference indexed with bwa index>
 \end{verbatim}
 
 
 
 \section{Other Considerations}
-Reads should be re-aligned using the same aligner and parameters as were used to create the original BAM file. By default, bamsurgeon assumes alignments were performed using bwa with parameters \texttt{-q 5 -l 32 -k 3 -o 1}. The specific parameters are not currently specifiable on the command line but may be altered through modification of the functions \texttt{remap\_paired} (for paired reads) or \texttt{remap\_single}.
+\subsection{System Requirements}
+For each process (specified by -p/--procs) add*.py will require ~4GB RAM. So for 8 concurrent mutation processes, you should have 32GB RAM. System requirements may decrease in the future as we find ways to improve efficiency.
+
+\subsection{Alignments}
+Reads should be re-aligned using the same aligner and parameters as were used to create the original BAM file. By default, bamsurgeon assumes alignments were performed using bwa aln with parameters \texttt{-q 5 -l 32 -k 3 -o 1}. The specific parameters are not currently specifiable on the command line but may be altered through modification of the functions \texttt{remap\_paired} (for paired reads) or \texttt{remap\_single}.
 
 \section{Acknowledgements}
 We would like to thank everyone who has submitted a pull request or bug report through github, the synapse forums for the DREAM Somatic Mutation Calling challenge, or by other means.

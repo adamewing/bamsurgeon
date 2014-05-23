@@ -1,11 +1,11 @@
-#!/bin/sh
+#!/bin/bash
 
 # adds up to 100 SNPs to a ~770 kb region around the LARGE gene
 # requires samtools/bcftools
 
-if [ $# -ne 1 ]
+if [ $# -ne 2 ]
 then
-    echo "usage: $0 <reference indexed with bwa index>"
+    echo "usage: $0 <number of threads> <reference indexed with bwa index>"
     exit 65
 fi
 
@@ -15,19 +15,31 @@ then
     exit 65
 fi
 
-if [ ! -e $1 ]
+if ! [[ $1 =~ ^[0-9]+$ ]]
 then
-    echo "can't find reference .fasta: $1, please supply a bwa-indexed .fasta"
+    echo "arg 1 must be an integer (number of SNVs to add)"
     exit 65
 fi
 
-if [ ! -e $1.bwt ]
+if [ $1 -gt 100 ]
 then
-    echo "can't find $1.bwt: is $1 indexed with bwa?"
+    echo "max number of SNVs must be <= 100"
     exit 65
 fi
 
-../addsv.py -p 1 -v ../test_data/test_sv.txt -f ../test_data/testregion.bam -r $1 -o ../test_data/testregion_sv_mut.bam -c ../test_data/test_cnvlist.txt.gz
+if [ ! -e $2 ]
+then
+    echo "can't find reference .fasta: $2, please supply a bwa-indexed .fasta"
+    exit 65
+fi
+
+if [ ! -e $2.bwt ]
+then
+    echo "can't find $2.bwt: is $2 indexed with bwa?"
+    exit 65
+fi
+
+../addsv.py -p $1 -v ../test_data/test_sv.txt -f ../test_data/testregion.bam -r $2 -o ../test_data/testregion_sv_mut.bam -c ../test_data/test_cnvlist.txt.gz
 if [ $? -ne 0 ]
 then
   echo "addsv.py failed."
