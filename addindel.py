@@ -90,6 +90,7 @@ def countBaseAtPos(bamfile,chrom,pos,mutid='null'):
 
     return bases
 
+
 def mergebams(bamlist, outbamfn, maxopen=1000):
     """ call samtools to merge two .bams
     """
@@ -143,6 +144,7 @@ def mergebams(bamlist, outbamfn, maxopen=1000):
             os.remove(bamfile)
             os.remove(bamfile + '.bai')
 
+
 def remap_paired(bamfn, threads, bwaref, mutid='null'):
     """ call bwa/samtools to remap .bam
     """
@@ -180,6 +182,7 @@ def remap_paired(bamfn, threads, bwaref, mutid='null'):
     os.remove(sai1fn)
     os.remove(sai2fn)
     os.remove(samfn)
+
 
 def remap_single(bamfn, threads, bwaref, mutid='null'):
     """ call bwa/samtools to remap .bam
@@ -398,10 +401,20 @@ def makedel(read, chrom, start, end, ref, debug=False): #FIXME
         right += ref.fetch(chrom, read.pos+len(read.seq), read.pos+len(read.seq)+(len(read.seq)-len(left)-len(right)))
         return left + right
 
+
 def get_mutstr(chrom, start, end, ins, ref):
     return 'FIX get_mutstr'
 
-def makemut(args, chrom, start, end, vaf, ins):
+
+def dictlist(fn):
+    d = {}
+    with open(fn, 'r') as inlist:
+        for name in inlist:
+            d[name.strip()] = True
+    return d
+
+
+def makemut(args, chrom, start, end, vaf, ins, avoid):
     ''' is ins is a sequence, it will is inserted at start, otherwise delete from start to end'''
 
     mutid = chrom + ':' + str(start) + '-' + str(end) + ':' + str(vaf)
@@ -453,6 +466,10 @@ def makemut(args, chrom, start, end, vaf, ins):
             if pcol.pos: #> start and pcol.pos <= end:
                 basepile = ''
                 for pread in pcol.pileups:
+                    if avoid is not None and pread.alignment.qname in avoid:
+                        print "WARN\t" + now() + "\t" + mutid + "\tdropped mutation due to read in --avoidlist", pread.alignment.qname
+                        os.remove(tmpoutbamname)
+                        return None
                     if not pread.alignment.is_secondary: # only consider primary alignments
                         basepile += pread.alignment.seq[pread.qpos-1]
                         pairname = 'F' # read is first in pair
@@ -479,18 +496,19 @@ def makemut(args, chrom, start, end, vaf, ins):
                                         sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\twarning: no mate for " + pread.alignment.qname + "\n")
                                         if args.requirepaired:
                                             print "WARN\t" + now() + "\t" + mutid + "\tskipped mutation due to --requirepaired"
+                                            os.remove(tmpoutbamname)
                                             return None
 
                                 mutmates[extqname] = mate
                                 log.write(" ".join(('read',extqname,mutreads[extqname],"\n")))
                             else:
                                 numunmap += 1
-                            #print "len(mutreads):",len(mutreads.keys())
 
                             # abort if mutation list getting too long
                             if len(mutreads) > 200: # FIXME maxdepth should be a parameter
                                 sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tdepth at site is greater than cutoff, aborting mutation.\n")
                                 outbam_muts.close()
+                                os.remove(tmpoutbamname)
                                 return None
 
                 # make sure region doesn't have any changes that are likely SNPs
@@ -631,6 +649,7 @@ def makemut(args, chrom, start, end, vaf, ins):
             os.remove(tmpoutbamname + '.bai')
         return None
 
+
 def main(args):
     print "INFO\t" + now() + "\tstarting " + sys.argv[0] + " called with args: " + ' '.join(sys.argv) + "\n"
     bedfile = open(args.varFileName, 'r')
@@ -639,6 +658,11 @@ def main(args):
     if args.bwamem and args.samtofastq is None:
         sys.stderr.write("ERROR\t" + now() + "\t --samtofastq must be specified with --bwamem option")
         sys.exit(1)
+
+    # load readlist to avoid, if specified
+    avoid = None
+    if args.avoidreads is not None:
+        avoid = dictlist(args.avoidreads)
 
     # make a temporary file to hold mutated reads
     outbam_mutsfile = "addindel." + str(random.random()) + ".muts.bam"
@@ -671,7 +695,7 @@ def main(args):
                 ins = c[5]
 
             # make mutation (submit job to thread pool)
-            result = pool.apply_async(makemut, [args, chrom, start, end, vaf, ins])
+            result = pool.apply_async(makemut, [args, chrom, start, end, vaf, ins, avoid])
             results.append(result)
             ntried += 1
 
@@ -725,6 +749,7 @@ def run():
     parser.add_argument('-p', '--procs', dest='procs', default=1, help="split into multiple processes (default=1)")
     parser.add_argument('--samtofastq', default=None, help='path to picard SamToFastq.jar')
     parser.add_argument('--mindepth', default=5, help='minimum read depth to make mutation')
+    parser.add_argument('--avoidreads', default=None, help='file of read names to avoid (mutations will be skipped if overlap)')
     parser.add_argument('--nomut', action='store_true', default=False, help="dry run")
     parser.add_argument('--det', action='store_true', default=False, help="deterministic base changes: make transitions only")
     parser.add_argument('--force', action='store_true', default=False, help="force mutation to happen regardless of nearby SNP or low coverage")
