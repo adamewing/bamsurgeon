@@ -46,7 +46,15 @@ TODO
 TODO
 
 \subsection{Known bugs and limitations}
-BAMSurgeon is under rapid development driven by suggesting and bug reports from the mutation calling community.
+BAMSurgeon is under rapid development driven by suggesting and bug reports from the mutation calling community. The following is an incomplete TODO list of things needing attention:
+
+\begin{enumerate}
+\item Simulated SV size is limited to ~30kb
+\item Simulated SVs cannot be specified exactly
+\item Heterozygous mutations in SV regions tend to increase or decrease in allele fraction due to one or the other haplotype being assembled and used as the basis for read coverage simulation. This can lead to false-positive mutations in SV regions, so we suggest masking these regions or simulating SVs and SNVs/INDELs on seperate BAMs.
+\item Unification of SNV and INDEL spike-in should be staightforward, unification with SVs less so.
+\item Proliferation of input and output formats needs to be contained: most desirable input/output is BAM+VCF.
+\end{enumerate}
 
 
 
