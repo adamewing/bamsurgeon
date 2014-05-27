@@ -474,7 +474,7 @@ def makemut(args, chrom, start, end, vaf, avoid):
         random.shuffle(readlist)
 
         if len(readlist) < int(args.mindepth):
-            print "INFO\t" + now() + "\t" + mutid + "\ttoo few reads in region (" + str(len(readlist)) + ") skipping..."
+            print "WARN\t" + now() + "\t" + mutid + "\ttoo few reads in region (" + str(len(readlist)) + ") skipping..."
             outbam_muts.close()
             os.remove(tmpoutbamname)
             return None
@@ -494,14 +494,23 @@ def makemut(args, chrom, start, end, vaf, avoid):
         else:
             print "INFO\t" + now() + "\t" + mutid + "\tselected VAF: " + str(vaf) + "\n"
 
+        ######
         lastread = int(len(readlist)*vaf)
 
-        # pick at least one read if possible
-        if lastread == 0 and len(readlist) > 0:
-            sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tforced 1 read.\n")
-            lastread = 1
+        # pick at least args.minmutreads if possible
+        if lastread < int(args.minmutreads):
+            if len(readlist) > int(args.minmutreads):
+                lastread = int(args.minmutreads)
+                sys.stdout.write("WARN\t" + now() + "\t" + mutid + "\tforced " + str(lastread) + " reads.\n")
+            else:
+                print "WARN\t" + now() + "\t" + mutid + "\tdropped site with fewer reads than --minmutreads"
+                os.remove(tmpoutbamname)
+                return None
 
-        readlist = readlist[0:int(len(readlist)*vaf)] 
+        readlist = readlist[0:lastread] 
+
+        ######
+
         print "INFO\t" + now() + "\t" + mutid + "\tpicked:",str(len(readlist))
 
         wrote = 0
@@ -671,6 +680,7 @@ def run():
     parser.add_argument('-p', '--procs', dest='procs', default=1, help="split into multiple processes (default=1)")
     parser.add_argument('--samtofastq', default=None, help='path to picard SamToFastq.jar')
     parser.add_argument('--mindepth', default=5, help='minimum read depth to make mutation')
+    parser.add_argument('--minmutreads', default=2, help='minimum number of mutated reads to output per site')
     parser.add_argument('--avoidreads', default=None, help='file of read names to avoid (mutations will be skipped if overlap)')
     parser.add_argument('--nomut', action='store_true', default=False, help="dry run")
     parser.add_argument('--det', action='store_true', default=False, help="deterministic base changes: make transitions only")
