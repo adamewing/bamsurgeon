@@ -92,6 +92,8 @@ optional arguments:
   --samtofastq SAMTOFASTQ
                         path to picard SamToFastq.jar
   --mindepth MINDEPTH   minimum read depth to make mutation
+  --minmutreads MINMUTREADS
+                        minimum number of mutated reads to output per site
   --avoidreads AVOIDREADS
                         file of read names to avoid (mutations will be skipped
                         if overlap)
@@ -148,6 +150,7 @@ optional arguments:
 \item -p/--procs : BAMSurgeon programs currently spawn a new process for each spikein, to speed things along the processes can be run concurrently with the number of simultaneous jobs set by this parameter.
 \item --samtofastq : path to SamToFastq.jar provided by picard tools, this is required for the --bwamem option
 \item --mindepth : minimum depth at sites for mutations, sites with fewer reads in pileup column will be dropped. Default is 5 reads.
+\item --minmutreads : minimum number of mutated reads per site. If this level of coverage cannot be obtained, mutations will be dropped.
 \item --avoidreads : addsnv and addindel can be passed a list of read names to avoid when making mutations. Any sites selected that overlap these reads will be dropped. This feature exists as a means to ensure mutations across multiple runs do not overlap.
 \item --force : force the addition of a mutation even if it fails thresholds set by --mindepth and -c/--coverdiff. Not recommended for most use cases.
 \item --single : covered above, assume reads are single-end (i.e. fragment reads).
@@ -201,6 +204,8 @@ optional arguments:
   --samtofastq SAMTOFASTQ
                         path to picard SamToFastq.jar
   --mindepth MINDEPTH   minimum read depth to make mutation
+  --minmutreads MINMUTREADS
+                        minimum number of mutated reads to output per site
   --avoidreads AVOIDREADS
                         file of read names to avoid (mutations will be skipped
                         if overlap)
