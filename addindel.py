@@ -153,8 +153,8 @@ def remap_paired(bamfn, threads, bwaref, mutid='null'):
     samfn  = bamfn + ".sam"
     refidx = bwaref + ".fai"
 
-    sai1args = ['bwa', 'aln', bwaref, '-q', '5', '-l', '32', '-k', '3', '-t', str(threads), '-o', '1', '-f', sai1fn, '-b1', bamfn]
-    sai2args = ['bwa', 'aln', bwaref, '-q', '5', '-l', '32', '-k', '3', '-t', str(threads), '-o', '1', '-f', sai2fn, '-b2', bamfn]
+    sai1args = ['bwa', 'aln', '-q', '5', '-l', '32', '-k', '3', '-t', str(threads), '-o', '1', '-f', sai1fn, '-b1', bwaref, bamfn]
+    sai2args = ['bwa', 'aln', '-q', '5', '-l', '32', '-k', '3', '-t', str(threads), '-o', '1', '-f', sai2fn, '-b2', bwaref, bamfn]
     samargs  = ['bwa', 'sampe', '-P', '-f', samfn, bwaref, sai1fn, sai2fn, bamfn, bamfn]
     bamargs  = ['samtools', 'view', '-bt', refidx, '-o', bamfn, samfn] 
 
@@ -191,7 +191,7 @@ def remap_single(bamfn, threads, bwaref, mutid='null'):
     samfn  = bamfn + ".sam"
     refidx = bwaref + ".fai"
 
-    saiargs = ['bwa', 'aln', bwaref, '-q', '5', '-l', '32', '-k', '3', '-t', str(threads), '-o', '1', '-f', saifn, '-b1', bamfn]
+    saiargs = ['bwa', 'aln', '-q', '5', '-l', '32', '-k', '3', '-t', str(threads), '-o', '1', '-f', saifn, '-b1', bwaref, bamfn]
     samargs  = ['bwa', 'samse', '-f', samfn, bwaref, saifn, bamfn]
     bamargs  = ['samtools', 'view', '-bt', refidx, '-o', bamfn, samfn] 
 
