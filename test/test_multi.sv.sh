@@ -44,4 +44,8 @@ else
   echo "making pileups..."
   samtools mpileup $2 ../test_data/test_multi.lib1.bam ../test_data/test_multi.lib2.bam ../test_data/test_multi.lib3.bam ../test_data/test_multi.sv.lib1.bam ../test_data/test_multi.sv.lib2.bam ../test_data/test_multi.sv.lib3.bam > ../test_data/test_multi.svbam_sv.pileup.txt
   echo "done. output in test_sv.pileup.txt"
+  
+  echo "collecting mutations..."
+  cat addsv_logs_test_multi.sv.lib1.bam/*.log | grep -E "dup|del|ins|inv" >test_multi.sv.tab
+
 fi
