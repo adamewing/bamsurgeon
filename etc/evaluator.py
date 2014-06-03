@@ -5,8 +5,8 @@ import vcf
 import argparse
 
 '''
-Submission evaluation code for TCGA/ICGC/DREAM SMC
-Adam Ewing, ewingad@soe.ucsc.edu
+Evaluate VCFs against BAMSurgeon "Truth" VCFs
+Adam Ewing, adam.ewing@mater.uq.edu.au
 Requires PyVCF (https://github.com/jamescasbon/PyVCF)
 '''
 
