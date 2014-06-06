@@ -379,8 +379,8 @@ def align(qryseq, refseq):
                 topscore = int(c[1])
                 best = c
 
-    #os.remove(tgtfa)
-    #os.remove(qryfa)
+    os.remove(tgtfa)
+    os.remove(qryfa)
 
     return best
 
