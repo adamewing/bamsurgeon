@@ -10,6 +10,7 @@ import bs.asmregion as ar
 import bs.mutableseq as ms
 import datetime
 
+from uuid import uuid4
 from time import sleep
 from shutil import move
 from math import sqrt
@@ -20,6 +21,7 @@ from multiprocessing import Pool
 sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)
 sys.stderr = os.fdopen(sys.stderr.fileno(), 'w', 0)
 
+
 def now():
     return str(datetime.datetime.now())
 
@@ -28,7 +30,7 @@ def remap_bwamem(fq1, fq2, threads, bwaref, outbam, deltmp=True, mutid='null'):
     """ call bwa mem and samtools to remap .bam
     """
 
-    basefn   = "bwatmp" + str(random.random())
+    basefn   = "bwatmp." + str(uuid4())
     sam_out  = basefn + '.sam'
     sort_out = basefn + '.sorted'
 
@@ -77,7 +79,7 @@ def remap_bwamem(fq1, fq2, threads, bwaref, outbam, deltmp=True, mutid='null'):
 def remap(fq1, fq2, threads, bwaref, outbam, deltmp=True, mutid='null'):
     """ call bwa/samtools to remap .bam and merge with existing .bam
     """
-    basefn = "bwatmp" + str(random.random())
+    basefn = "bwatmp." + str(uuid4())
     sai1fn = basefn + ".1.sai"
     sai2fn = basefn + ".2.sai"
     samfn  = basefn + ".sam"
@@ -144,7 +146,7 @@ def runwgsim(contig, newseq, svfrac, exclude, pemean, pesd, mutid='null'):
     '''
     namecount = Counter(contig.reads.reads)
 
-    basefn = "wgsimtmp" + str(random.random())
+    basefn = "wgsimtmp." + str(uuid4())
     fasta = basefn + ".fasta"
     fq1 = basefn + ".1.fq"
     fq2 = basefn + ".2.fq"
@@ -374,7 +376,7 @@ def mergebams(bamlist, outbamfn, maxopen=100):
 
 
 def align(qryseq, refseq):
-    rnd = str(random.random())
+    rnd = str(uuid4())
     tgtfa = 'tmp.' + rnd + '.tgt.fa'
     qryfa = 'tmp.' + rnd + '.qry.fa'
 
@@ -442,7 +444,7 @@ def makemut(args, bedline):
         reffile = pysam.Fastafile(args.refFasta)
         logfn   = '_'.join(map(os.path.basename, bedline.strip().split())) + ".log"
         logfile = open('addsv_logs_' + os.path.basename(args.outBamFile) + '/' + os.path.basename(args.outBamFile) + '_' + logfn, 'w')
-        exclfile = 'exclude.' + str(random.random()) + '.txt'
+        exclfile = 'exclude.' + str(uuid4()) + '.txt'
         exclude = open(exclfile, 'w')
 
         # optional CNV file
@@ -451,7 +453,7 @@ def makemut(args, bedline):
             cnv = pysam.Tabixfile(args.cnvfile, 'r')
 
         # temporary file to hold mutated reads
-        outbam_mutsfile = "tmp." + str(random.random()) + ".muts.bam"
+        outbam_mutsfile = "tmp." + str(uuid4()) + ".muts.bam"
 
         c = bedline.strip().split()
         chrom    = c[0]
@@ -714,8 +716,8 @@ def main(args):
     print "INFO\t" + now() + "\ttmpbams:",tmpbams
     print "INFO\t" + now() + "\texclude:",exclfns
 
-    excl_merged = 'addsv.exclude.final.' + str(random.random()) + '.txt'
-    mergedtmp = 'addsv.mergetmp.final.' + str(random.random()) + '.bam'
+    excl_merged = 'addsv.exclude.final.' + str(uuid4()) + '.txt'
+    mergedtmp = 'addsv.mergetmp.final.' + str(uuid4()) + '.bam'
 
     print "INFO\t" + now() + "\tmerging exclude files into", excl_merged, "..."
     exclout = open(excl_merged, 'w')

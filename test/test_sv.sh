@@ -53,6 +53,6 @@ else
   samtools index ../test_data/testregion_sv_mut.bam
   
   echo "making pileups..."
-  samtools mpileup $2 ../test_data/testregion_sv_mut.bam ../test_data/testregion.bam > test_sv.pileup.txt
+  samtools mpileup -f $2 ../test_data/testregion_sv_mut.bam ../test_data/testregion.bam > test_sv.pileup.txt
   echo "done. output in test_sv.pileup.txt"
 fi

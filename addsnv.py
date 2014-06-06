@@ -10,6 +10,7 @@ import bs.replacereads as rr
 import datetime
 import traceback
 
+from uuid import uuid4
 from shutil import move
 from re import sub
 from multiprocessing import Pool, Value, Lock
@@ -390,7 +391,7 @@ def makemut(args, chrom, start, end, vaf, avoid):
         mutmates = {} # same keys as outreads, keep track of mates
         numunmap = 0
         hasSNP = False
-        tmpoutbamname = "tmpbam" + str(random.random()) + ".bam"
+        tmpoutbamname = "tmpbam." + str(uuid4()) + ".bam"
         print "INFO\t" + now() + "\t" + mutid + "\tcreating tmp bam: ",tmpoutbamname
         outbam_muts = pysam.Samfile(tmpoutbamname, 'wb', template=bamfile)
         maxfrac = 0.0
@@ -605,7 +606,7 @@ def main(args):
         avoid = dictlist(args.avoidreads)
 
     # make a temporary file to hold mutated reads
-    outbam_mutsfile = "addsnv." + str(random.random()) + ".muts.bam"
+    outbam_mutsfile = "addsnv." + str(uuid4()) + ".muts.bam"
     bamfile = pysam.Samfile(args.bamFileName, 'rb')
     outbam_muts = pysam.Samfile(outbam_mutsfile, 'wb', template=bamfile)
     outbam_muts.close()
