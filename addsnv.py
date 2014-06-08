@@ -37,32 +37,23 @@ def minorbase(basepile):
     else:
         return c.most_common()[0]
 
-def mut(base,det=False):
+def mut(base, altbase):
     """ change base to something different
-        if 'det' (deterministic) is true, mutations will be made in a predictable pattern:
-        A-->G, G-->A, T-->C, C-->T (transitions)
     """
 
     bases = ('A','T','C','G')
     base = base.upper()
-    if base not in bases:
+    if base not in bases or (altbase is not None and altbase not in ['A','T','G','C']):
         raise ValueError("ERROR\t" + now() + "\tbase passed to mut(): " + str(base) + " not one of (A,T,C,G)\n")
 
-    if det:
-        if base == 'A':
-            return 'T'
-        elif base == 'T':
-            return 'A'
-        elif base == 'G':
-            return 'C'
-        elif base == 'C':
-            return 'G'
+    if altbase is not None:
+        return altbase
 
     else:
-        mut = base
-        while mut == base:
-            mut = bases[int(random.uniform(0,4))]
-        return mut
+        alt = base
+        while alt == base:
+            alt = bases[int(random.uniform(0,4))]
+        return alt
 
 def countReadCoverage(bam,chrom,start,end):
     """ calculate coverage of aligned reads over region
@@ -356,8 +347,8 @@ def dictlist(fn):
     return d
 
 
-def makemut(args, chrom, start, end, vaf, avoid):
-    mutid = chrom + ':' + str(start) + '-' + str(end) + ':' + str(vaf)
+def makemut(args, chrom, start, end, vaf, altbase, avoid):
+    mutid = chrom + ':' + str(start) + '-' + str(end) + ':' + str(vaf) + ':' + str(altbase)
     try:
         bamfile = pysam.Samfile(args.bamFileName, 'rb')
         bammate = pysam.Samfile(args.bamFileName, 'rb') # use for mates to avoid iterator problems
@@ -369,8 +360,12 @@ def makemut(args, chrom, start, end, vaf, avoid):
         mutpos = int(random.uniform(start,end+1)) # position of mutation in genome
         refbase = reffile.fetch(chrom,mutpos-1,mutpos)
 
+        if altbase == refbase.upper():
+            sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tspecified ALT base matches reference, skipping mutation\n")
+            return None
+
         try:
-            mutbase = mut(refbase,args.det)
+            mutbase = mut(refbase, altbase)
         except ValueError as e:
             sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\t" + ' '.join(("skipped site:",chrom,str(start),str(end),"due to N base:",str(e),"\n")))
             return None
@@ -458,11 +453,11 @@ def makemut(args, chrom, start, end, vaf, avoid):
                         frac = 0.0
                     if frac > maxfrac:
                         maxfrac = frac
-                    if frac > snvfrac:
-                        print "INFO\t" + now() + "\t" + mutid + "\tdropped for proximity to SNP, nearby SNP MAF:",frac,"maxfrac:",snvfrac
+                    if frac > snvfrac or majb[0].upper() != refbase.upper():
+                        print "WARN\t" + now() + "\t" + mutid + "\tdropped for proximity to SNP, nearby SNP MAF:",frac,"maxfrac:",snvfrac
                         hasSNP = True
                 else:
-                    print "INFO\t" + now() + "\t" + mutid + "\tcould not pileup for region:",chrom,pcol.pos
+                    print "WARN\t" + now() + "\t" + mutid + "\tcould not pileup for region:",chrom,pcol.pos
                     hasSNP = True
 
         # pick reads to change
@@ -625,14 +620,22 @@ def main(args):
         if ntried < int(args.numsnvs) or int(args.numsnvs) == 0:
             c = bedline.strip().split()
             chrom   = c[0]
-            start = int(c[1])
-            end   = int(c[2])
-            vaf   = None
+            start   = int(c[1])
+            end     = int(c[2])
+            vaf     = None
+            altbase = None
+
+            # VAF is 4th column, if present
             if len(c) > 3:
                 vaf = float(c[3])
 
+            # ALT is 5th column, if present
+            if len(c) == 5:
+                altbase = c[4].upper()
+                assert altbase in ['A','T','C','G'], "ERROR:\t" + now() + "\tALT " + altbase + " not A, T, C, or G!\n"
+
             # make mutation (submit job to thread pool)
-            result = pool.apply_async(makemut, [args, chrom, start, end, vaf, avoid])
+            result = pool.apply_async(makemut, [args, chrom, start, end, vaf, altbase, avoid])
             results.append(result)
             ntried += 1
 
@@ -684,7 +687,6 @@ def run():
     parser.add_argument('--minmutreads', default=2, help='minimum number of mutated reads to output per site')
     parser.add_argument('--avoidreads', default=None, help='file of read names to avoid (mutations will be skipped if overlap)')
     parser.add_argument('--nomut', action='store_true', default=False, help="dry run")
-    parser.add_argument('--det', action='store_true', default=False, help="deterministic base changes: make transitions only")
     parser.add_argument('--force', action='store_true', default=False, help="force mutation to happen regardless of nearby SNP or low coverage")
     parser.add_argument('--single', action='store_true', default=False, help="input BAM is simgle-ended (default is paired-end)")
     parser.add_argument('--maxopen', dest='maxopen', default=1000, help="maximum number of open files during merge (default 1000)")
