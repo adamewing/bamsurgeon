@@ -9,7 +9,7 @@ then
     exit 65
 fi
 
-if [ ! -e ../addsnv.py ]
+if [ ! -e ../addsv.py ]
 then
     echo "addsnv.py isn't one directory level down (../addsnv.py) as expected"
     exit 65

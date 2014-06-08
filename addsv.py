@@ -76,6 +76,55 @@ def remap_bwamem(fq1, fq2, threads, bwaref, outbam, deltmp=True, mutid='null'):
     return bamreads(outbam)
 
 
+def remap_novoalign(fq1, fq2, threads, bwaref, novoref, outbam, deltmp=True, mutid='null'):
+    """ call novoalign and samtools to remap .bam
+    """
+
+    basefn   = "novotmp." + str(uuid4())
+    sam_out  = basefn + '.sam'
+    sort_out = basefn + '.sorted'
+
+    sam_cmd  = ['novoalign', '-F', 'STDFQ', '-f', fq1, fq2, '-r', 'Random', '-d', novoref, '-oSAM']
+    bam_cmd  = ['samtools', 'view', '-bt', bwaref + '.fai', '-o', outbam, sam_out]
+    sort_cmd = ['samtools', 'sort', '-@', str(threads), '-m', '10000000000', outbam, sort_out]
+    idx_cmd  = ['samtools', 'index', outbam]
+
+    print "INFO\t" + now() + "\t" + mutid + "\taligning " + fq1 + ',' + fq2 + " with novoalign"
+    with open(sam_out, 'w') as sam:
+        p = subprocess.Popen(sam_cmd, stdout=subprocess.PIPE)
+        for line in p.stdout:
+            sam.write(line)
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\twriting " + sam_out + " to BAM...\n")
+    subprocess.call(bam_cmd)
+
+    if deltmp:
+        sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tdeleting SAM: " + sam_out + "\n")
+        os.remove(sam_out)
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tsorting output: " + ' '.join(sort_cmd) + "\n")
+    subprocess.call(sort_cmd)
+
+    sort_out += '.bam'
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremove original bam:" + outbam + "\n")
+    os.remove(outbam)
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\trename sorted bam: " + sort_out + " to original name: " + outbam + "\n")
+    move(sort_out, outbam)
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tindexing: " + ' '.join(idx_cmd) + "\n")
+    subprocess.call(idx_cmd)
+
+    if deltmp:
+        sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fq1 + "\n")
+        os.remove(fq1)
+        sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fq2 + "\n")
+        os.remove(fq2)
+
+    return bamreads(outbam)
+
+
 def remap(fq1, fq2, threads, bwaref, outbam, deltmp=True, mutid='null'):
     """ call bwa/samtools to remap .bam and merge with existing .bam
     """
@@ -636,9 +685,11 @@ def makemut(args, bedline):
 
             # remap reads
             if args.bwamem:
-                outreads = remap_bwamem(fq1, fq2, 4, args.refFasta, outbam_mutsfile, mutid=mutid)
+                outreads = remap_bwamem(fq1, fq2, 1, args.refFasta, outbam_mutsfile, mutid=mutid)
+            elif args.novoalign:
+                outreads = remap_novoalign(fq1, fq2, 1, args.refFasta, args.novoref, outbam_mutsfile, mutid=mutid)
             else:
-                outreads = remap(fq1, fq2, 4, args.refFasta, outbam_mutsfile, mutid=mutid)
+                outreads = remap(fq1, fq2, 1, args.refFasta, outbam_mutsfile, mutid=mutid)
 
             if outreads == 0:
                 sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\toutbam " + outbam_mutsfile + " has no mapped reads!\n")
@@ -666,6 +717,14 @@ def main(args):
     print "INFO\t" + now() + "\tstarting " + sys.argv[0] + " called with args: " + ' '.join(sys.argv) + "\n"
     tmpbams = [] # temporary BAMs, each holds the realigned reads for one mutation
     exclfns = [] # 'exclude' files store reads to be removed from the original BAM due to deletions
+
+    if args.bwamem and args.novoalign:
+        sys.stderr.write("ERROR\t" + now() + "\t --bwamem and --novoalign cannot be specified together")
+        sys.exit(1)
+
+    if args.novoalign and args.novoref is None:
+        sys.stderr.write("ERROR\t" + now() + "\t --novoref must be be specified with --novoalign")
+        sys.exit(1)
 
     # load insertion library if present
     try:
@@ -802,6 +861,8 @@ if __name__ == '__main__':
                         help="do not perform reference based assembly")
     parser.add_argument('--recycle', action='store_true', default=False)
     parser.add_argument('--bwamem', action='store_true', default=False, help='realign with bwa mem (original shuld be aligned with mem as well!)')
+    parser.add_argument('--novoalign', action='store_true', default=False, help='realignment with novoalign')
+    parser.add_argument('--novoref', default=None, help='novoalign reference, must be specified with --novoalign')
     parser.add_argument('--skipmerge', action='store_true', default=False)
     args = parser.parse_args()
     main(args)

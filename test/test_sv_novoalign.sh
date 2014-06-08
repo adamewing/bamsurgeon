@@ -3,15 +3,15 @@
 # adds up to 100 SNPs to a ~770 kb region around the LARGE gene
 # requires samtools/bcftools
 
-if [ $# -ne 1 ]
+if [ $# -ne 2 ]
 then
-    echo "usage: $0 <reference indexed with bwa index>" 
+    echo "usage: $0 <reference indexed with bwa index> <novoindex reference>" 
     exit 65
 fi
 
 if [ ! -e ../addsv.py ]
 then
-    echo "addsv.py isn't one directory level down (../addsnv.py) as expected"
+    echo "addsv.py isn't one directory level down (../addsv.py) as expected"
     exit 65
 fi
 
@@ -21,13 +21,19 @@ then
     exit 65
 fi
 
+if [ ! -e $2 ]
+then
+    echo "can't find novoalign index: $2, please supply a novoindex index"
+    exit 65
+fi
+
 if [ ! -e $1.bwt ]
 then
     echo "can't find $1.bwt: is $1 indexed with bwa?"
     exit 65
 fi
 
-../addsv.py -p 1 -v ../test_data/test_sv.txt -f ../test_data/testregion.bam -r $1 -o ../test_data/testregion_sv_mut.bam -c ../test_data/test_cnvlist.txt.gz --bwamem
+../addsv.py -p 1 -v ../test_data/test_sv.txt -f ../test_data/testregion_novo.bam -r $1 -o ../test_data/testregion_sv_mut.bam -c ../test_data/test_cnvlist.txt.gz --novoalign --novoref $2
 if [ $? -ne 0 ]
 then
   echo "addsv.py failed."
