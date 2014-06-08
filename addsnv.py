@@ -453,7 +453,7 @@ def makemut(args, chrom, start, end, vaf, altbase, avoid):
                         frac = 0.0
                     if frac > maxfrac:
                         maxfrac = frac
-                    if frac > snvfrac or majb.upper() != refbase.upper():
+                    if frac > snvfrac or majb[0].upper() != refbase.upper():
                         print "WARN\t" + now() + "\t" + mutid + "\tdropped for proximity to SNP, nearby SNP MAF:",frac,"maxfrac:",snvfrac
                         hasSNP = True
                 else:
