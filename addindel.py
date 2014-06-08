@@ -281,23 +281,109 @@ def remap_bwamem(bamfn, threads, bwaref, samtofastq, mutid='null', paired=True):
     os.remove(fastq)
 
 
-def bamtofastq(bam, samtofastq, threads=1, paired=True):
+def remap_novoalign(bamfn, threads, bwaref, samtofastq, novoref, mutid='null', paired=True):
+    """ call novoalign and samtools to remap .bam
+    """
+    assert os.path.exists(samtofastq)
+    assert os.path.exists(novoref)
+    assert bamreadcount(bamfn) > 0 
+
+    sam_out  = bamfn + '.realign.sam'
+    sort_out = bamfn + '.realign.sorted'
+
+    print "INFO\t" + now() + "\t" + mutid + "\tconverting " + bamfn + " to fastq\n"
+    fastq = bamtofastq(bamfn, samtofastq, threads=threads, paired=paired, twofastq=True)
+
+    sam_cmd = []
+
+    if paired:
+        sam_cmd  = ['novoalign', '-F', 'STDFQ', '-f', fastq[0], fastq[1], '-r', 'Random', '-d', novoref, '-oSAM'] # interleaved
+    else:
+        sam_cmd  = ['novoalign', '-F', 'STDFQ', '-f', fastq, '-r', 'Random', '-d', novoref, '-oSAM'] # interleaved
+
+    assert len(sam_cmd) > 0
+
+    bam_cmd  = ['samtools', 'view', '-bt', bwaref + '.fai', '-o', bamfn, sam_out]
+    sort_cmd = ['samtools', 'sort', '-@', str(threads), '-m', '10000000000', bamfn, sort_out]
+    idx_cmd  = ['samtools', 'index', bamfn]
+
+    print "INFO\t" + now() + "\t" + mutid + "\taligning " + str(fastq) + " with novoalign\n"
+    with open(sam_out, 'w') as sam:
+        p = subprocess.Popen(sam_cmd, stdout=subprocess.PIPE)
+        for line in p.stdout:
+            sam.write(line)
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\twriting " + sam_out + " to BAM...\n")
+    subprocess.call(bam_cmd)
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tdeleting SAM: " + sam_out + "\n")
+    os.remove(sam_out)
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tsorting output: " + ' '.join(sort_cmd) + "\n")
+    subprocess.call(sort_cmd)
+
+    sort_out += '.bam'
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremove original bam:" + bamfn + "\n")
+    os.remove(bamfn)
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\trename sorted bam: " + sort_out + " to original name: " + bamfn + "\n")
+    move(sort_out, bamfn)
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tindexing: " + ' '.join(idx_cmd) + "\n")
+    subprocess.call(idx_cmd)
+
+    # check if BAM readcount looks sane
+    if paired:
+        if bamreadcount(bamfn) < fastqreadcount(fastq[0]) + fastqreadcount(fastq[1]): 
+            raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
+    else:
+        if bamreadcount(bamfn) < fastqreadcount(fastq): 
+            raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
+
+    if paired:
+        for fq in fastq:
+            sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fq + "\n")
+            os.remove(fq)
+    else:
+        sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fastq + "\n")
+        os.remove(fastq)
+
+
+def bamtofastq(bam, samtofastq, threads=1, paired=True, twofastq=False):
+    ''' if twofastq is True output two fastq files instead of interleaved (default) for paired-end'''
     assert os.path.exists(samtofastq)
     assert bam.endswith('.bam')
-    assert bamreadcount(bam) > 0
 
-    outfq = sub('bam$', 'fastq', bam)
+    outfq = None
+    outfq_pair = None
 
-    cmd = ['java', '-XX:ParallelGCThreads=' + str(threads), '-Xmx4g', '-jar', samtofastq, 'VALIDATION_STRINGENCY=SILENT', 'INPUT=' + bam, 'FASTQ=' + outfq]
+    cmd = ['java', '-XX:ParallelGCThreads=' + str(threads), '-Xmx4g', '-jar', samtofastq, 'VALIDATION_STRINGENCY=SILENT', 'INPUT=' + bam]
     if paired:
-        cmd.append('INTERLEAVE=true')
+        if twofastq: # two-fastq paired end
+            outfq_pair = [sub('bam$', '1.fastq', bam), sub('bam$', '2.fastq', bam)]
+            cmd.append('F=' + outfq_pair[0])
+            cmd.append('F2=' + outfq_pair[1])
+        else: # interleaved paired-end
+            outfq = sub('bam$', 'fastq', bam)
+            cmd.append('FASTQ=' + outfq)
+            cmd.append('INTERLEAVE=true')
+    else:
+        outfq = sub('bam$', 'fastq', bam)
+        cmd.append('FASTQ=' + outfq)
 
     sys.stdout.write("INFO\t" + now() + "\tconverting BAM " + bam + " to FASTQ\n")
     subprocess.call(cmd)
 
-    assert os.path.exists(outfq) # conversion failed
+    if outfq is not None:
+        assert os.path.exists(outfq) # conversion failed
+        return outfq
 
-    return outfq
+    if outfq_pair is not None:
+        assert os.path.exists(outfq_pair[0]) and os.path.exists(outfq_pair[1])
+        return outfq_pair
+
+    return None
 
 
 def bamreadcount(bamfile):
@@ -603,14 +689,18 @@ def makemut(args, chrom, start, end, vaf, ins, avoid):
             outbam_muts.close()
             if args.single:
                 if args.bwamem:
-                    remap_bwamem(tmpoutbamname, 4, args.refFasta, args.samtofastq, mutid=mutid, paired=False)
+                    remap_bwamem(tmpoutbamname, 1, args.refFasta, args.samtofastq, mutid=mutid, paired=False)
+                elif args.novoalign:
+                    remap_novoalign(tmpoutbamname, 1, args.refFasta, args.samtofastq, args.novoref, mutid=mutid, paired=False)
                 else:
-                    remap_single(tmpoutbamname, 4, args.refFasta, mutid=mutid)
+                    remap_single(tmpoutbamname, 1, args.refFasta, mutid=mutid)
             else:
                 if args.bwamem:
-                    remap_bwamem(tmpoutbamname, 4, args.refFasta, args.samtofastq, mutid=mutid, paired=True)
+                    remap_bwamem(tmpoutbamname, 1, args.refFasta, args.samtofastq, mutid=mutid, paired=True)
+                elif args.novoalign:
+                    remap_novoalign(tmpoutbamname, 1, args.refFasta, args.samtofastq, args.novoref, mutid=mutid, paired=True)
                 else:
-                    remap_paired(tmpoutbamname, 4, args.refFasta, mutid=mutid)
+                    remap_paired(tmpoutbamname, 1, args.refFasta, mutid=mutid)
 
             outbam_muts = pysam.Samfile(tmpoutbamname,'rb')
             coverwindow = 1
@@ -664,8 +754,16 @@ def main(args):
     bedfile = open(args.varFileName, 'r')
     reffile = pysam.Fastafile(args.refFasta)
 
-    if args.bwamem and args.samtofastq is None:
-        sys.stderr.write("ERROR\t" + now() + "\t --samtofastq must be specified with --bwamem option")
+    if (args.bwamem or args.novoalign) and args.samtofastq is None:
+        sys.stderr.write("ERROR\t" + now() + "\t --samtofastq must be specified with --bwamem or --novoalign option")
+        sys.exit(1)
+
+    if args.bwamem and args.novoalign:
+        sys.stderr.write("ERROR\t" + now() + "\t --bwamem and --novoalign cannot be specified together")
+        sys.exit(1)
+
+    if args.novoalign and args.novoref is None:
+        sys.stderr.write("ERROR\t" + now() + "\t --novoref must be be specified with --novoalign")
         sys.exit(1)
 
     # load readlist to avoid, if specified
@@ -767,6 +865,8 @@ def run():
     parser.add_argument('--maxopen', dest='maxopen', default=1000, help="maximum number of open files during merge (default 1000)")
     parser.add_argument('--requirepaired', action='store_true', default=False, help='skip mutations if unpaired reads are present')
     parser.add_argument('--bwamem', action='store_true', default=False, help='realignment with BWA MEM (instead of backtrack)')
+    parser.add_argument('--novoalign', action='store_true', default=False, help='realignment with novoalign')
+    parser.add_argument('--novoref', default=None, help='novoalign reference, must be specified with --novoalign')
     parser.add_argument('--skipmerge', action='store_true', default=False, help="final output is tmp file to be merged")
     args = parser.parse_args()
     main(args)
