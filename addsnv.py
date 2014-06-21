@@ -540,7 +540,7 @@ def makemut(args, chrom, start, end, vaf, altbase, avoid):
                         frac = 0.0
                     if frac > maxfrac:
                         maxfrac = frac
-                    if frac > snvfrac or majb[0].upper() != refbase.upper():
+                    if (not args.ignoresnps) and (frac > snvfrac or majb[0].upper() != refbase.upper()):
                         print "WARN\t" + now() + "\t" + mutid + "\tdropped for proximity to SNP, nearby SNP MAF:",frac,"maxfrac:",snvfrac
                         hasSNP = True
                 else:
@@ -786,6 +786,7 @@ def run():
     parser.add_argument('--minmutreads', default=2, help='minimum number of mutated reads to output per site')
     parser.add_argument('--avoidreads', default=None, help='file of read names to avoid (mutations will be skipped if overlap)')
     parser.add_argument('--nomut', action='store_true', default=False, help="dry run")
+    parser.add_argument('--ignoresnps', action='store_true', default=False, help="make mutations even if there are non-reference alleles sharing the relevant reads")
     parser.add_argument('--force', action='store_true', default=False, help="force mutation to happen regardless of nearby SNP or low coverage")
     parser.add_argument('--single', action='store_true', default=False, help="input BAM is simgle-ended (default is paired-end)")
     parser.add_argument('--maxopen', dest='maxopen', default=1000, help="maximum number of open files during merge (default 1000)")
