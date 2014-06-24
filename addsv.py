@@ -520,7 +520,7 @@ def makemut(args, bedline):
                     cn = float(cnregion.strip().split()[3]) # expect chrom,start,end,CN
                     sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\t" + ' '.join(("copy number in snp region:",chrom,str(start),str(end),"=",str(cn))) + "\n")
                     svfrac = 1.0/float(cn)
-                    assert svfrac < 1.0
+                    assert svfrac <= 1.0
                     sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tadjusted MAF: " + str(svfrac) + "\n")
 
         print "INFO\t" + now() + "\t" + mutid + "\tinterval:", c
