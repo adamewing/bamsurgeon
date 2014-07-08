@@ -95,18 +95,18 @@ def set_isize(isizedistr):
 def runwgsim(contig,newseq,svfrac,exclude,readnames=None,isizedistr=None):
     ''' wrapper function for wgsim
     '''
-    assert len(exclude) == len(readnames)
+    assert len(exclude) == len(readnames) #== nbf
     nbf=len(exclude) #number of bamfiles
 
     try:
         print isizedistr
         isizeopt = set_isize(isizedistr)
-        if isizeopt == None: #thst means only one default distr for each bam
+        if isizeopt == None: #that means only one default distr for each bam
             isizeopt = [ [ [1.0, 500, 50] ] for x in xrange(nbf) ]
     except Exception, e:
         print >>sys.stderr,"parsing isizedistr error!"
 
-    assert len(isizeopt) == len(readnames)
+    assert len(isizeopt) == len(readnames) #==nbf
     #print readnames
 
     namecount = Counter(contig.reads.reads)
@@ -120,18 +120,18 @@ def runwgsim(contig,newseq,svfrac,exclude,readnames=None,isizedistr=None):
     # names with count 2 had both pairs in the contig
     for name,count in namecount.items():
         #print name,count
-        origin = [ rni for rni in xrange(len(readnames)) if name in readnames[rni] ]
+        origin = [ rni for rni in xrange(len(readnames)) if name in readnames[rni] ] #origin=which bam file the read come from?
         try:
             assert len(origin) == 1 #otherwise where this read come from?
         except AssertionError:
             print "warning: some read in contig not in bam!"
             continue
-        origin = origin[0]
+        origin = origin[0] #get the original bi 
         if count == 1:
             single[origin] += 1
         elif count == 2:
             paired[origin] += 1 
-            pairednames[origin].append(name) 
+            pairednames[origin].append(name) #collect the paired names 
         else:
             discard[origin] += 1
 
@@ -145,7 +145,7 @@ def runwgsim(contig,newseq,svfrac,exclude,readnames=None,isizedistr=None):
     tfq1 = []
     tfq2 = []
     for bi in xrange(nbf):
-        nfq = len(isizeopt[bi])
+        nfq = len(isizeopt[bi]) #how many sub fq files for single bi
         tfq1.append([ basefn + "." + str(bi) + "." + str(fqi) + ".fq1" for fqi in xrange(nfq) ])
         tfq2.append([ basefn + "." + str(bi) + "." + str(fqi) + ".fq2" for fqi in xrange(nfq) ])
 
@@ -163,7 +163,7 @@ def runwgsim(contig,newseq,svfrac,exclude,readnames=None,isizedistr=None):
     print "adj. factor: " + str(lenfrac)
 
     # number of paried reads to simulate
-    nsimreads = int((sum(paired) + (sum(single)/2)) * svfrac * lenfrac)
+    nsimreads = int((sum(paired) + (sum(single)/2)) * svfrac * lenfrac) #total number of reads to sim across all bamfiles
 
     print "num. sim. reads: " + str(nsimreads) 
 
@@ -198,6 +198,10 @@ def runwgsim(contig,newseq,svfrac,exclude,readnames=None,isizedistr=None):
         merge_fq(fq2[bi],tfq2[bi])
         fqReplaceList(fq1[bi],pairednames[bi],contig.rquals,svfrac,exclude[bi])
         fqReplaceList(fq2[bi],pairednames[bi],contig.mquals,svfrac,exclude[bi])
+        os.remove(tfq1[bi])
+        os.remove(tfq2[bi])
+       
+
 
     return (fq1,fq2)
 
@@ -218,25 +222,26 @@ def fqReplaceList(fqfile,names,quals,svfrac,exclude):
     not appear in the final output BAM
 
     '''
+    #here only one fqfile and one exclude file will be generated
     print fqfile
     print os.path.exists(fqfile)
     fqin = open(fqfile,'r')
 
-    ln = 0
-    namenum = 0
+    ln = 0 #counting lines in each record
+    namenum = 0 #counting fq records
     newnames = []
     seqs = []
     usednames = {}
 
     for fqline in fqin:
         if ln == 0:
-            if len(names) > namenum:
+            if len(names) > namenum: #still have original names, use names here
                 newnames.append(names[namenum])
             else:
                 simname = fqline.strip().lstrip('@')
                 simname = re.sub('/1$','',simname)  #wgsim
                 simname = re.sub('/2$','',simname)  #wgsim
-                newnames.append(simname) 
+                newnames.append(simname) #otherwise use names from simulation
             namenum += 1
             ln += 1
         elif ln == 1:
@@ -278,9 +283,10 @@ def fqReplaceList(fqfile,names,quals,svfrac,exclude):
     # burn off excess
     if len(seqs) > 0:
         for name in names:
-            if name not in usednames:
-                if random.uniform(0,1) < svfrac:  # this controls deletion depth
+            if name not in usednames: 
+                if random.uniform(0,1) < svfrac:  
                     exclude.write(name + "\n")
+    # this controls deletion depth, this number isn't correct either, we need to remove exact simed reads
 
     fqout.close()
 
@@ -474,12 +480,12 @@ def makemut(args, bedline, pct=1):
         #logfile = open('addsv_logs_' + os.path.basename(args.outBamFile) + '/' + os.path.basename(args.outBamFile) + '_' + logfn, 'w')
         bamfilenames = args.bamFileName.split(':')
         isizedistr = args.isizeDistr.split(':')
-        bamfile = [ pysam.Samfile(bfn, 'rb') for bfn in bamfilenames ]
+        bamfile = [ pysam.Samfile(bfn, 'rb') for bfn in bamfilenames ] #bamfiles
         reffile = pysam.Fastafile(args.refFasta)
         logfn   = '_'.join(map(os.path.basename, bedline.strip().split())) + ".log"
-        outbamfilenames = args.outBamFile.split(':')
-        logfile = [ open('addsv_logs_' + os.path.basename(obfn) + '/' + os.path.basename(obfn) + '_' + logfn, 'w') for obfn in outbamfilenames ]
-        exclfile = [ 'exclude.' + str(random.random()) + '.txt' for bfn in bamfilenames ]
+        outbamfilenames = args.outBamFile.split(':') #outbamfiles
+        logfile = [ open('addsv_logs_' + os.path.basename(obfn) + '/' + os.path.basename(obfn) + '_' + logfn, 'w') for obfn in outbamfilenames ] #log files
+        exclfile = [ 'exclude.' + str(random.random()) + '.txt' for bfn in bamfilenames ] #exclude files
         exclude = [ open(ef, 'w') for ef in exclfile ]
         assert len(bamfile) == len(outbamfilenames)
         nbf = len(bamfile)
@@ -487,7 +493,7 @@ def makemut(args, bedline, pct=1):
 
         # temporary file to hold mutated reads
         #outbam_mutsfile = "tmp." + str(random.random()) + ".muts.bam"
-        outbam_mutsfile = [ "tmp." + str(random.random()) + ".muts.bam" for bfn in bamfilenames ]
+        outbam_mutsfile = [ "tmp." + str(random.random()) + ".muts.bam" for bfn in bamfilenames ] #mutated files
 
         c = bedline.strip().split()
         chrom    = c[0]
@@ -512,12 +518,12 @@ def makemut(args, bedline, pct=1):
         if end-start > maxctglen:
             adj   = (end-start) - maxctglen
             rndpt = random.randint(0,adj)
-            start = start + rndpt
+            start = start + rndpt                
             end   = end - (adj-rndpt)
-            print "note: interval size too long, adjusted:",chrom,start,end
+            print "note: interval size too long, adjusted:",chrom,start,end  #start and end is based on contig
 
         #dfrac = discordant_fraction(args.bamFileName, chrom, start, end)
-        dfrac = [ discordant_fraction(bfn, chrom, start, end) for bfn in bamfilenames ]
+        dfrac = [ discordant_fraction(bfn, chrom, start, end) for bfn in bamfilenames ] #discordant fraction
         #charlie: dfrac is a list now
         print "discordant fraction:",dfrac
 
@@ -528,7 +534,7 @@ def makemut(args, bedline, pct=1):
             return None, None
 
         #need to keep track of all read names in the region
-        readnames=[ [] for x in xrange(nbf) ]
+        readnames=[ [] for x in xrange(nbf) ] #hold readnames for each bamfile
         for bi in xrange(nbf):
             for read in bamfile[bi].fetch(chrom,start,end):
                 readnames[bi].append(read.qname)
@@ -680,15 +686,14 @@ def makemut(args, bedline, pct=1):
                     lgf.write(">" + chrom + ":" + str(refstart) + "-" + str(refend) +" AFTER\n" + str(mutseq) + "\n")
 
             # simulate reads
-            (fq1, fq2) = runwgsim(maxcontig, mutseq.seq, svfrac, exclude, readnames, isizedistr)
+            (fq1, fq2) = runwgsim(maxcontig, mutseq.seq, svfrac, exclude, readnames, isizedistr) #depth control is based on contig
             # charlie: here we need to runwgsim for multiple bamfile
             # charlie: fq1, fq2 is list of len(bamfile)
             # charlie: exclude is list of len(bamfile)
 
             # remap reads
             for bi in xrange(nbf):
-                outreads = remap(fq1[bi], fq2[bi], 4, args.refFasta, outbam_mutsfile[bi], deltmp=False)
-            # charlie: this remap function also need update to reflect multi bams
+                outreads = remap(fq1[bi], fq2[bi], 4, args.refFasta, outbam_mutsfile[bi], deltmp=True) #outreads contains bam of sim and mapped reads
                 if outreads == 0:
                     print "outbam", outbam_mutsfile[bi], "has no mapped reads!"
                     return None, None
@@ -806,64 +811,66 @@ def main(args):
     print "bams:",str(tmpbams)
     print "excl:",str(exclfns)
 
-    def final_merge(tmpbams,exclfns,bamfile,outbamfile):
+    def final_merge(tmpbam,exclfn,bamfile,outbamfile,deltmp=True): #merge tmpbam=tmpbams[bi], exclfn=exclfns[bi]
 
         excl_merged = 'exclude.final.' + str(random.random()) + '.txt'
         mergedtmp = 'mergetmp.final.' + str(random.random()) + '.bam'
 
         print "merging exclude files into", excl_merged, "..."
         exclout = open(excl_merged, 'w')
-        for exclfn in exclfns:
-            with open(exclfn, 'r') as excl:
+        for exclf in exclfn:
+            with open(exclf, 'r') as excl:
                 for line in excl:
                     exclout.write(line)
         exclout.close()
 
-        if len(tmpbams) == 1:
-            print "only one bam:", tmpbams[0], "renaming to", mergedtmp
-            os.rename(tmpbams[0], mergedtmp)
+        if len(tmpbam) == 1:
+            print "only one bam:", tmpbam[0], "renaming to", mergedtmp
+            os.rename(tmpbam[0], mergedtmp)
 
-        elif len(tmpbams) > 1:
+        elif len(tmpbam) > 1:
             print "merging bams into", mergedtmp, "..."
-            mergebams(tmpbams, mergedtmp)
+            mergebams(tmpbam, mergedtmp)
 
-        if args.skipmerge:
-            print "final merge skipped, please merge manually:",mergedtmp
-            print "exclude file to use:",excl_merged
-            print "cleaning up..."
-
-            for exclfn in exclfns:
-                if os.path.isfile(exclfn):
-                    os.remove(exclfn)
-
-            for tmpbam in tmpbams:
-                if os.path.isfile(tmpbam):
-                    os.remove(tmpbam)
-                if os.path.isfile(tmpbam + '.bai'):
-                    os.remove(tmpbam + '.bai')
-
+        if args.skipmerge: #skip merge into original bam
+             print "final merge skipped, please merge manually:",mergedtmp
+             print "exclude file to use:",excl_merged
+             print "cleaning up..."
+     
+             for exclf in exclfn:
+                 if os.path.isfile(exclf):
+                     os.remove(exclf)
+     
+             for tmpb in tmpbam:
+                 if os.path.isfile(tmpb):
+                     os.remove(tmpb)
+                 if os.path.isfile(tmpb + '.bai'):
+                     os.remove(tmpb + '.bai')
+     
         else:
             print "swapping reads into original and writing to", outbamfile
             print bamfile, mergedtmp, outbamfile, excl_merged
             replace(bamfile, mergedtmp, outbamfile, excl_merged)
-
-            os.remove(excl_merged)
-            os.remove(mergedtmp)
-
-            for exclfn in exclfns:
-                if os.path.isfile(exclfn):
-                    os.remove(exclfn)
-
-            for tmpbam in tmpbams:
-                if os.path.isfile(tmpbam):
-                    os.remove(tmpbam)
-                if os.path.isfile(tmpbam + '.bai'):
-                    os.remove(tmpbam + '.bai')
+     
+            if deltmp:
+               os.remove(excl_merged)
+               os.remove(mergedtmp)
+     
+               for exclf in exclfn:
+                   if os.path.isfile(exclf):
+                       os.remove(exclf)
+     
+               for tmpb in tmpbam:
+                   if os.path.isfile(tmpb):
+                       os.remove(tmpb)
+                   if os.path.isfile(tmpb + '.bai'):
+                       os.remove(tmpb + '.bai')
             print "done."
 
     for bi in xrange(nbf):
         if tmpbams[bi] != []:
-            final_merge(tmpbams[bi],exclfns[bi],bamfilenames[bi],outbamfilenames[bi])
+            print "merging", bamfilenames[bi], "and", str(tmpbams[bi]), "to", outbamfilenames[bi], "without", exclfns[bi], "\n"
+            final_merge(tmpbams[bi],exclfns[bi],bamfilenames[bi],outbamfilenames[bi],False)
         else:
             print "no bam to merge for",bi,"-th lib bam, all sv spike-in failed on it?\n" 
 

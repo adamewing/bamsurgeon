@@ -66,6 +66,7 @@ def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=No
         outputbam must be writeable and use targetbam as template
         read names in excludefile will not appear in final output
     '''
+    #original, mutated, output
 
     # check whether references are compatible
     if not compare_ref(targetbam, donorbam):
@@ -83,7 +84,7 @@ def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=No
     rdict = {}
     excount = 0 # number of excluded reads
     nullcount = 0 # number of null reads
-    for read in donorbam.fetch(until_eof=True):
+    for read in donorbam.fetch(until_eof=True): #mutated
         if read.seq and not read.is_secondary: # sanity check - don't include null reads, secondary alignments
             if read.qname not in exclude:
                 pairname = 'F' # read is first in pair

@@ -22,6 +22,9 @@ then
 fi
 
 addsv -p 2 -v ../test_data/test_multi.sv.txt -t ../test_data/test_multi.sv.pct -i 1_259_22:1_371_28:0.4_540_50,0.6_143_50 -f ../test_data/test_multi.lib1.bam:../test_data/test_multi.lib2.bam:../test_data/test_multi.lib3.bam -r $1 -o ../test_data/test_multi.sv.lib1.bam:../test_data/test_multi.sv.lib2.bam:../test_data/test_multi.sv.lib3.bam
+
+exit
+
 if [ $? -ne 0 ]
 then
   echo "addsv.py failed."
