@@ -639,13 +639,14 @@ def makemut(args, bedline, pct=1):
                     lgf.write(">" + chrom + ":" + str(refstart) + "-" + str(refend) + " BEFORE\n" + str(mutseq) + "\n")
 
                 if action == 'INS':
+                    ins_offset=mutseq.length()/2
                     if insseqfile: # seq in file
                         mutseq.insertion(mutseq.length()/2,singleseqfa(insseqfile),tsdlen)
                     else: # seq is input
                         mutseq.insertion(mutseq.length()/2,insseq,tsdlen)
 
                     for lgf in logfile:
-                        lgf.write("\t".join(('ins',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(mutseq.length()/2),str(insseqfile),str(tsdlen),str(svfrac)))+ "\n")
+                        lgf.write("\t".join(('ins',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(ins_offset),str(insseqfile),str(tsdlen),str(svfrac)))+ "\n")
 
                 elif action == 'INV':
                     invstart = int(args.maxlibsize)
