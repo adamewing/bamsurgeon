@@ -198,10 +198,10 @@ def runwgsim(contig,newseq,svfrac,exclude,readnames=None,isizedistr=None):
         merge_fq(fq2[bi],tfq2[bi])
         fqReplaceList(fq1[bi],pairednames[bi],contig.rquals,svfrac,exclude[bi])
         fqReplaceList(fq2[bi],pairednames[bi],contig.mquals,svfrac,exclude[bi])
-        os.remove(tfq1[bi])
-        os.remove(tfq2[bi])
-       
-
+        for fqi in tfq1[bi]:
+          os.remove(fqi)
+        for fqi in tfq2[bi]:
+          os.remove(fqi)
 
     return (fq1,fq2)
 
