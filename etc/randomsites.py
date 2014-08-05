@@ -57,13 +57,13 @@ def main(args):
         if args.chrom and args.chrom != rndchr:
             continue
 
-        # handle mask
-        if mask is not None and rndchr in mask.contigs and len(list(mask.fetch(chrom, rndloc, rndloc+1))) > 0:
-            continue
-
         fraglen = int(random.uniform(minlen,maxlen))
         fragstart = rndloc
         fragend   = rndloc + int(fraglen)
+
+        # handle mask
+        if mask is not None and rndchr in mask.contigs and len(list(mask.fetch(rndchr, fragstart, fragend))) > 0:
+            continue
 
         # handle pmin/pmax args
         if args.minpos is not None and fragstart < int(args.minpos):

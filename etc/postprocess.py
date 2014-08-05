@@ -182,6 +182,7 @@ def main(args):
     fixed_strand  = 0
     fixed_rg_pair = 0
     fixed_matepos = 0
+    fixed_tlen    = 0
     fixed_unmap   = 0
     fixed_materef = 0
 
@@ -198,39 +199,58 @@ def main(args):
 
     for read in bam.fetch(until_eof=True):
         n += 1
-        if read.is_paired:
+        if read.is_paired and not read.is_secondary:
             p += 1
             if read.qname in paired:
                 # make sure paired read groups match
                 rg = getRG(read.tags)
                 if rg != getRG(paired[read.qname].tags):
-                    fixed_rg_pair += 1
                     read.tags = putRG(read.tags, rg)
                     paired[read.qname].tags = putRG(paired[read.qname].tags, rg)
 
+                    assert rg == getRG(paired[read.qname].tags)
+                    fixed_rg_pair += 1
+
                 # fix strand 
                 if read.mate_is_reverse != paired[read.qname].is_reverse or paired[read.qname].mate_is_reverse != read.is_reverse:
-                    fixed_strand += 1
                     read.mate_is_reverse = paired[read.qname].is_reverse
                     paired[read.qname].mate_is_reverse = read.is_reverse
 
+                    assert read.mate_is_reverse == paired[read.qname].is_reverse and paired[read.qname].mate_is_reverse == read.is_reverse
+                    fixed_strand += 1
+
                 # fix mate position
                 if read.pnext != paired[read.qname].pos or paired[read.qname].pnext != read.pos:
-                    fixed_matepos += 1
                     read.pnext = paired[read.qname].pos
                     paired[read.qname].pnext = read.pos
 
+                    assert read.pnext == paired[read.qname].pos and paired[read.qname].pnext == read.pos
+                    fixed_matepos += 1
+
                 # fix unmapped flag
                 if read.mate_is_unmapped != paired[read.qname].is_unmapped or paired[read.qname].mate_is_unmapped != read.is_unmapped:
-                    fixed_unmap += 1
                     read.mate_is_unmapped = paired[read.qname].is_unmapped
                     paired[read.qname].mate_is_unmapped = read.is_unmapped
 
+                    assert read.mate_is_unmapped == paired[read.qname].is_unmapped and paired[read.qname].mate_is_unmapped == read.is_unmapped
+                    fixed_unmap += 1
+
                 # fix mate ref
                 if read.tid != paired[read.qname].rnext or paired[read.qname].tid != read.rnext:
-                    fixed_materef += 1
                     read.rnext = paired[read.qname].tid
                     paired[read.qname].rnext = read.tid
+
+                    assert read.tid == paired[read.qname].rnext and paired[read.qname].tid == read.rnext
+                    fixed_materef += 1
+
+                # fix tlen (left - (right + read length) where left < right)
+                if not read.is_unmapped and not paired[read.qname].is_unmapped and read.tid == paired[read.qname].tid:
+                    if abs(read.tlen) != abs(paired[read.qname].tlen):
+                        read.tlen = min(read.pos, read.pnext)-(max(read.pos, read.pnext)+read.rlen)
+                        paired[read.qname].tlen = 0-read.tlen
+                        
+                        assert abs(read.tlen) == abs(paired[read.qname].tlen)
+                        fixed_tlen += 1
 
                 newname = None 
                 if args.rename:
@@ -245,19 +265,20 @@ def main(args):
                 paired[read.qname] = read
                 w += 1
         else:
-            u += 1
+            if not read.is_secondary:
+                u += 1
 
-            newname = None
-            if args.rename:
-                newname = str(uuid4())
+                newname = None
+                if args.rename:
+                    newname = str(uuid4())
 
-            outsam.write(samrec(read, bam, IDRG, newname=newname) + '\n')
-            w += 1
+                outsam.write(samrec(read, bam, IDRG, newname=newname) + '\n')
+                w += 1
 
         if n % tick == 0:
             sys.stderr.write('\t'.join(map(str, ('processed',n,'reads:',p,'paired',u,'unpaired',w,'written',m,'mates found.'))) + '\n')
             sys.stderr.write('\t'.join(map(str, ('fixed strand:', fixed_strand, 'fixed RG pair:', fixed_rg_pair, 'fixed mate pos:', fixed_matepos))) + '\n')
-            sys.stderr.write('\t'.join(map(str, ('fixed unmapped flag:', fixed_unmap, 'fixed mate ref:', fixed_materef))) + '\n')
+            sys.stderr.write('\t'.join(map(str, ('fixed unmapped flag:', fixed_unmap, 'fixed mate ref:', fixed_materef, 'fixed tlen:', fixed_tlen))) + '\n')
 
     if len(paired.keys()) > 0:
         sys.stderr.write("WARNING:\t" + now() + "\tfound " + str(len(paired.keys())) + " orphaned paired reads that were not output!\n") 
