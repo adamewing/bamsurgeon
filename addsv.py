@@ -576,8 +576,14 @@ def makemut(args, bedline, pct=1):
 
         print "best contig length:", maxlen
         print "alignment result:", alignstats
+        if qrystart!=0 or qryend!= maxlen:
+            print "WARNING: contig trimmed: trim start=",qrystart,"trim end=",qryend,"contig length=",maxlen
+            print maxcontig.reads.reads
 
         maxcontig.trimseq(qrystart, qryend)
+        #charlie TODO: need to remove reads from contig.reads based on whether it is in trimmed contig
+        #charlie BUG: contig was trimmed however reads of contig were not
+        #charlie BUG: then the contig.reads is no longer suitable for thinning
         print "trimmed contig length:", maxcontig.len
 
         refstart = start + tgtstart
