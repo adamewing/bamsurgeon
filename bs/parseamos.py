@@ -19,9 +19,8 @@ class ContigReads:
         self.reads = {} # read names
 
     def addread(self,src):
-        if src in self.reads:
-            sys.stderr.write("AMOS PROBLEM: src already in readlist\n")
-
+        #if src in self.reads:
+        #    sys.stderr.write("AMOS PROBLEM: src already in readlist\n")
         self.reads[src] = Read(src)
 
     def getReadNames(self,seqs):
@@ -34,6 +33,7 @@ class ContigReads:
         for eid, read in self.reads.iteritems():
             output.append(str(read))
         return '\n'.join(output)
+
 
 class InputSeqs:
     def __init__(self,seqfile):

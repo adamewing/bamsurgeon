@@ -10,8 +10,10 @@ import datetime
 
 from uuid import uuid4
 
+
 def now():
     return str(datetime.datetime.now())
+
 
 def velvetContigs(dir):
     assert os.path.exists(dir)
@@ -33,6 +35,7 @@ def velvetContigs(dir):
     if name and seq:
         contigs.append(Contig(name,seq,dir))
     return contigs
+
 
 class Contig:
     def __init__(self,name,seq,dir):
@@ -67,13 +70,16 @@ class Contig:
         self.len = len(self.seq)
 
         # modify read list
-        new_reads = {}
-        for read in self.reads:
-            pass # FIXME : PROGRESS AS OF 120814
-
+        new_reads = parseamos.ContigReads(self.eid)
+        for src, read in self.reads.reads.iteritems():
+            if int(read.off) > int(start) and int(read.off) < int(end):
+                new_reads.reads[read.src] = read
+        assert new_reads is not None
+        self.reads = new_reads
 
     def __str__(self):
         return ">" + self.name + "\n" + self.seq
+
 
 def median(list):
     list.sort()
@@ -83,6 +89,7 @@ def median(list):
     else:
         return list[i]
 
+
 def n50(contigs):
     ln = map(lambda x: x.len, contigs)
     nlist = []
@@ -90,6 +97,7 @@ def n50(contigs):
         for i in range(n):
             nlist.append(n)
     return median(nlist)
+
 
 def runVelvet(reads,refseqname,refseq,kmer,addsv_tmpdir,isPaired=True,long=False,inputContigs=False,cov_cutoff=False,noref=False,mutid='null',debug=False):
     """
@@ -178,6 +186,7 @@ class ReadPair:
         output = " ".join(("read1:", self.read1.qname, self.read1.seq, r1map, "read2:", self.read2.qname, self.read2.seq, r2map))
         return output
 
+
 def asm(chr, start, end, bamfilename, reffile, kmersize, tmpdir, noref=False, recycle=False, mutid='null', debug=False):
     bamfile  = pysam.Samfile(bamfilename,'rb')
     matefile = pysam.Samfile(bamfilename,'rb')
@@ -242,6 +251,7 @@ def asm(chr, start, end, bamfilename, reffile, kmersize, tmpdir, noref=False, re
         contig.rquals = rquals
         contig.mquals = mquals
     return contigs
+
 
 def main(args):
     '''

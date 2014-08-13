@@ -197,7 +197,7 @@ def bamreads(bamfn, mappedonly=True):
 def runwgsim(contig, newseq, svfrac, svtype, exclude, pemean, pesd, tmpdir, mutid='null'):
     ''' wrapper function for wgsim
     '''
-    namecount = Counter(contig.reads.reads)
+    namecount = Counter([read.name for read in contig.reads.reads.values()])
 
     basefn = tmpdir + '/' + mutid + ".wgsimtmp." + str(uuid4())
     fasta = basefn + ".fasta"
@@ -220,7 +220,7 @@ def runwgsim(contig, newseq, svfrac, svtype, exclude, pemean, pesd, tmpdir, muti
             single += 1
         elif count == 2:
             paired += 1 
-            pairednames.append(name) 
+            pairednames.append(name)
         else:
             discard += 1
 
@@ -593,8 +593,8 @@ def makemut(args, bedline):
         print "INFO\t" + now() + "\t" + mutid + "\talignment result:", alignstats
 
         # FIXME: contig trimming causing coverage abberations (bug)
-        #maxcontig.trimseq(qrystart, qryend)
-        #print "INFO\t" + now() + "\t" + mutid + "\ttrimmed contig length:", maxcontig.len
+        maxcontig.trimseq(qrystart, qryend)
+        print "INFO\t" + now() + "\t" + mutid + "\ttrimmed contig length:", maxcontig.len
 
         refstart = start + tgtstart
         refend = start + tgtend
