@@ -592,7 +592,6 @@ def makemut(args, bedline):
         print "INFO\t" + now() + "\t" + mutid + "\tbest contig length:", maxlen
         print "INFO\t" + now() + "\t" + mutid + "\talignment result:", alignstats
 
-        # FIXME: contig trimming causing coverage abberations (bug)
         maxcontig.trimseq(qrystart, qryend)
         print "INFO\t" + now() + "\t" + mutid + "\ttrimmed contig length:", maxcontig.len
 
