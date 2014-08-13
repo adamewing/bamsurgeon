@@ -4,12 +4,16 @@
 try to do ref-directed assembly for paired reads in a region of a .bam file
 """
 
-import pysam,tempfile,argparse,subprocess,sys,shutil,os,re
+import pysam,argparse,subprocess,sys,shutil,os,re
 import parseamos
 import datetime
 
+from uuid import uuid4
+
+
 def now():
     return str(datetime.datetime.now())
+
 
 def velvetContigs(dir):
     assert os.path.exists(dir)
@@ -32,6 +36,7 @@ def velvetContigs(dir):
         contigs.append(Contig(name,seq,dir))
     return contigs
 
+
 class Contig:
     def __init__(self,name,seq,dir):
         self.name = name
@@ -46,7 +51,7 @@ class Contig:
         namefields = name.split('_')
         self.eid = namefields[1]
 
-        self.reads = contigreadmap[self.eid] 
+        self.reads = contigreadmap[self.eid]
         self.rquals = [] # meaningless, used for filler later rather than have uniform quality
         self.mquals = [] # meaningless, used for filler later rather than have uniform quality
 
@@ -64,8 +69,17 @@ class Contig:
         self.seq = self.subseq(start, end)
         self.len = len(self.seq)
 
+        # modify read list
+        new_reads = parseamos.ContigReads(self.eid)
+        for src, read in self.reads.reads.iteritems():
+            if int(read.off) > int(start) and int(read.off) < int(end):
+                new_reads.reads[read.src] = read
+        assert new_reads is not None
+        self.reads = new_reads
+
     def __str__(self):
-        return ">" + self.name + "\n" + self.seq 
+        return ">" + self.name + "\n" + self.seq
+
 
 def median(list):
     list.sort()
@@ -75,6 +89,7 @@ def median(list):
     else:
         return list[i]
 
+
 def n50(contigs):
     ln = map(lambda x: x.len, contigs)
     nlist = []
@@ -83,44 +98,45 @@ def n50(contigs):
             nlist.append(n)
     return median(nlist)
 
-def runVelvet(reads,refseqname,refseq,kmer,isPaired=True,long=False, inputContigs=False, cov_cutoff=False, noref=False):
+
+def runVelvet(reads,refseqname,refseq,kmer,addsv_tmpdir,isPaired=True,long=False,inputContigs=False,cov_cutoff=False,noref=False,mutid='null',debug=False):
     """
     reads is either a dictionary of ReadPair objects, (if inputContigs=False) or a list of 
     Contig objects (if inputContigs=True), refseq is a single sequence, kmer is an odd int
     """
-    readsFasta  = tempfile.NamedTemporaryFile(delete=False,dir='.')
-    refseqFasta = tempfile.NamedTemporaryFile(delete=False,dir='.')
+    reads_fasta_tmpfn = addsv_tmpdir + '/' + '.'.join((mutid, 'tmpreads', 'fasta'))
+    ref_fasta_tmpfn   = addsv_tmpdir + '/' + '.'.join((mutid, 'tmpref', 'fasta'))
+
+    reads_fasta = open(reads_fasta_tmpfn, 'w')
+    ref_fasta   = open(ref_fasta_tmpfn, 'w')
 
     if inputContigs:
         for contig in reads:
-            readsFasta.write(str(contig) + "\n")
+            reads_fasta.write(str(contig) + "\n")
     else:
         for readpair in reads.values():
-            readsFasta.write(readpair.fasta())
+            reads_fasta.write(readpair.fasta())
 
     if refseq:
-        refseqFasta.write(">%s\n%s\n" % (refseqname,refseq))
+        ref_fasta.write(">%s\n%s\n" % (refseqname,refseq))
 
-    readsFasta.flush()
-    refseqFasta.flush()
+    reads_fasta.close()
+    ref_fasta.close()
 
-    readsFN  = readsFasta.name
-    refseqFN = refseqFasta.name
-
-    tmpdir = tempfile.mkdtemp(dir='.')
+    tmpdir = addsv_tmpdir + '/' + mutid + '.' + str(uuid4()).split('-')[0]
 
     print tmpdir
 
     if noref:
         if long:
-            argsvelveth = ['velveth', tmpdir, str(kmer), '-long', readsFN]
+            argsvelveth = ['velveth', tmpdir, str(kmer), '-long', reads_fasta_tmpfn]
         else:
-            argsvelveth = ['velveth', tmpdir, str(kmer), '-shortPaired', readsFN]
+            argsvelveth = ['velveth', tmpdir, str(kmer), '-shortPaired', reads_fasta_tmpfn]
     else:
         if long: 
-            argsvelveth = ['velveth', tmpdir, str(kmer), '-reference', refseqFN, '-long', readsFN]
+            argsvelveth = ['velveth', tmpdir, str(kmer), '-reference', ref_fasta_tmpfn, '-long', reads_fasta_tmpfn]
         else:
-            argsvelveth = ['velveth', tmpdir, str(kmer), '-reference', refseqFN, '-shortPaired', readsFN]
+            argsvelveth = ['velveth', tmpdir, str(kmer), '-reference', ref_fasta_tmpfn, '-shortPaired', reads_fasta_tmpfn]
 
     if cov_cutoff:
         argsvelvetg = ['velvetg', tmpdir, '-exp_cov', 'auto', '-cov_cutoff', 'auto', '-unused_reads', 'yes', '-read_trkg', 'yes', '-amos_file', 'yes']
@@ -133,9 +149,10 @@ def runVelvet(reads,refseqname,refseq,kmer,isPaired=True,long=False, inputContig
     vcontigs = velvetContigs(tmpdir)
 
     # cleanup
-    shutil.rmtree(tmpdir)
-    os.unlink(readsFN)
-    os.unlink(refseqFN)
+    if not debug:
+        shutil.rmtree(tmpdir)
+        os.unlink(reads_fasta_tmpfn)
+        os.unlink(ref_fasta_tmpfn)
 
     return vcontigs
 
@@ -169,7 +186,8 @@ class ReadPair:
         output = " ".join(("read1:", self.read1.qname, self.read1.seq, r1map, "read2:", self.read2.qname, self.read2.seq, r2map))
         return output
 
-def asm(chr, start, end, bamfilename, reffile, kmersize, noref=False, recycle=False, mutid='null'):
+
+def asm(chr, start, end, bamfilename, reffile, kmersize, tmpdir, noref=False, recycle=False, mutid='null', debug=False):
     bamfile  = pysam.Samfile(bamfilename,'rb')
     matefile = pysam.Samfile(bamfilename,'rb')
 
@@ -219,12 +237,12 @@ def asm(chr, start, end, bamfilename, reffile, kmersize, noref=False, recycle=Fa
 
     region = chr + ":" + str(start) + "-" + str(end)
 
-    contigs = runVelvet(readpairs, region, refseq, kmersize, cov_cutoff=True, noref=noref)
+    contigs = runVelvet(readpairs, region, refseq, kmersize, tmpdir, cov_cutoff=True, noref=noref, mutid=mutid, debug=debug)
     newcontigs = None
 
     if recycle:
         if len(contigs) > 1:
-            newcontigs = runVelvet(contigs, region, refseq, kmersize, long=True, inputContigs=True, noref=noref)
+            newcontigs = runVelvet(contigs, region, refseq, kmersize, tmpdir, long=True, inputContigs=True, noref=noref, mutid=mutid, debug=debug)
 
         if newcontigs and n50(newcontigs) > n50(contigs):
             contigs = newcontigs
@@ -233,6 +251,7 @@ def asm(chr, start, end, bamfilename, reffile, kmersize, noref=False, recycle=Fa
         contig.rquals = rquals
         contig.mquals = mquals
     return contigs
+
 
 def main(args):
     '''
@@ -252,7 +271,11 @@ def main(args):
     start = int(start)
     end   = int(end)
 
-    contigs = asm(chr, start, end, args.bamFileName, reffile, int(args.kmersize), args.noref, args.recycle)
+    if not os.path.exists(args.tmpdir):
+        os.mkdir(args.tmpdir)
+        print "INFO\t" + now() + "\tcreated tmp directory: " + args.tmpdir
+
+    contigs = asm(chr, start, end, args.bamFileName, reffile, int(args.kmersize), args.tmpdir, args.noref, args.recycle)
 
     maxlen = 0
     maxeid = None
@@ -272,6 +295,7 @@ if __name__ == '__main__':
                         help='target .bam file, region specified in -r must exist')
     parser.add_argument('-k', '--kmersize', dest='kmersize', default=31,
                         help='kmer size for velvet, default=31')
+    parser.add_argument('-t', '--tmpdir', dest='tmpdir', default='addsv.tmp')
     parser.add_argument('--noref', action="store_true")
     parser.add_argument('--recycle', action="store_true")
     args = parser.parse_args()

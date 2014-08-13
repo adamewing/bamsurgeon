@@ -1,27 +1,47 @@
 #!/usr/bin/env python
 
-import sys,re
+import sys, re
+
+
+class Read:
+    def __init__(self, src):
+        self.src  = src  # read number
+        self.off  = None # offset in contig
+        self.name = None
+        self.seq  = None
+    def __str__(self):
+        return '\t'.join(map(str, (self.src, self.off, self.name, '\n'+self.seq)))
+
 
 class ContigReads:
     def __init__(self, eid):
-        self.eid = eid 
-        self.srcs = [] # read numbers from velvet
-        self.reads = [] # read names
-    def addsrc(self,src):
-        self.srcs.append(src)
+        self.eid = eid
+        self.reads = {} # read names
+
+    def addread(self,src):
+        #if src in self.reads:
+        #    sys.stderr.write("AMOS PROBLEM: src already in readlist\n")
+        self.reads[src] = Read(src)
+
     def getReadNames(self,seqs):
-        for src in self.srcs:
-            read = seqs.srcread[src]
-            self.reads.append(read)
-    def infodump(self):
-        for i in range(len(self.srcs)):
-            print self.srcs[i],self.reads[i]
+        for src, read in self.reads.iteritems():
+            self.reads[src].name = seqs.srcread[src]
+            self.reads[src].seq  = seqs.seqmap[seqs.srcread[src]]
+
+    def __str__(self):
+        output = []
+        for eid, read in self.reads.iteritems():
+            output.append(str(read))
+        return '\n'.join(output)
+
 
 class InputSeqs:
     def __init__(self,seqfile):
         self.srcread = {}  # read number --> read name
-        self.readnames = []  # read names
-        self.readseqs = []
+        self.seqmap  = {} # read name --> read seq
+
+        readnames = []
+        readseqs  = []
 
         f = open(seqfile,'r')
         read = None
@@ -31,22 +51,26 @@ class InputSeqs:
             if re.search('^>',line):
                 if read:
                     assert seq != ""
-                    self.readseqs.append(seq)
+                    readseqs.append(seq)
                     seq = ""
                 (read,src,n) = re.sub('^>','',line).strip().split()
                 assert read and src
                 self.srcread[src] = read
-                self.readnames.append(read)
+                readnames.append(read)
             else:
                 seq += line.strip()
+
         self.srcread[src] = read
-        self.readseqs.append(seq)
+        readseqs.append(seq)
+
+        self.seqmap = dict(zip(readnames,readseqs))
 
     def __str__(self):
         output = ""
-        for i in range(len(self.readnames)):
-            output += ">" + self.readnames[i] + "\n" + self.readseqs[i] + "\n"
+        for name, seq in self.seqmap.iteritems():
+            output += ">" + name + "\n" + seq + "\n"
         return output
+
 
 def contigreadmap(amosfile,seqs):
     '''
@@ -57,6 +81,7 @@ def contigreadmap(amosfile,seqs):
     inTLEblock = False
     CTGeid = None
     TLEsrc = None
+    TLEoff = None
     contig = None
     contigs = {} 
 
@@ -85,12 +110,17 @@ def contigreadmap(amosfile,seqs):
             else: # in TLE block
                 if re.search('^src:',line):
                     TLEsrc = re.sub('src:','',line)
-                    contig.addsrc(TLEsrc)
+                    contig.addread(TLEsrc)
                     #print "debug TLEsrc =",TLEsrc
+
+                if re.search('^off:',line):
+                    TLEoff = re.sub('off:', '', line)
+                    contig.reads[TLEsrc].off = int(TLEoff) # set read offset in contig
 
                 if re.search('}', line):
                     inTLEblock = False
                     TLEsrc = None
+                    TLEoff = None
                     #print "debug: left TLE block"
 
         else: # not in CTG block
@@ -99,6 +129,7 @@ def contigreadmap(amosfile,seqs):
                 inCTGblock = True
 
     return contigs
+
 
 if __name__ == '__main__':
     '''
@@ -110,4 +141,4 @@ if __name__ == '__main__':
         inputseqs = InputSeqs(seqfile)
         contigmap = contigreadmap(amosfile,inputseqs)
         for eid,contig in contigmap.iteritems():
-            contig.infodump()
+            print contig
