@@ -7,13 +7,13 @@ if len(sys.argv) == 2:
         lastend = 0
         lastchrom = None
         for line in sites:
-            chrom, start, end = line.strip().split()
+            chrom, start, end = line.strip().split()[:3]
             start = int(start)
             end   = int(end)
             if chrom != lastchrom:
                 lastend = 0
 
-            if end-lastend > 1000:
+            if end-lastend > 2000:
                 print line.strip()
 
             lastend = end

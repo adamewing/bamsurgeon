@@ -435,7 +435,7 @@ def dictlist(fn):
 
 
 def makemut(args, chrom, start, end, vaf, altbase, avoid):
-    mutid = chrom + ':' + str(start) + '-' + str(end) + ':' + str(vaf) + ':' + str(altbase)
+    mutid = chrom + '_' + str(start) + '_' + str(end) + '_' + str(vaf) + '_' + str(altbase)
     try:
         bamfile = pysam.Samfile(args.bamFileName, 'rb')
         bammate = pysam.Samfile(args.bamFileName, 'rb') # use for mates to avoid iterator problems
@@ -473,7 +473,7 @@ def makemut(args, chrom, start, end, vaf, altbase, avoid):
         mutmates = {} # same keys as outreads, keep track of mates
         numunmap = 0
         hasSNP = False
-        tmpoutbamname = "tmpbam." + str(uuid4()) + ".bam"
+        tmpoutbamname = args.tmpdir + "/" + mutid + ".tmpbam." + str(uuid4()) + ".bam"
         print "INFO\t" + now() + "\t" + mutid + "\tcreating tmp bam: ",tmpoutbamname
         outbam_muts = pysam.Samfile(tmpoutbamname, 'wb', template=bamfile)
         maxfrac = 0.0
@@ -707,9 +707,16 @@ def main(args):
     bamfile.close()
     tmpbams = []
 
+    if not os.path.exists(args.tmpdir):
+        os.mkdir(args.tmpdir)
+        print "INFO\t" + now() + "\tcreated tmp directory: " + args.tmpdir
+
     if not os.path.exists('addsnv_logs_' + os.path.basename(args.outBamFile)):
         os.mkdir('addsnv_logs_' + os.path.basename(args.outBamFile))
         print "INFO\t" + now() + "\tcreated directory: addsnv_logs_" + os.path.basename(args.outBamFile)
+
+    assert os.path.exists('addsnv_logs_' + os.path.basename(args.outBamFile)), "could not create output directory!"
+    assert os.path.exists(args.tmpdir), "could not create temporary directory!"
 
     pool = Pool(processes=int(args.procs))
     results = []
@@ -795,6 +802,7 @@ def run():
     parser.add_argument('--bwamem', action='store_true', default=False, help='realignment with BWA MEM (instead of backtrack)')
     parser.add_argument('--novoalign', action='store_true', default=False, help='realignment with novoalign')
     parser.add_argument('--novoref', default=None, help='novoalign reference, must be specified with --novoalign')
+    parser.add_argument('--tmpdir', default='addsnv.tmp', help='temporary directory (default=addsnv.tmp)')
     args = parser.parse_args()
     main(args)
 
