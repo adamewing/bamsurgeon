@@ -23,10 +23,6 @@ def modhead(header, rgid, fn):
     return header
 
 
-def getRGID(header):
-    return header['RG'][0]['ID']
-
-
 def usage():
     return "usage: " + sys.argv[0] + " <BAM with no readgroups>"
 
