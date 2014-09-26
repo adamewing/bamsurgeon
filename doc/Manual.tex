@@ -12,7 +12,7 @@
 \title{BAMSurgeon: Methods for spike-in mutations on BAM files}
 \author{Adam D. Ewing (adam.ewing@mater.uq.edu.au)}
 \begin{document}
- \date{May 22, 2014}
+ \date{September 25, 2014}
  \maketitle
 
 \section{Introduction}
@@ -64,9 +64,12 @@ BAMSurgeon is under rapid development driven by suggesting and bug reports from 
 usage: addsnv.py [-h] -v VARFILENAME -f BAMFILENAME -r REFFASTA -o OUTBAMFILE
                  [-s SNVFRAC] [-m MUTFRAC] [-n NUMSNVS] [-c CNVFILE]
                  [-d COVERDIFF] [-p PROCS] [--samtofastq SAMTOFASTQ]
-                 [--mindepth MINDEPTH] [--nomut] [--det] [--force] [--single]
-                 [--maxopen MAXOPEN] [--requirepaired] [--skipmerge]
-                 [--bwamem]
+                 [--mindepth MINDEPTH] [--minmutreads MINMUTREADS]
+                 [--avoidreads AVOIDREADS] [--nomut] [--ignoresnps] [--force]
+                 [--single] [--maxopen MAXOPEN] [--requirepaired]
+                 [--skipmerge] [--bwamem] [--novoalign] [--novoref NOVOREF]
+                 [--gsnap] [--gsnaprefname GSNAPREFNAME]
+                 [--gsnaprefdir GSNAPREFDIR] [--tmpdir TMPDIR]
 
 adds SNVs to reads, outputs modified reads as .bam along with mates
 
@@ -105,18 +108,26 @@ optional arguments:
   --avoidreads AVOIDREADS
                         file of read names to avoid (mutations will be skipped
                         if overlap)
-
   --nomut               dry run
-  --det                 deterministic base changes: make transitions only
+  --ignoresnps          make mutations even if there are non-reference alleles
+                        sharing the relevant reads
   --force               force mutation to happen regardless of nearby SNP or
                         low coverage
-  --single              input BAM is single-ended (default is paired-end)
+  --single              input BAM is simgle-ended (default is paired-end)
   --maxopen MAXOPEN     maximum number of open files during merge (default
                         1000)
   --requirepaired       skip mutations if unpaired reads are present
   --skipmerge           final output is tmp file to be merged
   --bwamem              realignment with BWA MEM (instead of backtrack)
-
+  --novoalign           realignment with novoalign
+  --novoref NOVOREF     novoalign reference, must be specified with
+                        --novoalign
+  --gsnap               realignment with gsnap
+  --gsnaprefname GSNAPREFNAME
+                        gsnap reference directory
+  --gsnaprefdir GSNAPREFDIR
+                        gsnap reference name
+  --tmpdir TMPDIR       temporary directory (default=addsnv.tmp)
 \end{verbatim}
 
 \subsection{Description}
@@ -166,6 +177,11 @@ optional arguments:
 \item --requirepaired : drop mutations where a paired end in the region cannot be located. However, it is probably better to correct the problem in the BAM file than to resort to using this option.
 \item --skipmerge : instead of replacing the mutated and realigned reads back into the original BAM, which is normally the final step, leave the addsnv.
 \item --bwamem : realign reads using bwa mem. The target BAM file should have also been aligned using bwa mem if this option is used.
+\item --novoalign : realign reads using novoalign (\url{http://www.novocraft.com}). The target BAM file should have also been aligned using novoalign if this option is used.
+\item --novoref : novoalign reference (generate with novoindex), required if using --novoalign option
+\item --gsnap : realign reads using GSNAP (\url{http://research-pub.gene.com/gmap/}). The target BAM file should have also been aligned using GSNAP if this option is used.
+\item --gsnaprefname : required if --gsnap is used, corresponds to the name (-d option) given to the index created with gmap\_build.
+\item --gsnaprefdir : required if --gsnap is used, corresponds to the directory (-D option) given to gmap\_build
 \item options not listed here are either brand new and the manual has not been updated as yet, or they are there for debugging and will be removed in the future.
 \end{itemize}
 
@@ -176,11 +192,14 @@ optional arguments:
 usage: addindel.py [-h] -v VARFILENAME -f BAMFILENAME -r REFFASTA -o
                    OUTBAMFILE [-s SNVFRAC] [-m MUTFRAC] [-n NUMSNVS]
                    [-c CNVFILE] [-d COVERDIFF] [-p PROCS]
-                   [--samtofastq SAMTOFASTQ] [--mindepth MINDEPTH] [--nomut]
-                   [--det] [--force] [--single] [--maxopen MAXOPEN]
-                   [--requirepaired] [--bwamem] [--skipmerge]
+                   [--samtofastq SAMTOFASTQ] [--mindepth MINDEPTH]
+                   [--minmutreads MINMUTREADS] [--avoidreads AVOIDREADS]
+                   [--nomut] [--det] [--force] [--single] [--maxopen MAXOPEN]
+                   [--requirepaired] [--bwamem] [--novoalign]
+                   [--novoref NOVOREF] [--gsnap] [--gsnaprefname GSNAPREFNAME]
+                   [--gsnaprefdir GSNAPREFDIR] [--skipmerge] [--tmpdir TMPDIR]
 
-adds SNVs to reads, outputs modified reads as .bam along with mates
+adds INDELs to reads, outputs modified reads as .bam along with mates
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -217,7 +236,6 @@ optional arguments:
   --avoidreads AVOIDREADS
                         file of read names to avoid (mutations will be skipped
                         if overlap)
-
   --nomut               dry run
   --det                 deterministic base changes: make transitions only
   --force               force mutation to happen regardless of nearby SNP or
@@ -227,8 +245,16 @@ optional arguments:
                         1000)
   --requirepaired       skip mutations if unpaired reads are present
   --bwamem              realignment with BWA MEM (instead of backtrack)
+  --novoalign           realignment with novoalign
+  --novoref NOVOREF     novoalign reference, must be specified with
+                        --novoalign
+  --gsnap               realignment with gsnap
+  --gsnaprefname GSNAPREFNAME
+                        gsnap reference directory
+  --gsnaprefdir GSNAPREFDIR
+                        gsnap reference name
   --skipmerge           final output is tmp file to be merged
-
+  --tmpdir TMPDIR       temporary directory (default=addindel.tmp)
 \end{verbatim}
 
 \subsection{Description}
@@ -256,7 +282,8 @@ usage: addsv.py [-h] -v VARFILENAME -f BAMFILENAME -r REFFASTA -o OUTBAMFILE
                 [--maxctglen MAXCTGLEN] [-n MAXMUTS] [-c CNVFILE]
                 [--ismean ISMEAN] [--issd ISSD] [-p PROCS] [--inslib INSLIB]
                 [--delay DELAY] [--nomut] [--noremap] [--noref] [--recycle]
-                [--bwamem] [--skipmerge]
+                [--bwamem] [--novoalign] [--novoref NOVOREF] [--skipmerge]
+                [--debug] [--tmpdir TMPDIR]
 
 adds SNVs to reads, outputs modified reads as .bam along with mates
 
@@ -266,7 +293,7 @@ optional arguments:
                         whitespace-delimited target regions to try and add a
                         SNV: chrom,start,stop,action,seqfile (if
                         insertion),TSDlength (if insertion)
-  -f BAMFILENAME, --sambamfile BAMFILENAME
+  -f BAMFILENAME, --bamfile BAMFILENAME
                         sam/bam file from which to obtain reads
   -r REFFASTA, --reference REFFASTA
                         reference genome, fasta indexed with bwa index -a
@@ -300,7 +327,14 @@ optional arguments:
   --recycle
   --bwamem              realign with bwa mem (original shuld be aligned with
                         mem as well!)
-  --skipmerge
+  --novoalign           realignment with novoalign
+  --novoref NOVOREF     novoalign reference, must be specified with
+                        --novoalign
+  --skipmerge           do not merge spike-in reads back into original BAM
+  --debug               output read tracking info to debug file, retain all
+                        intermediates
+  --tmpdir TMPDIR       temporary directory (default=addsv.tmp)
+
 
 
 \end{verbatim}
@@ -355,7 +389,7 @@ optional arguments:
 \end{figure}
 
 \section{Testing}
-The \texttt{test/} directory contains scripts useful for testing bamsurgeon installations, one for SNVs and one for SVs.
+The \texttt{test/} directory contains scripts useful for testing bamsurgeon's various modes, the primary ones are as follows:
 \subsection{Testing addsnv.py}
 The script {test/test\_snv.sh} may be run with no parameters to display a usage statement:
 \begin{verbatim}

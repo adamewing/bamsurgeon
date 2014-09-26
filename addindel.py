@@ -350,6 +350,79 @@ def remap_novoalign(bamfn, threads, bwaref, samtofastq, novoref, mutid='null', p
         os.remove(fastq)
 
 
+def remap_gsnap(bamfn, threads, bwaref, samtofastq, gsnaprefdir, gsnaprefname, mutid='null', paired=True):
+    """ call gsnap and samtools to remap .bam
+    """
+    assert os.path.exists(samtofastq)
+    assert os.path.exists(gsnaprefdir)
+    assert bamreadcount(bamfn) > 0 
+
+    sam_out  = bamfn + '.realign.sam'
+    sort_out = bamfn + '.realign.sorted'
+
+    print "INFO\t" + now() + "\t" + mutid + "\tconverting " + bamfn + " to fastq\n"
+    fastq = bamtofastq(bamfn, samtofastq, threads=threads, paired=paired, twofastq=True)
+
+    sam_cmd = []
+
+    if paired:
+        sam_cmd = ['gsnap', '-D', gsnaprefdir, '-d', gsnaprefname, '-t', str(threads), '--quality-protocol=sanger', 
+                   '-M', '2', '-n', '10', '-B', '2', '-i', '1', '--pairmax-dna=1000', '--terminal-threshold=1000', 
+                   '--gmap-mode=none', '--clip-overlap', '-A', 'sam', '-a', 'paired', fastq[0], fastq[1]]
+    else:
+        sam_cmd = ['gsnap', '-D', gsnaprefdir, '-d', gsnaprefname, '-t', str(threads), '--quality-protocol=sanger', 
+                   '-M', '2', '-n', '10', '-B', '2', '-i', '1', '--terminal-threshold=1000', '--gmap-mode=none', 
+                   '--clip-overlap', '-A', 'sam', fastq[0]]
+
+    assert len(sam_cmd) > 0
+
+    bam_cmd  = ['samtools', 'view', '-bt', bwaref + '.fai', '-o', bamfn, sam_out]
+    sort_cmd = ['samtools', 'sort', '-@', str(threads), '-m', '10000000000', bamfn, sort_out]
+    idx_cmd  = ['samtools', 'index', bamfn]
+
+    print "INFO\t" + now() + "\t" + mutid + "\taligning " + str(fastq) + " with gsnap\n"
+    with open(sam_out, 'w') as sam:
+        p = subprocess.Popen(sam_cmd, stdout=subprocess.PIPE)
+        for line in p.stdout:
+            sam.write(line)
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\twriting " + sam_out + " to BAM...\n")
+    subprocess.call(bam_cmd)
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tdeleting SAM: " + sam_out + "\n")
+    os.remove(sam_out)
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tsorting output: " + ' '.join(sort_cmd) + "\n")
+    subprocess.call(sort_cmd)
+
+    sort_out += '.bam'
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremove original bam:" + bamfn + "\n")
+    os.remove(bamfn)
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\trename sorted bam: " + sort_out + " to original name: " + bamfn + "\n")
+    move(sort_out, bamfn)
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tindexing: " + ' '.join(idx_cmd) + "\n")
+    subprocess.call(idx_cmd)
+
+    # check if BAM readcount looks sane
+    if paired:
+        if bamreadcount(bamfn) < fastqreadcount(fastq[0]) + fastqreadcount(fastq[1]): 
+            raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
+    else:
+        if bamreadcount(bamfn) < fastqreadcount(fastq): 
+            raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
+
+    if paired:
+        for fq in fastq:
+            sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fq + "\n")
+            os.remove(fq)
+    else:
+        sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fastq + "\n")
+        os.remove(fastq)
+
+
 def bamtofastq(bam, samtofastq, threads=1, paired=True, twofastq=False):
     ''' if twofastq is True output two fastq files instead of interleaved (default) for paired-end'''
     assert os.path.exists(samtofastq)
@@ -692,6 +765,8 @@ def makemut(args, chrom, start, end, vaf, ins, avoid):
                     remap_bwamem(tmpoutbamname, 1, args.refFasta, args.samtofastq, mutid=mutid, paired=False)
                 elif args.novoalign:
                     remap_novoalign(tmpoutbamname, 1, args.refFasta, args.samtofastq, args.novoref, mutid=mutid, paired=False)
+                elif args.gsnap:
+                    remap_gsnap(tmpoutbamname, 1, args.refFasta, args.samtofastq, args.gsnaprefdir, args.gsnaprefname, mutid=mutid, paired=False)
                 else:
                     remap_single(tmpoutbamname, 1, args.refFasta, mutid=mutid)
             else:
@@ -699,6 +774,8 @@ def makemut(args, chrom, start, end, vaf, ins, avoid):
                     remap_bwamem(tmpoutbamname, 1, args.refFasta, args.samtofastq, mutid=mutid, paired=True)
                 elif args.novoalign:
                     remap_novoalign(tmpoutbamname, 1, args.refFasta, args.samtofastq, args.novoref, mutid=mutid, paired=True)
+                elif args.gsnap:
+                    remap_gsnap(tmpoutbamname, 1, args.refFasta, args.samtofastq, args.gsnaprefdir, args.gsnaprefname, mutid=mutid, paired=True)
                 else:
                     remap_paired(tmpoutbamname, 1, args.refFasta, mutid=mutid)
 
@@ -754,16 +831,20 @@ def main(args):
     bedfile = open(args.varFileName, 'r')
     reffile = pysam.Fastafile(args.refFasta)
 
-    if (args.bwamem or args.novoalign) and args.samtofastq is None:
-        sys.stderr.write("ERROR\t" + now() + "\t --samtofastq must be specified with --bwamem or --novoalign option")
+    if (args.bwamem or args.novoalign or args.gsnap) and args.samtofastq is None:
+        sys.stderr.write("ERROR\t" + now() + "\t --samtofastq must be specified with --bwamem or --novoalign option\n")
         sys.exit(1)
 
-    if args.bwamem and args.novoalign:
-        sys.stderr.write("ERROR\t" + now() + "\t --bwamem and --novoalign cannot be specified together")
+    if sum((args.bwamem, args.novoalign, args.gsnap)) > 1:
+        sys.stderr.write("ERROR\t" + now() + "\t only one aligner allowed e.g. --bwamem and --novoalign cannot be specified together\n")
         sys.exit(1)
 
     if args.novoalign and args.novoref is None:
-        sys.stderr.write("ERROR\t" + now() + "\t --novoref must be be specified with --novoalign")
+        sys.stderr.write("ERROR\t" + now() + "\t --novoref must be be specified with --novoalign\n")
+        sys.exit(1)
+
+    if args.gsnap and (args.gsnaprefname is None or args.gsnaprefdir is None):
+        sys.stderr.write("ERROR\t" + now() + "\t --gsnaprefname and --gsnaprefdir must be be specified with --gsnap\n")
         sys.exit(1)
 
     # load readlist to avoid, if specified
@@ -874,6 +955,9 @@ def run():
     parser.add_argument('--bwamem', action='store_true', default=False, help='realignment with BWA MEM (instead of backtrack)')
     parser.add_argument('--novoalign', action='store_true', default=False, help='realignment with novoalign')
     parser.add_argument('--novoref', default=None, help='novoalign reference, must be specified with --novoalign')
+    parser.add_argument('--gsnap', action='store_true', default=False, help='realignment with gsnap')
+    parser.add_argument('--gsnaprefname', default=None, help='gsnap reference directory')
+    parser.add_argument('--gsnaprefdir', default=None, help='gsnap reference name')
     parser.add_argument('--skipmerge', action='store_true', default=False, help="final output is tmp file to be merged")
     parser.add_argument('--tmpdir', default='addindel.tmp', help='temporary directory (default=addindel.tmp)')
     args = parser.parse_args()
