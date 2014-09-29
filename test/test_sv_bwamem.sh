@@ -27,7 +27,7 @@ then
     exit 65
 fi
 
-../addsv.py -p 1 -v ../test_data/test_sv.txt -f ../test_data/testregion.bam -r $1 -o ../test_data/testregion_sv_mut.bam -c ../test_data/test_cnvlist.txt.gz --bwamem
+../addsv.py -p 1 -v ../test_data/test_sv.txt -f ../test_data/testregion.bam -r $1 -o ../test_data/testregion_sv_mut.bam -c ../test_data/test_cnvlist.txt.gz --bwamem --keepsecondary --debug
 if [ $? -ne 0 ]
 then
   echo "addsv.py failed."
