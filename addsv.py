@@ -736,6 +736,10 @@ def main(args):
     tmpbams = [] # temporary BAMs, each holds the realigned reads for one mutation
     exclfns = [] # 'exclude' files store reads to be removed from the original BAM due to deletions
 
+    if not os.path.exists(args.bamFileName + '.bai'):
+        sys.stderr.write("ERROR\t" + now() + "\tinput bam must be indexed, not .bai file found for " + args.bamFileName + " \n")
+        sys.exit(1)
+
     if args.bwamem and args.novoalign:
         sys.stderr.write("ERROR\t" + now() + "\t --bwamem and --novoalign cannot be specified together")
         sys.exit(1)

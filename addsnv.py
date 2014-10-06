@@ -759,6 +759,10 @@ def main(args):
     bedfile = open(args.varFileName, 'r')
     reffile = pysam.Fastafile(args.refFasta)
 
+    if not os.path.exists(args.bamFileName + '.bai'):
+        sys.stderr.write("ERROR\t" + now() + "\tinput bam must be indexed, not .bai file found for " + args.bamFileName + " \n")
+        sys.exit(1)
+
     if (args.bwamem or args.novoalign or args.gsnap) and args.samtofastq is None:
         sys.stderr.write("ERROR\t" + now() + "\t --samtofastq must be specified with --bwamem or --novoalign option\n")
         sys.exit(1)
