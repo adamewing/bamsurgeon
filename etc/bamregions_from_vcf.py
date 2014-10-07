@@ -38,7 +38,7 @@ def main(args):
     assert os.path.exists(args.vcf), "VCF file not found: " + args.vcf
     assert args.vcf.endswith('.vcf') or args.vcf.endswith('.vcf.gz'), "not a VCF file based on extension " + args.vcf
 
-    fetchregions(args.bam, args.out, args.vcf, window=args.window)
+    fetchregions(args.bam, args.out, args.vcf, window=int(args.window))
 
 
 if __name__ == '__main__':
