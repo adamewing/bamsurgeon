@@ -665,7 +665,7 @@ def makemut(args, chrom, start, end, vaf, ins, avoid):
                                 numunmap += 1
 
                             # abort if mutation list getting too long
-                            if len(mutreads) > 200: # FIXME maxdepth should be a parameter
+                            if len(mutreads) > args.maxdepth: # FIXME maxdepth should be a parameter
                                 sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tdepth at site is greater than cutoff, aborting mutation.\n")
                                 outbam_muts.close()
                                 os.remove(tmpoutbamname)
@@ -944,6 +944,7 @@ def run():
     parser.add_argument('-p', '--procs', dest='procs', default=1, help="split into multiple processes (default=1)")
     parser.add_argument('--samtofastq', default=None, help='path to picard SamToFastq.jar')
     parser.add_argument('--mindepth', default=10, help='minimum read depth to make mutation')
+    parser.add_argument('--maxdepth', default=200, help='maximum read depth to make mutation')
     parser.add_argument('--minmutreads', default=3, help='minimum number of mutated reads to output per site')
     parser.add_argument('--avoidreads', default=None, help='file of read names to avoid (mutations will be skipped if overlap)')
     parser.add_argument('--nomut', action='store_true', default=False, help="dry run")
