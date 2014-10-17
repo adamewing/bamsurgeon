@@ -15,26 +15,9 @@ from uuid import uuid4
 from re import sub
 from shutil import move
 from multiprocessing import Pool, Value, Lock
-from collections import Counter
 
 sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)
 sys.stderr = os.fdopen(sys.stderr.fileno(), 'w', 0)
-
-
-def majorbase(basepile):
-    """returns tuple: (major base, count)
-    """
-    return Counter(basepile).most_common()[0]
-
-
-def minorbase(basepile):
-    """returns tuple: (minor base, count)
-    """
-    c = Counter(basepile)
-    if len(list(c.elements())) > 1:
-        return c.most_common(2)[-1]
-    else:
-        return c.most_common()[0]
 
 
 def countReadCoverage(bam,chrom,start,end):
@@ -364,55 +347,6 @@ def remap_gsnap(bamfn, threads, bwaref, samtofastq, gsnaprefdir, gsnaprefname, m
     else:
         sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fastq + "\n")
         os.remove(fastq)
-
-
-def bamtofastq(bam, samtofastq, threads=1, paired=True, twofastq=False):
-    ''' if twofastq is True output two fastq files instead of interleaved (default) for paired-end'''
-    assert os.path.exists(samtofastq)
-    assert bam.endswith('.bam')
-
-    outfq = None
-    outfq_pair = None
-
-    cmd = ['java', '-XX:ParallelGCThreads=' + str(threads), '-Xmx4g', '-jar', samtofastq, 'VALIDATION_STRINGENCY=SILENT', 'INPUT=' + bam]
-    if paired:
-        if twofastq: # two-fastq paired end
-            outfq_pair = [sub('bam$', '1.fastq', bam), sub('bam$', '2.fastq', bam)]
-            cmd.append('F=' + outfq_pair[0])
-            cmd.append('F2=' + outfq_pair[1])
-        else: # interleaved paired-end
-            outfq = sub('bam$', 'fastq', bam)
-            cmd.append('FASTQ=' + outfq)
-            cmd.append('INTERLEAVE=true')
-    else:
-        outfq = sub('bam$', 'fastq', bam)
-        cmd.append('FASTQ=' + outfq)
-
-    sys.stdout.write("INFO\t" + now() + "\tconverting BAM " + bam + " to FASTQ\n")
-    subprocess.call(cmd)
-
-    if outfq is not None:
-        assert os.path.exists(outfq) # conversion failed
-        return outfq
-
-    if outfq_pair is not None:
-        assert os.path.exists(outfq_pair[0]) and os.path.exists(outfq_pair[1])
-        return outfq_pair
-
-    return None
-
-
-def bamreadcount(bamfile):
-    bam = pysam.Samfile(bamfile, 'rb')
-    if os.path.exists(bamfile + '.bai'):
-        return bam.mapped + bam.unmapped
-    else:
-        return(list(bam.fetch(until_eof=True)))        
-
-
-def fastqreadcount(fastqfile):
-    assert not fastqfile.endswith('gz') # not supported yet
-    return sum(1 for line in open(fastqfile))/4
 
 
 #########
