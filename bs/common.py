@@ -5,9 +5,11 @@ import datetime
 import subprocess
 import pysam
 import os
+import sys
 
 from collections import Counter
 from shutil import move
+from re import sub
 
 
 def now():
@@ -79,6 +81,7 @@ def mergebams(bamlist, outbamfn, maxopen=100, debug=False):
         for bamfile in bamlist:
             if os.path.exists(bamfile):
                 os.remove(bamfile)
+            if os.path.exists(bamfile + '.bai'):
                 os.remove(bamfile + '.bai')
 
 
