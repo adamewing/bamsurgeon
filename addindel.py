@@ -846,6 +846,12 @@ def main(args):
     if args.gsnap and (args.gsnaprefname is None or args.gsnaprefdir is None):
         sys.stderr.write("ERROR\t" + now() + "\t --gsnaprefname and --gsnaprefdir must be be specified with --gsnap\n")
         sys.exit(1)
+        
+    if args.numtargeted is not None:
+        if int(args.numsnvs) != 0 and int(args.numtargeted) > int(args.numsnvs):
+            # number of snvs tried cannot be smaller than number of snvs targeted
+            sys.stderr.write("WARNING\t" + now() + "\t --numtargeted ignored\n")
+            args.numtargeted = None
 
     # load readlist to avoid, if specified
     avoid = None
@@ -874,9 +880,15 @@ def main(args):
     pool = Pool(processes=int(args.procs))
     results = []
 
+    nmutated = 0
     ntried = 0
     for bedline in bedfile:
-        if ntried < int(args.numsnvs) or int(args.numsnvs) == 0:
+        if args.numtargeted is None:
+            continue_assert = ntried < int(args.numsnvs) or int(args.numsnvs) == 0
+        else:
+            continue_assert = nmutated < int(args.numtargeted) and (ntried < int(args.numsnvs) or int(args.numsnvs) == 0)
+
+        if continue_assert:
             c = bedline.strip().split()
             chrom = c[0]
             start = int(c[1])
@@ -891,6 +903,12 @@ def main(args):
 
             # make mutation (submit job to thread pool)
             result = pool.apply_async(makemut, [args, chrom, start, end, vaf, ins, avoid])
+
+            if result.get() is not None and result.get():
+                # result = None if skipped
+                # result = [] if dropped because of nearby SNPs
+                nmutated += 1
+
             results.append(result)
             ntried += 1
 
@@ -939,6 +957,7 @@ def run():
     parser.add_argument('-s', '--snvfrac', dest='snvfrac', default=1, help='maximum allowable linked SNP MAF (for avoiding haplotypes) (default = 1)')
     parser.add_argument('-m', '--mutfrac', dest='mutfrac', default=0.5, help='allelic fraction at which to make SNVs (default = 0.5)')
     parser.add_argument('-n', '--numsnvs', dest='numsnvs', default=0, help="maximum number of mutations to try (default: entire input)")
+    parser.add_argument('-t', '--numtargeted',dest='numtargeted', default=None, help="targeted number of mutations to achieve (default: undefined, rely on -n option)")
     parser.add_argument('-c', '--cnvfile', dest='cnvfile', default=None, help="tabix-indexed list of genome-wide absolute copy number values (e.g. 2 alleles = no change)")
     parser.add_argument('-d', '--coverdiff', dest='coverdiff', default=0.1, help="allow difference in input and output coverage (default=0.1)")
     parser.add_argument('-p', '--procs', dest='procs', default=1, help="split into multiple processes (default=1)")
