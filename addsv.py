@@ -674,7 +674,7 @@ if __name__ == '__main__':
     parser.add_argument('--noref', action='store_true', default=False, 
                         help="do not perform reference based assembly")
     parser.add_argument('--recycle', action='store_true', default=False)
-    parser.add_argument('--bwamem', action='store_true', default=False, help='realign with bwa mem (original shuld be aligned with mem as well!)')
+    parser.add_argument('--bwamem', action='store_true', default=False, help='realign with bwa mem (original should be aligned with mem as well!)')
     parser.add_argument('--novoalign', action='store_true', default=False, help='realignment with novoalign')
     parser.add_argument('--novoref', default=None, help='novoalign reference, must be specified with --novoalign')
     parser.add_argument('--skipmerge', action='store_true', default=False, help='do not merge spike-in reads back into original BAM')
