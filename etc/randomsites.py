@@ -43,9 +43,6 @@ class Genome:
             if not avoidN:
                 goodmut = True
 
-        # debug
-        print self.ref.fetch(rchrom, rpos-1, rpos+mutlen)
-
         return rchrom, rpos, rpos + mutlen
 
 
