@@ -851,10 +851,6 @@ def main(args):
                 # result = None if skipped
                 # result = [] if dropped because of nearby SNPs
                 nmutated += 1
-            # Testing code
-            # print '\n\n\n\n\n'
-            # print result.get()
-            # print '\n\n\n++++++++++++++++++++++++++++\n%d\n++++++++++++++++++++++++++++++++\n\n\n' % nmutated
 
             results.append(result)
             ntried += 1
