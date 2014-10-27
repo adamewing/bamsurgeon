@@ -34,7 +34,7 @@ def remap_bwamem(fq1, fq2, threads, bwaref, outbam, deltmp=True, mutid='null'):
     sam_out  = basefn + '.sam'
     sort_out = basefn + '.sorted'
 
-    sam_cmd  = ['bwa', 'mem', '-t', str(threads), '-M', bwaref, fq1, fq2]
+    sam_cmd  = ['bwa', 'mem', '-t', str(threads), '-M', '-Y', bwaref, fq1, fq2]
 
     bam_cmd  = ['samtools', 'view', '-bt', bwaref + '.fai', '-o', outbam, sam_out]
     sort_cmd = ['samtools', 'sort', '-@', str(threads), '-m', '10000000000', outbam, sort_out]
@@ -468,14 +468,14 @@ def align(qryseq, refseq):
     return best
 
 
-def replace(origbamfile, mutbamfile, outbamfile, excludefile):
+def replace(origbamfile, mutbamfile, outbamfile, excludefile, keepsecondary=False):
     ''' open .bam file and call replacereads
     '''
     origbam = pysam.Samfile(origbamfile, 'rb')
     mutbam  = pysam.Samfile(mutbamfile, 'rb')
     outbam  = pysam.Samfile(outbamfile, 'wb', template=origbam)
 
-    rr.replaceReads(origbam, mutbam, outbam, excludefile=excludefile, allreads=True)
+    rr.replaceReads(origbam, mutbam, outbam, excludefile=excludefile, allreads=True, keepsecondary=keepsecondary)
 
     origbam.close()
     mutbam.close()
@@ -736,6 +736,10 @@ def main(args):
     tmpbams = [] # temporary BAMs, each holds the realigned reads for one mutation
     exclfns = [] # 'exclude' files store reads to be removed from the original BAM due to deletions
 
+    if not os.path.exists(args.bamFileName + '.bai'):
+        sys.stderr.write("ERROR\t" + now() + "\tinput bam must be indexed, not .bai file found for " + args.bamFileName + " \n")
+        sys.exit(1)
+
     if args.bwamem and args.novoalign:
         sys.stderr.write("ERROR\t" + now() + "\t --bwamem and --novoalign cannot be specified together")
         sys.exit(1)
@@ -841,7 +845,7 @@ def main(args):
 
     else:
         print "INFO\t" + now() + "\tswapping reads into original and writing to ", args.outBamFile
-        replace(args.bamFileName, mergedtmp, args.outBamFile, excl_merged)
+        replace(args.bamFileName, mergedtmp, args.outBamFile, excl_merged, keepsecondary=args.keepsecondary)
 
         if not args.debug:
             os.remove(excl_merged)
@@ -895,6 +899,7 @@ if __name__ == '__main__':
     parser.add_argument('--novoalign', action='store_true', default=False, help='realignment with novoalign')
     parser.add_argument('--novoref', default=None, help='novoalign reference, must be specified with --novoalign')
     parser.add_argument('--skipmerge', action='store_true', default=False, help='do not merge spike-in reads back into original BAM')
+    parser.add_argument('--keepsecondary', action='store_true', default=False, help='keep secondary reads in final BAM')
     parser.add_argument('--debug', action='store_true', default=False, help='output read tracking info to debug file, retain all intermediates')
     parser.add_argument('--tmpdir', default='addsv.tmp', help='temporary directory (default=addsv.tmp)')
     args = parser.parse_args()

@@ -76,7 +76,7 @@ def compare_ref(targetbam, donorbam):
     return True
     
 
-def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=None, allreads=False, keepqual=False, progress=False):
+def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=None, allreads=False, keepqual=False, progress=False, keepsecondary=False):
     ''' targetbam, donorbam, and outputbam are pysam.Samfile objects
         outputbam must be writeable and use targetbam as template
         read names in excludefile will not appear in final output
@@ -93,11 +93,13 @@ def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=No
         exclude = getExcludedReads(excludefile)
 
     # load reads from donorbam into dict 
-    sys.stderr.write("loading donor reads into dictionary...\n")
+    sys.stdout.write("loading donor reads into dictionary...\n")
     nr = 0
     rdict = {}
+    secondary = [] # track secondary alignments, if specified
     excount = 0 # number of excluded reads
     nullcount = 0 # number of null reads
+
     for read in donorbam.fetch(until_eof=True):
         if read.seq and not read.is_secondary and not (read.flag & 0x800): # sanity check - don't include null reads, secondary and supplementary alignments
             if read.qname not in exclude:
@@ -115,10 +117,12 @@ def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=No
                 nr += 1
             else: # excluded
                 excount += 1
+        elif read.is_secondary and keepsecondary:
+            secondary.append(read)
         else: # no seq!
             nullcount += 1
 
-    sys.stderr.write("loaded " + str(nr) + " reads, (" + str(excount) + " excluded, " + str(nullcount) + " null or secondary --> ignored)\n")
+    sys.stdout.write("loaded " + str(nr) + " reads, (" + str(excount) + " excluded, " + str(nullcount) + " null or secondary --> ignored)\n")
 
     excount = 0
     recount = 0 # number of replaced reads
@@ -128,7 +132,7 @@ def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=No
 
         prog += 1
         if progress and prog % 10000000 == 0:
-            sys.stderr.write("processed " + str(prog) + " reads.\n")
+            sys.stdout.write("processed " + str(prog) + " reads.\n")
 
         if not read.is_secondary and not (read.flag & 0x800) and read.qname not in exclude:
             pairname = 'F' # read is first in pair
@@ -147,9 +151,9 @@ def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=No
                     try:
                         rdict[extqname].qual = read.qual
                     except ValueError as e:
-                        sys.stderr.write("error replacing quality score for read: " + str(rdict[extqname].qname) + " : " + str(e) + "\n")
-                        sys.stderr.write("donor:  " + str(rdict[extqname]) + "\n")
-                        sys.stderr.write("target: " + str(read) + "\n")
+                        sys.stdout.write("error replacing quality score for read: " + str(rdict[extqname].qname) + " : " + str(e) + "\n")
+                        sys.stdout.write("donor:  " + str(rdict[extqname]) + "\n")
+                        sys.stdout.write("target: " + str(read) + "\n")
                         sys.exit(1)
 
                 rdict[extqname] = cleanup(rdict[extqname],read,RG)
@@ -162,7 +166,13 @@ def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=No
         else:
             excount += 1
 
-    sys.stderr.write("replaced " + str(recount) + " reads (" + str(excount) + " excluded )\n")
+    sys.stdout.write("replaced " + str(recount) + " reads (" + str(excount) + " excluded )\n")
+
+    if keepsecondary:
+        for secread in secondary:
+            outputbam.write(secread)
+
+    sys.stdout.write("kept " + str(len(secondary)) + " secondary reads.\n")
 
     nadded = 0
     # dump the unused reads from the donor if requested with --all
@@ -172,36 +182,31 @@ def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=No
                 rdict[extqname] = cleanup(rdict[extqname],None,RG)
                 outputbam.write(rdict[extqname])
                 nadded += 1
-        sys.stderr.write("added " + str(nadded) + " reads due to --all\n")
+        sys.stdout.write("added " + str(nadded) + " reads due to --all\n")
+
 
 def main(args):
     targetbam = pysam.Samfile(args.targetbam, 'rb')
     donorbam  = pysam.Samfile(args.donorbam, 'rb')
     outputbam = pysam.Samfile(args.outputbam, 'wb', template=targetbam)
 
-    replaceReads(targetbam, donorbam, outputbam, args.namechange, args.exclfile, args.all, args.keepqual, args.progress)
+    replaceReads(targetbam, donorbam, outputbam, args.namechange, args.exclfile, args.all, args.keepqual, args.progress, args.keepsecondary)
 
     targetbam.close()
     donorbam.close()
     outputbam.close()
 
+
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description='replaces aligned reads in bamfile1 with aligned reads from bamfile2')
-    parser.add_argument('-b', '--bam', dest='targetbam', required=True,
-                        help='original .bam')
-    parser.add_argument('-r', '--replacebam', dest='donorbam', required=True,
-                        help='.bam with reads to replace original bam')
-    parser.add_argument('-o', '--outputbam', dest='outputbam', required=True, 
-                        help="name for new .bam output")
-    parser.add_argument('-n', '--namechange', dest='namechange', default=None, 
-                        help="change all read names by prepending string (passed as -n [string])")
-    parser.add_argument('-x', '--exclude', dest='exclfile', default=None,
-                        help="file containing a list of read names to ignore (exclude from output)")
-    parser.add_argument('--all', action='store_true', default=False, 
-                        help="append reads that don't match target .bam")
-    parser.add_argument('--keepqual', action='store_true', default=False, 
-                        help="keep original quality scores, replace read and mapping only")
-    parser.add_argument('--progress', action='store_true', default=False,
-                        help="output progress every 10M reads")
+    parser.add_argument('-b', '--bam', dest='targetbam', required=True, help='original .bam')
+    parser.add_argument('-r', '--replacebam', dest='donorbam', required=True, help='.bam with reads to replace original bam')
+    parser.add_argument('-o', '--outputbam', dest='outputbam', required=True, help="name for new .bam output")
+    parser.add_argument('-n', '--namechange', dest='namechange', default=None, help="change all read names by prepending string (passed as -n [string])")
+    parser.add_argument('-x', '--exclude', dest='exclfile', default=None, help="file containing a list of read names to ignore (exclude from output)")
+    parser.add_argument('--all', action='store_true', default=False, help="append reads that don't match target .bam")
+    parser.add_argument('--keepqual', action='store_true', default=False, help="keep original quality scores, replace read and mapping only")
+    parser.add_argument('--progress', action='store_true', default=False, help="output progress every 10M reads")
+    parser.add_argument('--keepsecondary', action='store_true', default=False, help='keep secondary reads in final BAM')
     args = parser.parse_args()
     main(args)

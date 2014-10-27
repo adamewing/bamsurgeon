@@ -1,155 +1,153 @@
 #!/usr/bin/env python
 
-import argparse
 import random
-import pysam
-import re
-import subprocess
+import argparse
+
+'''
+http://hgdownload.cse.ucsc.edu/admin/exe/linux.x86_64/fetchChromSizes
+'''
+
+class Genome:
+    def __init__(self, gfn):
+        ''' gfn = genome file name '''
+        self.chrlen = {} # length of each chromosome
+        self.chrmap = [] # used for picking chromosomes
+
+        bp = 0
+        bins = 100000
+
+        with open(gfn, 'r') as g:
+            for line in g:
+                chrom, len = line.strip().split()
+                self.chrlen[chrom] = int(len)
+                bp += int(len)
+
+        for chrom, len in self.chrlen.iteritems():
+            self.chrmap += [chrom] * int(float(len) / float(bp) * bins)
+
+    def pick(self):
+        ''' return a random chromosome and position '''
+        rchrom = random.choice(self.chrmap)
+        rpos   = int(random.uniform(1, self.chrlen[rchrom]))
+
+        return rchrom, rpos
+
+
+def randomseq(len):
+    ''' make a random DNA sequence '''
+    return ''.join([random.choice(['A','T','G','C']) for _ in range(int(len))])
+    
+
+def randomsv():
+    ''' random SV information '''
+    i = random.randint(0,3)
+    if i == 0: # DEL
+        dfrac = random.uniform(0.5,1)
+        return 'DEL ' + str(dfrac)
+    if i == 1: # INS
+        tsdlen = random.randint(0,30)
+        return 'INS RND ' + str(tsdlen)
+    if i == 2: # INV
+        return 'INV'
+    if i == 3: # DUP
+        ndups = random.randint(1,4)
+        return 'DUP ' + str(ndups)
+
+
+def betafunc(a,b):
+    ''' return appropriate function from random class '''
+    return lambda : random.betavariate(float(a), float(b))
+
+
+def scalefunc(min, max):
+    ''' return func for rescaling value from range 0,1 to min,max '''
+    min, max = float(min), float(max)
+    return lambda x : float(x) * (max-min) + min
+
+
+def run_snv(g, args):
+    ''' generate input for addsnv.py '''
+    vaf = betafunc(args.vafbeta1, args.vafbeta2)
+    vafscale = scalefunc(args.minvaf, args.maxvaf)
+
+    for _ in range(int(args.numpicks)):
+        rchrom, rstart = g.pick()
+        info = [rchrom, rstart, rstart, vafscale(vaf())]
+        print '\t'.join(map(str, info))
+
+
+def run_indel(g, args):
+    ''' generate input for addindel.py '''
+    vaf = betafunc(args.vafbeta1, args.vafbeta2)
+    len = betafunc(args.lenbeta1, args.lenbeta2)
+
+    vafscale = scalefunc(args.minvaf, args.maxvaf)
+    lenscale = scalefunc(args.minlen, args.maxlen)
+
+    for _ in range(int(args.numpicks)):
+        rchrom, rstart = g.pick()
+        if random.uniform(0,1) < 0.5: # deletion
+            info = [rchrom, rstart, rstart + int(lenscale(len())), vafscale(vaf()), 'DEL']
+        else: # insertion
+            info = [rchrom, rstart, rstart, vafscale(vaf()), 'INS', randomseq(int(lenscale(len())))]
+
+        print '\t'.join(map(str, info))
+
+
+def run_sv(g, args):
+    ''' generate input for addsv.py '''
+    vaf = betafunc(args.vafbeta1, args.vafbeta2)
+    len = betafunc(args.lenbeta1, args.lenbeta2)
+
+    vafscale = scalefunc(args.minvaf, args.maxvaf)
+    lenscale = scalefunc(args.minlen, args.maxlen)
+
+    with open(args.cnvfile, 'w') as cnv:
+        for _ in range(int(args.numpicks)):
+            rchrom, rstart = g.pick()
+            rend = rstart + int(lenscale(len()))
+            info = [rchrom, rstart, rend, randomsv()]
+            cnvinfo = [rchrom, rstart, rend, 1.0/(vafscale(vaf()))]
+            print '\t'.join(map(str, info))
+            cnv.write('\t'.join(map(str, cnvinfo)) + '\n')
 
 def main(args):
+    if args.seed is not None:
+        random.seed(int(args.seed))
 
-    genome = pysam.Fastafile(args.fastaFile)
+    g = Genome(args.genome)
 
-    maptabix = None
-    if args.maptabix:
-        maptabix = pysam.Tabixfile(args.maptabix)
+    args.func(g, args)
 
-    minlen = int(args.minlen)
-    maxlen = int(args.maxlen)
-
-    assert minlen <= maxlen
-
-    mask = None
-    if args.mask is not None:
-        mask = pysam.Tabixfile(args.mask)
-
-    chrlen = {}
-    for line in open(args.fastaFile + '.fai', 'r'):
-        c = line.strip().split()
-        chr = c[0]
-        size = int(c[1])
-        chrlen[chr] = size
-
-    # calculate offsets
-    offset = 0
-    chroffset = {}
-    for chrom in sorted(chrlen.iterkeys()):
-        offset += int(chrlen[chrom])
-        chroffset[chrom] = offset
-
-    genomelen = offset
-
-    # random picks
-    n = 0
-    while n < int(args.numpicks):
-        rndloc = random.randint(0,genomelen)
-        lastoffset = 0
-        rndchr = None
-        for chrom in sorted(chrlen.iterkeys()):
-            offset = int(chroffset[chrom])
-            assert lastoffset < offset
-            if rndloc >= lastoffset and rndloc < offset:
-                rndchr = chrom
-                rndloc -= lastoffset
-            lastoffset = offset
-
-        # handle single chromosome option
-        if args.chrom and args.chrom != rndchr:
-            continue
-
-        fraglen = int(random.uniform(minlen,maxlen))
-        fragstart = rndloc
-        fragend   = rndloc + int(fraglen)
-
-        # handle mask
-        if mask is not None and rndchr in mask.contigs and len(list(mask.fetch(rndchr, fragstart, fragend))) > 0:
-            continue
-
-        # handle pmin/pmax args
-        if args.minpos is not None and fragstart < int(args.minpos):
-            continue
-
-        if args.maxpos is not None and fragend > int(args.maxpos):
-            continue
-
-        # handle mappability option
-        if maptabix:
-            reject = False 
-
-            if rndchr not in maptabix.contigs and 'chr' + rndchr in maptabix.contigs:
-                mchrom = 'chr' + rndchr
-            else:
-                mchrom = rndchr 
-
-            if mchrom in maptabix.contigs:
-                for mapline in maptabix.fetch(mchrom, fragstart, fragend):
-                    m = mapline.strip().split()
-                    mscore = float(m[3])
-
-                    if mscore < float(args.minmap):
-                        reject = True
-            if reject:
-                continue
-
-        # handle bamfile depth option
-        if args.bamfile is not None and int(args.mindepth) > 0:
-            reject = False
-    
-            # pileup 
-            region = rndchr + ':' + str(fragstart) + '-' + str(fragend)
-            mpargs = ['samtools', 'mpileup', '-r', region, args.bamfile]
-            p = subprocess.Popen(mpargs, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            lastpos = fragstart-1
-            for line in p.stdout.readlines():
-                c = line.strip().split()
-                if len(c) == 6:
-                    pos   = int(c[1])
-                    depth = int(c[3])
-                    if depth < int(args.mindepth):
-                        reject = True
-                    if pos - lastpos > 1:
-                        reject = True
-                    lastpos = pos
-
-            if reject:
-                continue
-
-        # don't pick sites on contigs if --nocontigs is set
-        if (rndchr.startswith('chr') and len(rndchr) > 5) or (not rndchr.startswith('chr') and len(rndchr) > 2):
-            if args.nocontigs:
-                continue
-
-        if fragend < offset:
-            if genome:
-                seq = genome.fetch(rndchr,fragstart,fragend)
-                assert seq
-
-                if args.requireseq:
-                    if re.search('[ATGCatgc]',seq):
-                        print "\t".join((rndchr,str(fragstart),str(fragend),seq))
-                        n += 1
-                else:
-                    print "\t".join((rndchr,str(fragstart),str(fragend),seq))
-                    n += 1
-            else:
-                print "\t".join((rndchr,str(fragstart),str(fragend)))
-                n += 1
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="pick random sites from a samtools-indexed genome")
-    parser.add_argument('-f', '--fasta', dest='fastaFile', required=True, help="reference fasta, must be indexed with samtools faidx")
-    parser.add_argument('-n', '--num', dest='numpicks', required=True, help="number of sites to pick")
-    parser.add_argument('-c', '--chr', dest='chrom', default=None, help='make mutations on one chromosome only')
-    parser.add_argument('-b', '--bamfile', dest='bamfile', default=None, help='bamfile to use with -d/--mindepth')
-    parser.add_argument('-d', '--mindepth', dest='mindepth', default=0, help='mindepth to use with -b/--bamfile')
-    parser.add_argument('--maptabix', dest='maptabix', default=None, help='mappability tabix, required for --minmap')
-    parser.add_argument('--minmap', dest='minmap', default=0.8, help='only select regions above mappability threshold (default 0.8)')
-    parser.add_argument('--lmin', dest='minlen', default=1, help='minimum fragment length (default=1)')
-    parser.add_argument('--lmax', dest='maxlen', default=1, help='maximum fragment length (default=1)')
-    parser.add_argument('--pmin', dest='minpos', default=None, help='minimum position')
-    parser.add_argument('--pmax', dest='maxpos', default=None, help='maximum position')
-    parser.add_argument('--mask', dest='mask', default=None, help='mask (tabix indexed BED-3)')
-    parser.add_argument('--requireseq', action="store_true", help="do not select hits in unsequenced regions, requires fasta file")
-    parser.add_argument('--nocontigs', action="store_true", help="exclude contigs")
+    parser = argparse.ArgumentParser(description='make random sites for bamsurgeon')
+    parser.add_argument('-g', '--genome', required=True, help='genome description: chromosome name <TAB/SPACE> chromosome length')
+    parser.add_argument('-s', '--seed', default=None, help='use a seed to make reproducible random picks')
+    parser.add_argument('-n', '--numpicks', default=1000, help='number of sites to generate (default = 1000)')
+    parser.add_argument('--minvaf', default=0.25, help='minimum variant allele fraction (default = 0.25)')
+    parser.add_argument('--maxvaf', default=0.5, help='maximum variant allele fraction (default = 0.5)')
+    parser.add_argument('--vafbeta1', default=2.0, help='left shape parameter for beta distribution of VAFs (default = 2.0)')
+    parser.add_argument('--vafbeta2', default=2.0, help='right shape parameter for beta distribution of VAFs (default = 2.0)')
+    subparsers = parser.add_subparsers(title="mode")
+
+    parser_snv = subparsers.add_parser('snv')
+    parser_snv.set_defaults(func=run_snv)
+
+    parser_indel = subparsers.add_parser('indel')
+    parser_indel.add_argument('--minlen', default=1,  help='minimum SV contig length (default = 1)')
+    parser_indel.add_argument('--maxlen', default=90, help='maximum SV contig length (default = 90)')
+    parser_indel.add_argument('--lenbeta1', default=0.5, help='left shape parameter for beta dist. of indel lengths (default = 0.5)') 
+    parser_indel.add_argument('--lenbeta2', default=4.0, help='right shape parameter for beta dist. of indel lengths (default = 4.0)') 
+    parser_indel.set_defaults(func=run_indel)
+
+    parser_sv = subparsers.add_parser('sv')
+    parser_sv.add_argument('--minlen', default=3000,  help='minimum SV contig length (default = 3000)')
+    parser_sv.add_argument('--maxlen', default=30000, help='maximum SV contig length (default = 30000)')
+    parser_sv.add_argument('--lenbeta1', default=1.0, help='left shape parameter for beta dist. of indel lengths (default = 1.0)') 
+    parser_sv.add_argument('--lenbeta2', default=1.0, help='right shape parameter for beta dist. of indel lengths (default = 1.0)')
+    parser_sv.add_argument('--cnvfile', default='cnvs.txt', help='output file for CNV information (used for SV VAF)') 
+    parser_sv.set_defaults(func=run_sv)
+
     args = parser.parse_args()
     main(args)

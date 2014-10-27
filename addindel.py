@@ -297,9 +297,9 @@ def remap_novoalign(bamfn, threads, bwaref, samtofastq, novoref, mutid='null', p
     sam_cmd = []
 
     if paired:
-        sam_cmd  = ['novoalign', '-F', 'STDFQ', '-f', fastq[0], fastq[1], '-r', 'Random', '-d', novoref, '-oSAM'] # interleaved
+        sam_cmd  = ['novoalign', '--mmapOff', '-F', 'STDFQ', '-f', fastq[0], fastq[1], '-r', 'Random', '-d', novoref, '-oSAM'] # interleaved
     else:
-        sam_cmd  = ['novoalign', '-F', 'STDFQ', '-f', fastq, '-r', 'Random', '-d', novoref, '-oSAM'] # interleaved
+        sam_cmd  = ['novoalign', '--mmapOff', '-F', 'STDFQ', '-f', fastq, '-r', 'Random', '-d', novoref, '-oSAM'] # interleaved
 
     assert len(sam_cmd) > 0
 
@@ -830,6 +830,10 @@ def main(args):
     print "INFO\t" + now() + "\tstarting " + sys.argv[0] + " called with args: " + ' '.join(sys.argv) + "\n"
     bedfile = open(args.varFileName, 'r')
     reffile = pysam.Fastafile(args.refFasta)
+
+    if not os.path.exists(args.bamFileName + '.bai'):
+        sys.stderr.write("ERROR\t" + now() + "\tinput bam must be indexed, not .bai file found for " + args.bamFileName + " \n")
+        sys.exit(1)
 
     if (args.bwamem or args.novoalign or args.gsnap) and args.samtofastq is None:
         sys.stderr.write("ERROR\t" + now() + "\t --samtofastq must be specified with --bwamem or --novoalign option\n")

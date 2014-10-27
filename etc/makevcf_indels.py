@@ -46,13 +46,13 @@ if len(sys.argv) == 3:
                         indelinfo = line.strip().split()[1].split(':')
                         if indelinfo[0] == 'DEL':
                             chrom, start, end = indelinfo[1:4]
-                            ref = fa.fetch(chrom, int(start)-1, int(end))
-                            alt = ref[0]
+                            ref = fa.fetch(chrom, int(start)-1, int(end)).upper()
+                            alt = ref[0].upper()
         
                         if indelinfo[0] == 'INS':
                             chrom, start, seq = indelinfo[1:4]
-                            ref = fa.fetch(chrom, int(start)-1, int(start))
-                            alt = ref + seq
+                            ref = fa.fetch(chrom, int(start)-1, int(start)).upper()
+                            alt = ref.upper() + seq.upper()
         
                         assert ref != '' and alt != '' and start != ''
         
