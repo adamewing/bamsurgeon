@@ -276,7 +276,7 @@ def discordant_fraction(bamfile, chrom, start, end):
         return 0.0
 
 
-def makemut(args, bedline):
+def makemut(args, bedline, alignopts):
     mutid = '_'.join(map(str, bedline.strip().split()))
     try:
         bamfile = pysam.Samfile(args.bamFileName, 'rb')
@@ -480,13 +480,7 @@ def makemut(args, bedline):
             # simulate reads
             (fq1, fq2) = runwgsim(maxcontig, mutseq.seq, svfrac, actions, exclude, pemean, pesd, args.tmpdir, mutid=mutid)
 
-            # remap reads
-            if args.bwamem:
-                outreads = aligners.remap_bwamem_fastq(fq1, fq2, 1, args.refFasta, outbam_mutsfile, mutid=mutid)
-            elif args.novoalign:
-                outreads = aligners.remap_novoalign_fastq(fq1, fq2, 1, args.refFasta, args.novoref, outbam_mutsfile, mutid=mutid)
-            else:
-                outreads = aligners.remap_backtrack_fastq(fq1, fq2, 1, args.refFasta, outbam_mutsfile, mutid=mutid)
+            outreads = aligners.remap_fastq(args.aligner, fq1, fq2, args.refFasta, outbam_mutsfile, alignopts, mutid=mutid, threads=1)
 
             if outreads == 0:
                 sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\toutbam " + outbam_mutsfile + " has no mapped reads!\n")
@@ -519,13 +513,11 @@ def main(args):
         sys.stderr.write("ERROR\t" + now() + "\tinput bam must be indexed, not .bai file found for " + args.bamFileName + " \n")
         sys.exit(1)
 
-    if args.bwamem and args.novoalign:
-        sys.stderr.write("ERROR\t" + now() + "\t --bwamem and --novoalign cannot be specified together")
-        sys.exit(1)
+    alignopts = {}
+    if args.alignopts is not None:
+        alignopts = dict([o.split(':') for o in args.alignopts.split(',')])
 
-    if args.novoalign and args.novoref is None:
-        sys.stderr.write("ERROR\t" + now() + "\t --novoref must be be specified with --novoalign")
-        sys.exit(1)
+    aligners.checkoptions(args.aligner, alignopts, None, sv=True)
 
     # load insertion library if present
     try:
@@ -562,7 +554,7 @@ def main(args):
                 break
             
             # submit each mutation as its own thread                
-            result = pool.apply_async(makemut, [args, bedline])
+            result = pool.apply_async(makemut, [args, bedline, alignopts])
             results.append(result)                              
 
             nmuts += 1
@@ -674,9 +666,8 @@ if __name__ == '__main__':
     parser.add_argument('--noref', action='store_true', default=False, 
                         help="do not perform reference based assembly")
     parser.add_argument('--recycle', action='store_true', default=False)
-    parser.add_argument('--bwamem', action='store_true', default=False, help='realign with bwa mem (original should be aligned with mem as well!)')
-    parser.add_argument('--novoalign', action='store_true', default=False, help='realignment with novoalign')
-    parser.add_argument('--novoref', default=None, help='novoalign reference, must be specified with --novoalign')
+    parser.add_argument('--aligner', default='backtrack', help='supported aligners: ' + ','.join(aligners.supported_aligners_fastq))
+    parser.add_argument('--alignopts', default=None, help='aligner-specific options as comma delimited list of option1:value1,option2:value2,...')
     parser.add_argument('--skipmerge', action='store_true', default=False, help='do not merge spike-in reads back into original BAM')
     parser.add_argument('--keepsecondary', action='store_true', default=False, help='keep secondary reads in final BAM')
     parser.add_argument('--debug', action='store_true', default=False, help='output read tracking info to debug file, retain all intermediates')
