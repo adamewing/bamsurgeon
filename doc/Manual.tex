@@ -118,15 +118,10 @@ optional arguments:
                         1000)
   --requirepaired       skip mutations if unpaired reads are present
   --skipmerge           final output is tmp file to be merged
-  --bwamem              realignment with BWA MEM (instead of backtrack)
-  --novoalign           realignment with novoalign
-  --novoref NOVOREF     novoalign reference, must be specified with
-                        --novoalign
-  --gsnap               realignment with gsnap
-  --gsnaprefname GSNAPREFNAME
-                        gsnap reference directory
-  --gsnaprefdir GSNAPREFDIR
-                        gsnap reference name
+  --aligner ALIGNER     supported aligners: backtrack,mem,novoalign,gsnap
+  --alignopts ALIGNOPTS
+                        aligner-specific options as comma delimited list of
+                        option1:value1,option2:value2,...
   --tmpdir TMPDIR       temporary directory (default=addsnv.tmp)
 \end{verbatim}
 
@@ -176,12 +171,8 @@ optional arguments:
 \item --maxopen : set the maximum number of open files (check your system limit with \texttt{ulimit -a})
 \item --requirepaired : drop mutations where a paired end in the region cannot be located. However, it is probably better to correct the problem in the BAM file than to resort to using this option.
 \item --skipmerge : instead of replacing the mutated and realigned reads back into the original BAM, which is normally the final step, leave the addsnv.
-\item --bwamem : realign reads using bwa mem. The target BAM file should have also been aligned using bwa mem if this option is used.
-\item --novoalign : realign reads using novoalign (\url{http://www.novocraft.com}). The target BAM file should have also been aligned using novoalign if this option is used.
-\item --novoref : novoalign reference (generate with novoindex), required if using --novoalign option
-\item --gsnap : realign reads using GSNAP (\url{http://research-pub.gene.com/gmap/}). The target BAM file should have also been aligned using GSNAP if this option is used.
-\item --gsnaprefname : required if --gsnap is used, corresponds to the name (-d option) given to the index created with gmap\_build.
-\item --gsnaprefdir : required if --gsnap is used, corresponds to the directory (-D option) given to gmap\_build
+\item --aligner : choose one of the supported aligners, default is backtrack (for bwa backtrack). Additional aligners can be added through modification of bs/aligners.py, and I take requests. Aligner specific options are handled through --alignopts
+\item --alignopts : aligner-specific options are specified in a comma-delimited list as option1:value1,option2:value2,etc. Required options are checked by the the function \texttt{checkoptions} in \texttt{bs/aligners.py}. For example, if --aligner novoalign is specified, --alignopts novoref:<path to novoalign reference> should also be specified.
 \item options not listed here are either brand new and the manual has not been updated as yet, or they are there for debugging and will be removed in the future.
 \end{itemize}
 
@@ -195,9 +186,8 @@ usage: addindel.py [-h] -v VARFILENAME -f BAMFILENAME -r REFFASTA -o
                    [--samtofastq SAMTOFASTQ] [--mindepth MINDEPTH]
                    [--minmutreads MINMUTREADS] [--avoidreads AVOIDREADS]
                    [--nomut] [--det] [--force] [--single] [--maxopen MAXOPEN]
-                   [--requirepaired] [--bwamem] [--novoalign]
-                   [--novoref NOVOREF] [--gsnap] [--gsnaprefname GSNAPREFNAME]
-                   [--gsnaprefdir GSNAPREFDIR] [--skipmerge] [--tmpdir TMPDIR]
+                   [--requirepaired] [--aligner ALIGNER]
+                   [--alignopts ALIGNOPTS] [--skipmerge] [--tmpdir TMPDIR]
 
 adds INDELs to reads, outputs modified reads as .bam along with mates
 
@@ -244,15 +234,10 @@ optional arguments:
   --maxopen MAXOPEN     maximum number of open files during merge (default
                         1000)
   --requirepaired       skip mutations if unpaired reads are present
-  --bwamem              realignment with BWA MEM (instead of backtrack)
-  --novoalign           realignment with novoalign
-  --novoref NOVOREF     novoalign reference, must be specified with
-                        --novoalign
-  --gsnap               realignment with gsnap
-  --gsnaprefname GSNAPREFNAME
-                        gsnap reference directory
-  --gsnaprefdir GSNAPREFDIR
-                        gsnap reference name
+  --aligner ALIGNER     supported aligners: backtrack,mem,novoalign,gsnap
+  --alignopts ALIGNOPTS
+                        aligner-specific options as comma delimited list of
+                        option1:value1,option2:value2,...
   --skipmerge           final output is tmp file to be merged
   --tmpdir TMPDIR       temporary directory (default=addindel.tmp)
 \end{verbatim}
@@ -282,8 +267,8 @@ usage: addsv.py [-h] -v VARFILENAME -f BAMFILENAME -r REFFASTA -o OUTBAMFILE
                 [--maxctglen MAXCTGLEN] [-n MAXMUTS] [-c CNVFILE]
                 [--ismean ISMEAN] [--issd ISSD] [-p PROCS] [--inslib INSLIB]
                 [--delay DELAY] [--nomut] [--noremap] [--noref] [--recycle]
-                [--bwamem] [--novoalign] [--novoref NOVOREF] [--skipmerge]
-                [--debug] [--tmpdir TMPDIR]
+                [--aligner ALIGNER] [--alignopts ALIGNOPTS] [--skipmerge]
+                [--keepsecondary] [--debug] [--tmpdir TMPDIR]
 
 adds SNVs to reads, outputs modified reads as .bam along with mates
 
@@ -325,11 +310,10 @@ optional arguments:
   --noremap             dry run
   --noref               do not perform reference based assembly
   --recycle
-  --bwamem              realign with bwa mem (original shuld be aligned with
-                        mem as well!)
-  --novoalign           realignment with novoalign
-  --novoref NOVOREF     novoalign reference, must be specified with
-                        --novoalign
+  --aligner ALIGNER     supported aligners: backtrack,mem,novoalign
+  --alignopts ALIGNOPTS
+                        aligner-specific options as comma delimited list of
+                        option1:value1,option2:value2,...
   --skipmerge           do not merge spike-in reads back into original BAM
   --debug               output read tracking info to debug file, retain all
                         intermediates
@@ -369,7 +353,6 @@ optional arguments:
 \item -n : only attempt this many mutations
 \item --ismean/--issd : the mean and standard deviation of the library size should be estimated from the original bam and specified through these arguments. This can be accomplished a number of ways, I suggest CollectInsertSizeMetrics from the picard tools.
 \item --inslib : a FASTA file can be specified and insertions can be tagged with RND instead of a sequence or file. If this is done, a sequence will be chosen at random from the FASTA file specified by --inslib and inserted.
-\item --bwamem : as with other scripts, use bwa mem instead of the default which is bwa backtrack
 \item --skipmerge : same meaning as for addsnv/addindel
 \end{itemize}
 

@@ -45,7 +45,7 @@ def checkoptions(name, options, samtofastq, sv=False):
 def remap_bam(name, bamfn, fastaref, options, mutid='null', threads=1, paired=True, samtofastq=None):
     ''' remap bam file with supported alignment method. "options" param is a dict of aligner-specific required options '''
 
-    checkoptions_bam(name, options, samtofastq)
+    checkoptions(name, options, samtofastq)
 
     if name == 'backtrack':
         remap_backtrack_bam(bamfn, threads, fastaref, mutid=mutid, paired=paired)
