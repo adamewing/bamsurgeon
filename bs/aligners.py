@@ -16,7 +16,7 @@ from uuid import uuid4
 #
 
 
-supported_aligners_bam   = ['backtrack', 'mem', 'novoalign', 'gsnap']
+supported_aligners_bam   = ['backtrack', 'mem', 'novoalign', 'gsnap', 'bowtie2']
 supported_aligners_fastq = ['backtrack', 'mem', 'novoalign']
 
 def checkoptions(name, options, samtofastq, sv=False):
@@ -41,6 +41,10 @@ def checkoptions(name, options, samtofastq, sv=False):
         if 'gsnaprefdir' not in options or 'gsnaprefname' not in options:
             raise ValueError("ERROR\t'--aligner gsnap' requires '--alignopts gsnaprefdir:GSNAP_reference_dir,gsnaprefname:GSNAP_ref_name\n")
 
+    if name == 'bowtie2':
+        if 'bowtie2ref' not in options:
+            raise ValueError("ERROR\t'--aligner bowtie2' requires '--alignopts bowtie2ref:bowtie2_ref_basepath\n")
+
 
 def remap_bam(name, bamfn, fastaref, options, mutid='null', threads=1, paired=True, samtofastq=None):
     ''' remap bam file with supported alignment method. "options" param is a dict of aligner-specific required options '''
@@ -50,17 +54,17 @@ def remap_bam(name, bamfn, fastaref, options, mutid='null', threads=1, paired=Tr
     if name == 'backtrack':
         remap_backtrack_bam(bamfn, threads, fastaref, mutid=mutid, paired=paired)
 
-
     if name == 'mem':
         remap_bwamem_bam(bamfn, threads, fastaref, samtofastq, mutid=mutid, paired=paired)
-
 
     if name == 'novoalign':
         remap_novoalign_bam(bamfn, threads, fastaref, samtofastq, options['novoref'], mutid=mutid, paired=paired)
 
-
     if name == 'gsnap':
         remap_gsnap_bam(bamfn, threads, fastaref, samtofastq, options['gsnaprefdir'], options['gsnaprefname'], mutid=mutid, paired=paired)
+
+    if name == 'bowtie2':
+        remap_bowtie2_bam(bamfn, threads, fastaref, samtofastq, options['bowtie2ref'], mutid=mutid, paired=paired)
 
 
 def remap_backtrack_bam(bamfn, threads, fastaref, mutid='null', paired=True):
@@ -295,6 +299,74 @@ def remap_gsnap_bam(bamfn, threads, fastaref, samtofastq, gsnaprefdir, gsnaprefn
     idx_cmd  = ['samtools', 'index', bamfn]
 
     print "INFO\t" + now() + "\t" + mutid + "\taligning " + str(fastq) + " with gsnap\n"
+    with open(sam_out, 'w') as sam:
+        p = subprocess.Popen(sam_cmd, stdout=subprocess.PIPE)
+        for line in p.stdout:
+            sam.write(line)
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\twriting " + sam_out + " to BAM...\n")
+    subprocess.call(bam_cmd)
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tdeleting SAM: " + sam_out + "\n")
+    os.remove(sam_out)
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tsorting output: " + ' '.join(sort_cmd) + "\n")
+    subprocess.call(sort_cmd)
+
+    sort_out += '.bam'
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremove original bam:" + bamfn + "\n")
+    os.remove(bamfn)
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\trename sorted bam: " + sort_out + " to original name: " + bamfn + "\n")
+    move(sort_out, bamfn)
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tindexing: " + ' '.join(idx_cmd) + "\n")
+    subprocess.call(idx_cmd)
+
+    # check if BAM readcount looks sane
+    if paired:
+        if bamreadcount(bamfn) < fastqreadcount(fastq[0]) + fastqreadcount(fastq[1]): 
+            raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
+    else:
+        if bamreadcount(bamfn) < fastqreadcount(fastq): 
+            raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
+
+    if paired:
+        for fq in fastq:
+            sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fq + "\n")
+            os.remove(fq)
+    else:
+        sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fastq + "\n")
+        os.remove(fastq)
+
+
+def remap_bowtie2_bam(bamfn, threads, fastaref, samtofastq, bowtie2ref, mutid='null', paired=True):
+    """ call bowtie2 and samtools to remap .bam
+    """
+
+    assert bamreadcount(bamfn) > 0 
+
+    sam_out  = bamfn + '.realign.sam'
+    sort_out = bamfn + '.realign.sorted'
+
+    print "INFO\t" + now() + "\t" + mutid + "\tconverting " + bamfn + " to fastq\n"
+    fastq = bamtofastq(bamfn, samtofastq, threads=threads, paired=paired, twofastq=True)
+
+    sam_cmd = []
+
+    if paired:
+        sam_cmd = ['bowtie2', '-x', bowtie2ref, '-1', fastq[0], '-2', fastq[1], '-S', sam_out]
+    else:
+        sam_cmd = ['bowtie2', '-x', bowtie2ref, '-U', fastq[0], '-S', sam_out]
+
+    assert len(sam_cmd) > 0
+
+    bam_cmd  = ['samtools', 'view', '-bt', fastaref + '.fai', '-o', bamfn, sam_out]
+    sort_cmd = ['samtools', 'sort', '-@', str(threads), '-m', '10000000000', bamfn, sort_out]
+    idx_cmd  = ['samtools', 'index', bamfn]
+
+    print "INFO\t" + now() + "\t" + mutid + "\taligning " + str(fastq) + " with bowtie2\n"
     with open(sam_out, 'w') as sam:
         p = subprocess.Popen(sam_cmd, stdout=subprocess.PIPE)
         for line in p.stdout:
