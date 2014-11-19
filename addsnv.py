@@ -218,7 +218,8 @@ def makemut(args, chrom, start, end, vaf, altbase, avoid, alignopts):
                         hasSNP = True
                 else:
                     print "WARN\t" + now() + "\t" + mutid + "\tcould not pileup for region:",chrom,pcol.pos
-                    hasSNP = True
+                    if not args.ignorepileup:
+                        hasSNP = True
 
         # pick reads to change
         readlist = []
@@ -458,6 +459,7 @@ def run():
     parser.add_argument('--maxopen', dest='maxopen', default=1000, help="maximum number of open files during merge (default 1000)")
     parser.add_argument('--requirepaired', action='store_true', default=False, help='skip mutations if unpaired reads are present')
     parser.add_argument('--skipmerge', action='store_true', default=False, help="final output is tmp file to be merged")
+    parser.add_argument('--ignorepileup', action='store_true', default=False, help="do not check pileup depth in mutation regions")
     parser.add_argument('--aligner', default='backtrack', help='supported aligners: ' + ','.join(aligners.supported_aligners_bam))
     parser.add_argument('--alignopts', default=None, help='aligner-specific options as comma delimited list of option1:value1,option2:value2,...')
     parser.add_argument('--tmpdir', default='addsnv.tmp', help='temporary directory (default=addsnv.tmp)')
