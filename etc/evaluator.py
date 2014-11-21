@@ -3,6 +3,7 @@
 import sys, os
 import vcf
 import argparse
+import string
 
 '''
 Evaluate VCFs against BAMSurgeon "Truth" VCFs
@@ -82,7 +83,8 @@ def svmask(rec, vcfh, truchroms):
     return False
 
 
-def evaluate(submission, truth, vtype='SNV', ignorechroms=None, ignorepass=False, printfp=False):
+def evaluate(submission, truth, vtype='SNV', ignorechroms=None, ignorepass=False, 
+             fpfh=False, tpfh=False):
     ''' return stats on sensitivity, specificity, balanced accuracy '''
 
     assert vtype in ('SNV', 'SV', 'INDEL')
@@ -133,17 +135,36 @@ def evaluate(submission, truth, vtype='SNV', ignorechroms=None, ignorepass=False
 
         if matched:
             tpcount += 1
+            if tpfh:
+                #import pdb; pdb.set_trace()
+                assert not subrec.ID
+                assert not subrec.FILTER
+                assert len(subrec.ALT)==1
+                tpfh.write("%s\t%d\t.\t%s\t%s\t%s\t.\t%s\n" % (
+                    subrec.CHROM, subrec.POS, subrec.REF,
+                    str(subrec.ALT[0]), subrec.QUAL if subrec.QUAL else ".",
+                    string.translate(str(subrec.INFO), None, "{}'[] ").replace(":", "=").replace('=True', '')))
         else:
             if relevant(subrec, vtype, ignorechroms) and passfilter(subrec, disabled=ignorepass) and not svmask(subrec, truvcfh, truchroms): 
                 fpcount += 1 # FP counting method needs to change for real tumors
-                if printfp:
-                    print "FP:", subrec
+                if fpfh:
+                    #import pdb; pdb.set_trace()
+                    assert not subrec.ID
+                    assert not subrec.FILTER
+                    assert len(subrec.ALT)==1
+                    fpfh.write("%s\t%d\t.\t%s\t%s\t%s\t.\t%s\n" % (
+                        subrec.CHROM, subrec.POS, subrec.REF,
+                        str(subrec.ALT[0]), subrec.QUAL if subrec.QUAL else ".",
+                        string.translate(str(subrec.INFO), None, "{}'[] ").replace(":", "=").replace('=True', '')))
 
     print "tpcount, fpcount, subrecs, trurecs:"
     print tpcount, fpcount, subrecs, trurecs
 
     recall    = float(tpcount) / float(trurecs)
-    precision = float(tpcount) / float(tpcount + fpcount)
+    if tpcount + fpcount > 0:
+        precision = float(tpcount) / float(tpcount + fpcount)
+    else:
+        precision = 0
     fdr       = 1.0 - float(fpcount) / float(subrecs)
     f1score   = 0.0 if tpcount == 0 else 2.0*(precision*recall)/(precision+recall)
 
@@ -167,7 +188,24 @@ def main(args):
         sys.stderr.write("-m/--mutype must be either SV, SNV, or INDEL\n")
         sys.exit(1)
 
-    result = evaluate(args.subvcf, args.truvcf, vtype=args.mutype, ignorechroms=chromlist, ignorepass=args.nonpass, printfp=args.printfp)
+    if args.print_fp_to:
+        if args.print_fp_to == "-":
+            fpfh = sys.stdout
+        else:
+            fpfh = open(args.print_fp_to, 'w')
+        print "Writing FPs to %s" % args.print_fp_to
+    else:
+        fpfh = False
+    if args.print_tp_to:
+        if args.print_tp_to == "-":
+            tpfh = sys.stdout
+        else:
+            tpfh = open(args.print_tp_to, 'w')
+        print "Writing TPs to %s" % args.print_tp_to
+    else:
+        tpfh = False
+    result = evaluate(args.subvcf, args.truvcf, vtype=args.mutype, ignorechroms=chromlist, ignorepass=args.nonpass, 
+                      fpfh=fpfh, tpfh=tpfh)
 
     print "precision, recall, F1 score: " + ','.join(map(str, result))
 
@@ -178,6 +216,7 @@ if __name__ == '__main__':
     parser.add_argument('-m', '--mutype', dest='mutype', required=True, help="Mutation type: must be either SNV, SV, or INDEL")
     parser.add_argument('--ignore', dest='chromlist', default=None, help="(optional) comma-seperated list of chromosomes to ignore")
     parser.add_argument('--nonpass', dest='nonpass', action="store_true", help="evaluate all records (not just PASS records) in VCF")
-    parser.add_argument('--printfp', dest='printfp', action="store_true", help="output false positive positions")
+    parser.add_argument('--print-fp-to', dest='print_fp_to', help="output false positive positions to this file")
+    parser.add_argument('--print-tp-to', dest='print_tp_to', help="output true positive positions to this file")
     args = parser.parse_args()
     main(args)
