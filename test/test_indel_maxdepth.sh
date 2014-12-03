@@ -2,21 +2,15 @@
 
 # requires samtools/bcftools
 
-if [ $# -ne 3 ]
+if [ $# -ne 2 ]
 then
-    echo "usage: $0 <number of threads> <reference indexed with bwa index> <path to SamToFastq.jar provided by picard tools>"
+    echo "usage: $0 <number of threads> <reference indexed with bwa index>"
     exit 65
 fi
 
 if [ ! -e ../addindel.py ]
 then
     echo "addsnv.py isn't one directory level down (../addsnv.py) as expected"
-    exit 65
-fi
-
-if [ ! -e $3 ]
-then
-    echo "cannot find SamToFastq.jar"
     exit 65
 fi
 
@@ -33,7 +27,7 @@ then
 fi
 
 
-../addindel.py -v ../test_data/test_indels.txt -f ../test_data/testregion.bam -r $2 -o ../test_data/testregion_mut.bam -c ../test_data/test_cnvlist.txt.gz -p $1 --samtofastq $3 --aligner mem
+../addindel.py -v ../test_data/test_indels.txt -f ../test_data/testregion.bam -r $2 -o ../test_data/testregion_mut.bam -c ../test_data/test_cnvlist.txt.gz -p $1 --maxdepth 20
 if [ $? -ne 0 ]
 then
  echo "addindel.py failed."

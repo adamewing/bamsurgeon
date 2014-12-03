@@ -8,8 +8,9 @@ import pysam
 import bs.replacereads as rr
 import bs.asmregion as ar
 import bs.mutableseq as ms
-import datetime
+import bs.aligners as aligners
 
+from bs.common import *
 from uuid import uuid4
 from time import sleep
 from shutil import move
@@ -18,180 +19,9 @@ from itertools import izip
 from collections import Counter
 from multiprocessing import Pool
 
+
 sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)
 sys.stderr = os.fdopen(sys.stderr.fileno(), 'w', 0)
-
-
-def now():
-    return str(datetime.datetime.now())
-
-
-def remap_bwamem(fq1, fq2, threads, bwaref, outbam, deltmp=True, mutid='null'):
-    """ call bwa mem and samtools to remap .bam
-    """
-
-    basefn   = "bwatmp." + str(uuid4())
-    sam_out  = basefn + '.sam'
-    sort_out = basefn + '.sorted'
-
-    sam_cmd  = ['bwa', 'mem', '-t', str(threads), '-M', '-Y', bwaref, fq1, fq2]
-
-    bam_cmd  = ['samtools', 'view', '-bt', bwaref + '.fai', '-o', outbam, sam_out]
-    sort_cmd = ['samtools', 'sort', '-@', str(threads), '-m', '10000000000', outbam, sort_out]
-    idx_cmd  = ['samtools', 'index', outbam]
-
-    print "INFO\t" + now() + "\t" + mutid + "\taligning " + fq1 + ',' + fq2 + " with bwa mem"
-    with open(sam_out, 'w') as sam:
-        p = subprocess.Popen(sam_cmd, stdout=subprocess.PIPE)
-        for line in p.stdout:
-            sam.write(line)
-
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\twriting " + sam_out + " to BAM...\n")
-    subprocess.call(bam_cmd)
-
-    if deltmp:
-        sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tdeleting SAM: " + sam_out + "\n")
-        os.remove(sam_out)
-
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tsorting output: " + ' '.join(sort_cmd) + "\n")
-    subprocess.call(sort_cmd)
-
-    sort_out += '.bam'
-
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremove original bam:" + outbam + "\n")
-    os.remove(outbam)
-
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\trename sorted bam: " + sort_out + " to original name: " + outbam + "\n")
-    move(sort_out, outbam)
-
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tindexing: " + ' '.join(idx_cmd) + "\n")
-    subprocess.call(idx_cmd)
-
-    if deltmp:
-        sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fq1 + "\n")
-        os.remove(fq1)
-        sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fq2 + "\n")
-        os.remove(fq2)
-
-    return bamreads(outbam)
-
-
-def remap_novoalign(fq1, fq2, threads, bwaref, novoref, outbam, deltmp=True, mutid='null'):
-    """ call novoalign and samtools to remap .bam
-    """
-
-    basefn   = "novotmp." + str(uuid4())
-    sam_out  = basefn + '.sam'
-    sort_out = basefn + '.sorted'
-
-    sam_cmd  = ['novoalign', '-F', 'STDFQ', '-f', fq1, fq2, '-r', 'Random', '-d', novoref, '-oSAM']
-    bam_cmd  = ['samtools', 'view', '-bt', bwaref + '.fai', '-o', outbam, sam_out]
-    sort_cmd = ['samtools', 'sort', '-@', str(threads), '-m', '10000000000', outbam, sort_out]
-    idx_cmd  = ['samtools', 'index', outbam]
-
-    print "INFO\t" + now() + "\t" + mutid + "\taligning " + fq1 + ',' + fq2 + " with novoalign"
-    with open(sam_out, 'w') as sam:
-        p = subprocess.Popen(sam_cmd, stdout=subprocess.PIPE)
-        for line in p.stdout:
-            sam.write(line)
-
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\twriting " + sam_out + " to BAM...\n")
-    subprocess.call(bam_cmd)
-
-    if deltmp:
-        sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tdeleting SAM: " + sam_out + "\n")
-        os.remove(sam_out)
-
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tsorting output: " + ' '.join(sort_cmd) + "\n")
-    subprocess.call(sort_cmd)
-
-    sort_out += '.bam'
-
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremove original bam:" + outbam + "\n")
-    os.remove(outbam)
-
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\trename sorted bam: " + sort_out + " to original name: " + outbam + "\n")
-    move(sort_out, outbam)
-
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tindexing: " + ' '.join(idx_cmd) + "\n")
-    subprocess.call(idx_cmd)
-
-    if deltmp:
-        sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fq1 + "\n")
-        os.remove(fq1)
-        sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fq2 + "\n")
-        os.remove(fq2)
-
-    return bamreads(outbam)
-
-
-def remap(fq1, fq2, threads, bwaref, outbam, deltmp=True, mutid='null'):
-    """ call bwa/samtools to remap .bam and merge with existing .bam
-    """
-    basefn = "bwatmp." + str(uuid4())
-    sai1fn = basefn + ".1.sai"
-    sai2fn = basefn + ".2.sai"
-    samfn  = basefn + ".sam"
-    refidx = bwaref + ".fai"
-    tmpbam = basefn + ".bam"
-    tmpsrt = basefn + ".sort"
-
-    sai1args = ['bwa', 'aln', '-q', '5', '-l', '32', '-k', '2', '-t', str(threads), '-o', '1', '-f', sai1fn, bwaref, fq1]
-    sai2args = ['bwa', 'aln', '-q', '5', '-l', '32', '-k', '2', '-t', str(threads), '-o', '1', '-f', sai2fn, bwaref, fq2]
-    samargs  = ['bwa', 'sampe', '-P', '-f', samfn, bwaref, sai1fn, sai2fn, fq1, fq2]
-    bamargs  = ['samtools', 'view', '-bt', refidx, '-o', tmpbam, samfn]
-    sortargs = ['samtools', 'sort', tmpbam, tmpsrt]
-
-    print "INFO\t" + now() + "\t" + mutid + "\tmapping 1st end, cmd: " + " ".join(sai2args)
-    p = subprocess.Popen(sai2args, stderr=subprocess.STDOUT)
-    p.wait()
-
-    print "INFO\t" + now() + "\t" + mutid + "\tmapping 2nd end, cmd: " + " ".join(sai1args)
-    p = subprocess.Popen(sai1args, stderr=subprocess.STDOUT)
-    p.wait()
-
-    print "INFO\t" + now() + "\t" + mutid + "\tpairing ends, building .sam, cmd: " + " ".join(samargs)
-    p = subprocess.Popen(samargs, stderr=subprocess.STDOUT)
-    p.wait()
-
-    print "INFO\t" + now() + "\t" + mutid + "\tsam --> bam, cmd: " + " ".join(bamargs)
-    p = subprocess.Popen(bamargs, stderr=subprocess.STDOUT)
-    p.wait()
-
-    print "INFO\t" + now() + "\t" + mutid + "\tsorting, cmd: " + " ".join(sortargs)
-    p = subprocess.Popen(sortargs, stderr=subprocess.STDOUT)
-    p.wait()
-
-    print "INFO\t" + now() + "\t" + mutid + "\trename " + tmpsrt + ".bam --> " + tmpbam
-    os.remove(tmpbam)
-    os.rename(tmpsrt + ".bam", tmpbam)
-
-    print "INFO\t" + now() + "\t" + mutid + "\trename " + tmpbam + " --> " + outbam
-    os.rename(tmpbam, outbam)
-
-    # cleanup
-    if deltmp:
-        os.remove(sai1fn)
-        os.remove(sai2fn)
-        os.remove(samfn)
-        os.remove(fq1)
-        os.remove(fq2)
-
-    return bamreads(outbam)
-
-
-def bamreads(bamfn, mappedonly=True):
-    assert os.path.exists(bamfn) and bamfn.endswith('.bam')
-    if not os.path.exists(bamfn + '.bai'):
-        args = ['samtools', 'index', bamfn]
-        subprocess.call(args)
-
-    bam = pysam.Samfile(bamfn, 'rb')
-
-    if mappedonly:
-        return bam.mapped
-    else:
-        return bam.mapped + bam.unmapped
 
 
 def runwgsim(contig, newseq, svfrac, svtype, exclude, pemean, pesd, tmpdir, mutid='null'):
@@ -383,57 +213,6 @@ def load_inslib(infa):
     return seqdict
 
 
-def mergebams(bamlist, outbamfn, maxopen=100, debug=False):
-    ''' call samtools to merge a list of bams hierarchically '''
-
-    assert outbamfn.endswith('.bam')
-    print "INFO\t" + now() + "\tlen(bamlist)", len(bamlist)
-
-    if len(bamlist) == 1:
-        print "INFO\t" + now() + "\tonly one BAM to merge, renaming",bamlist[0],"-->",outbamfn
-        os.rename(bamlist[0], outbamfn)
-    else:
-        nmerge = 1
-        mergenum = 0
-        merge_sublists = {}
-        for tmpbam in bamlist:
-            mergetmp = "tmp.merging." + str(mergenum) + "." + outbamfn
-            if mergetmp in merge_sublists:
-                merge_sublists[mergetmp].append(tmpbam)
-            else:
-                merge_sublists[mergetmp] = []
-                merge_sublists[mergetmp].append(tmpbam)
-            if nmerge % maxopen == 0:
-                mergenum += 1
-            nmerge += 1
-
-        for submergefn, tmpbams in merge_sublists.iteritems():
-            if len(tmpbams) == 1:
-                os.rename(tmpbams[0], submergefn)
-                print "INFO\t" + now() + "\trenamed:",tmpbams[0], " --> ", submergefn
-            else:
-                args = ['samtools','merge','-f',submergefn] + tmpbams 
-                print "INFO\t" + now() + "\tmerging, cmd: ", args
-                subprocess.call(args)
-
-        if len(merge_sublists.keys()) == 1:
-            print "INFO\t" + now() + "\tmerge finished, renaming: ", merge_sublists.keys()[0]," --> ", outbamfn
-            os.rename(merge_sublists.keys()[0], outbamfn)
-        else:
-            args = ['samtools','merge','-f',outbamfn] + merge_sublists.keys()
-            print "INFO\t" + now() + "\tfinal merge, cmd: ", args
-            subprocess.call(args)
-
-        for submergefn in merge_sublists.keys():
-            if os.path.exists(submergefn):
-                os.remove(submergefn)
-
-    if not debug:
-        for bamfile in bamlist:
-            if os.path.exists(bamfile):
-                os.remove(bamfile)
-                os.remove(bamfile + '.bai')
-
 
 def align(qryseq, refseq):
     rnd = str(uuid4())
@@ -497,7 +276,7 @@ def discordant_fraction(bamfile, chrom, start, end):
         return 0.0
 
 
-def makemut(args, bedline):
+def makemut(args, bedline, alignopts):
     mutid = '_'.join(map(str, bedline.strip().split()))
     try:
         bamfile = pysam.Samfile(args.bamFileName, 'rb')
@@ -701,13 +480,7 @@ def makemut(args, bedline):
             # simulate reads
             (fq1, fq2) = runwgsim(maxcontig, mutseq.seq, svfrac, actions, exclude, pemean, pesd, args.tmpdir, mutid=mutid)
 
-            # remap reads
-            if args.bwamem:
-                outreads = remap_bwamem(fq1, fq2, 1, args.refFasta, outbam_mutsfile, mutid=mutid)
-            elif args.novoalign:
-                outreads = remap_novoalign(fq1, fq2, 1, args.refFasta, args.novoref, outbam_mutsfile, mutid=mutid)
-            else:
-                outreads = remap(fq1, fq2, 1, args.refFasta, outbam_mutsfile, mutid=mutid)
+            outreads = aligners.remap_fastq(args.aligner, fq1, fq2, args.refFasta, outbam_mutsfile, alignopts, mutid=mutid, threads=1)
 
             if outreads == 0:
                 sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\toutbam " + outbam_mutsfile + " has no mapped reads!\n")
@@ -740,13 +513,11 @@ def main(args):
         sys.stderr.write("ERROR\t" + now() + "\tinput bam must be indexed, not .bai file found for " + args.bamFileName + " \n")
         sys.exit(1)
 
-    if args.bwamem and args.novoalign:
-        sys.stderr.write("ERROR\t" + now() + "\t --bwamem and --novoalign cannot be specified together")
-        sys.exit(1)
+    alignopts = {}
+    if args.alignopts is not None:
+        alignopts = dict([o.split(':') for o in args.alignopts.split(',')])
 
-    if args.novoalign and args.novoref is None:
-        sys.stderr.write("ERROR\t" + now() + "\t --novoref must be be specified with --novoalign")
-        sys.exit(1)
+    aligners.checkoptions(args.aligner, alignopts, None, sv=True)
 
     # load insertion library if present
     try:
@@ -783,7 +554,7 @@ def main(args):
                 break
             
             # submit each mutation as its own thread                
-            result = pool.apply_async(makemut, [args, bedline])
+            result = pool.apply_async(makemut, [args, bedline, alignopts])
             results.append(result)                              
 
             nmuts += 1
@@ -798,7 +569,7 @@ def main(args):
         tmpbam, exclfn = result.get()
 
         if tmpbam is not None and exclfn is not None:
-            if bamreads(tmpbam, mappedonly=False) > 0:
+            if bamreadcount(tmpbam) > 0:
                 tmpbams.append(tmpbam)
                 exclfns.append(exclfn)
             else:
@@ -865,9 +636,9 @@ def main(args):
 
     
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='adds SNVs to reads, outputs modified reads as .bam along with mates')
+    parser = argparse.ArgumentParser(description='adds SVs to reads, outputs modified reads as .bam along with mates')
     parser.add_argument('-v', '--varfile', dest='varFileName', required=True,
-                        help='whitespace-delimited target regions to try and add a SNV: chrom,start,stop,action,seqfile (if insertion),TSDlength (if insertion)')
+                        help='whitespace-delimited target regions to try and add a SV: chrom,start,stop,action,seqfile (if insertion),TSDlength (if insertion)')
     parser.add_argument('-f', '--bamfile', dest='bamFileName', required=True,
                         help='sam/bam file from which to obtain reads')
     parser.add_argument('-r', '--reference', dest='refFasta', required=True,
@@ -895,9 +666,8 @@ if __name__ == '__main__':
     parser.add_argument('--noref', action='store_true', default=False, 
                         help="do not perform reference based assembly")
     parser.add_argument('--recycle', action='store_true', default=False)
-    parser.add_argument('--bwamem', action='store_true', default=False, help='realign with bwa mem (original shuld be aligned with mem as well!)')
-    parser.add_argument('--novoalign', action='store_true', default=False, help='realignment with novoalign')
-    parser.add_argument('--novoref', default=None, help='novoalign reference, must be specified with --novoalign')
+    parser.add_argument('--aligner', default='backtrack', help='supported aligners: ' + ','.join(aligners.supported_aligners_fastq))
+    parser.add_argument('--alignopts', default=None, help='aligner-specific options as comma delimited list of option1:value1,option2:value2,...')
     parser.add_argument('--skipmerge', action='store_true', default=False, help='do not merge spike-in reads back into original BAM')
     parser.add_argument('--keepsecondary', action='store_true', default=False, help='keep secondary reads in final BAM')
     parser.add_argument('--debug', action='store_true', default=False, help='output read tracking info to debug file, retain all intermediates')

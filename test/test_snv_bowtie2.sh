@@ -3,9 +3,9 @@
 # adds up to 100 SNPs to a ~770 kb region around the LARGE gene
 # requires samtools/bcftools
 
-if [ $# -ne 4 ]
+if [ $# -ne 5 ]
 then
-    echo "usage: $0 <number of SNPs> <number of threads> <reference indexed with bwa index> <path to SamToFastq.jar provided by picard tools>"
+    echo "usage: $0 <number of SNPs> <number of threads> <reference indexed with bwa index> <path to SamToFastq.jar provided by picard tools> <bowtie2 index>"
     exit 65
 fi
 
@@ -18,6 +18,12 @@ fi
 if [ ! -e $4 ]
 then
     echo "cannot find SamToFastq.jar"
+    exit 65
+fi
+
+if [ ! -e $5 ]
+then
+    echo "cannot find bowtie2 index"
     exit 65
 fi
 
@@ -51,13 +57,13 @@ then
     exit 65
 fi
 
-../addsnv.py -v ../test_data/random_snvs.txt -f ../test_data/testregion.bam -r $3 -o ../test_data/testregion_mut.bam -n $1 -c ../test_data/test_cnvlist.txt.gz -p $2 --samtofastq $4 --aligner mem 
+../addsnv.py -v ../test_data/random_snvs.txt -f ../test_data/testregion_bt2.bam -r $3 -o ../test_data/testregion_bt2_mut.bam -n $1 -p $2 --samtofastq $4 --aligner bowtie2 --alignopts bowtie2ref:$5
 
 if [ $? -ne 0 ]
 then
  echo "addsnv.py failed. Are all the prequisites installed?"
  exit 65
 else
-  samtools mpileup -ugf $3 ../test_data/testregion_mut.bam | bcftools view -bvcg - > result.raw.bcf
+  samtools mpileup -ugf $3 ../test_data/testregion_bt2_mut.bam | bcftools view -bvcg - > result.raw.bcf
   bcftools view result.raw.bcf
 fi

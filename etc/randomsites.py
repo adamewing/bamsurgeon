@@ -1,10 +1,13 @@
 #!/usr/bin/env python
 
+import os
 import random
+import pysam
 import argparse
 
 '''
-http://hgdownload.cse.ucsc.edu/admin/exe/linux.x86_64/fetchChromSizes
+Tool for generating random sites for bamsurgeon input
+
 '''
 
 class Genome:
@@ -12,25 +15,35 @@ class Genome:
         ''' gfn = genome file name '''
         self.chrlen = {} # length of each chromosome
         self.chrmap = [] # used for picking chromosomes
+        self.ref    = pysam.Fastafile(gfn)
 
         bp = 0
         bins = 100000
 
-        with open(gfn, 'r') as g:
+        with open(gfn + '.fai', 'r') as g:
             for line in g:
-                chrom, len = line.strip().split()
-                self.chrlen[chrom] = int(len)
-                bp += int(len)
+                chrom, length = line.strip().split()[:2]
+                self.chrlen[chrom] = int(length)
+                bp += int(length)
 
-        for chrom, len in self.chrlen.iteritems():
-            self.chrmap += [chrom] * int(float(len) / float(bp) * bins)
+        for chrom, length in self.chrlen.iteritems():
+            self.chrmap += [chrom] * int(float(length) / float(bp) * bins)
 
-    def pick(self):
+    def pick(self, mutlen, avoidN=False):
         ''' return a random chromosome and position '''
-        rchrom = random.choice(self.chrmap)
-        rpos   = int(random.uniform(1, self.chrlen[rchrom]))
+        goodmut = False
 
-        return rchrom, rpos
+        while not goodmut: 
+            rchrom = random.choice(self.chrmap)
+            rpos   = int(random.uniform(1, self.chrlen[rchrom]))
+
+            if avoidN and 'N' not in self.ref.fetch(rchrom, rpos-1, rpos+mutlen):
+                goodmut = True
+
+            if not avoidN:
+                goodmut = True
+
+        return rchrom, rpos, rpos + mutlen
 
 
 def randomseq(len):
@@ -71,8 +84,8 @@ def run_snv(g, args):
     vafscale = scalefunc(args.minvaf, args.maxvaf)
 
     for _ in range(int(args.numpicks)):
-        rchrom, rstart = g.pick()
-        info = [rchrom, rstart, rstart, vafscale(vaf())]
+        rchrom, rstart, rend = g.pick(0, avoidN=args.avoidN)
+        info = [rchrom, rstart, rend, vafscale(vaf())]
         print '\t'.join(map(str, info))
 
 
@@ -85,11 +98,12 @@ def run_indel(g, args):
     lenscale = scalefunc(args.minlen, args.maxlen)
 
     for _ in range(int(args.numpicks)):
-        rchrom, rstart = g.pick()
+        mutlen = int(lenscale(len()))
+        rchrom, rstart, rend = g.pick(mutlen, avoidN=args.avoidN)
         if random.uniform(0,1) < 0.5: # deletion
-            info = [rchrom, rstart, rstart + int(lenscale(len())), vafscale(vaf()), 'DEL']
+            info = [rchrom, rstart, rend, vafscale(vaf()), 'DEL']
         else: # insertion
-            info = [rchrom, rstart, rstart, vafscale(vaf()), 'INS', randomseq(int(lenscale(len())))]
+            info = [rchrom, rstart, rend, vafscale(vaf()), 'INS', randomseq(mutlen)]
 
         print '\t'.join(map(str, info))
 
@@ -104,8 +118,8 @@ def run_sv(g, args):
 
     with open(args.cnvfile, 'w') as cnv:
         for _ in range(int(args.numpicks)):
-            rchrom, rstart = g.pick()
-            rend = rstart + int(lenscale(len()))
+            mutlen = int(lenscale(len()))
+            rchrom, rstart, rend = g.pick(mutlen, avoidN=args.avoidN)
             info = [rchrom, rstart, rend, randomsv()]
             cnvinfo = [rchrom, rstart, rend, 1.0/(vafscale(vaf()))]
             print '\t'.join(map(str, info))
@@ -115,6 +129,8 @@ def main(args):
     if args.seed is not None:
         random.seed(int(args.seed))
 
+    assert os.path.exists(args.genome + '.fai'), "reference FASTA not indexed: " + args.genome
+
     g = Genome(args.genome)
 
     args.func(g, args)
@@ -122,9 +138,10 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='make random sites for bamsurgeon')
-    parser.add_argument('-g', '--genome', required=True, help='genome description: chromosome name <TAB/SPACE> chromosome length')
+    parser.add_argument('-g', '--genome', required=True, help='Genome FASTA, indexed with samtools faidx (expects .fai file exists)')
     parser.add_argument('-s', '--seed', default=None, help='use a seed to make reproducible random picks')
     parser.add_argument('-n', '--numpicks', default=1000, help='number of sites to generate (default = 1000)')
+    parser.add_argument('--avoidN', default=False, action='store_true', help='avoid picking sites with N characters in ref')
     parser.add_argument('--minvaf', default=0.25, help='minimum variant allele fraction (default = 0.25)')
     parser.add_argument('--maxvaf', default=0.5, help='maximum variant allele fraction (default = 0.5)')
     parser.add_argument('--vafbeta1', default=2.0, help='left shape parameter for beta distribution of VAFs (default = 2.0)')

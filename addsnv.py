@@ -7,35 +7,19 @@ import random
 import subprocess
 import os
 import bs.replacereads as rr
-import datetime
 import traceback
+import bs.aligners as aligners
 
+from bs.common import *
 from uuid import uuid4
 from shutil import move
 from re import sub
 from multiprocessing import Pool, Value, Lock
-from collections import Counter
 
 
 sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)
 sys.stderr = os.fdopen(sys.stderr.fileno(), 'w', 0)
 
-def now():
-    return str(datetime.datetime.now())
-
-def majorbase(basepile):
-    """returns tuple: (major base, count)
-    """
-    return Counter(basepile).most_common()[0]
-
-def minorbase(basepile):
-    """returns tuple: (minor base, count)
-    """
-    c = Counter(basepile)
-    if len(list(c.elements())) > 1:
-        return c.most_common(2)[-1]
-    else:
-        return c.most_common()[0]
 
 def mut(base, altbase):
     """ change base to something different
@@ -506,15 +490,8 @@ def replace(origbamfile, mutbamfile, outbamfile):
     outbam.close()
 
 
-def dictlist(fn):
-    d = {}
-    with open(fn, 'r') as inlist:
-        for name in inlist:
-            d[name.strip()] = True
-    return d
 
-
-def makemut(args, chrom, start, end, vaf, altbase, avoid):
+def makemut(args, chrom, start, end, vaf, altbase, avoid, alignopts):
     mutid = chrom + '_' + str(start) + '_' + str(end) + '_' + str(vaf) + '_' + str(altbase)
     try:
         bamfile = pysam.Samfile(args.bamFileName, 'rb')
@@ -601,7 +578,7 @@ def makemut(args, chrom, start, end, vaf, altbase, avoid):
                             else:
                                 numunmap += 1
 
-                            if len(mutreads) > args.maxdepth: 
+                            if len(mutreads) > int(args.maxdepth):
                                 sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tdepth at site is greater than cutoff, aborting mutation.\n")
                                 outbam_muts.close()
                                 os.remove(tmpoutbamname)
@@ -625,7 +602,8 @@ def makemut(args, chrom, start, end, vaf, altbase, avoid):
                         hasSNP = True
                 else:
                     print "WARN\t" + now() + "\t" + mutid + "\tcould not pileup for region:",chrom,pcol.pos
-                    hasSNP = True
+                    if not args.ignorepileup:
+                        hasSNP = True
 
         # pick reads to change
         readlist = []
@@ -697,24 +675,8 @@ def makemut(args, chrom, start, end, vaf, altbase, avoid):
 
         if not hasSNP or args.force:
             outbam_muts.close()
-            if args.single:
-                if args.bwamem:
-                    remap_bwamem(tmpoutbamname, 1, args.refFasta, args.samtofastq, mutid=mutid, paired=False)
-                elif args.novoalign:
-                    remap_novoalign(tmpoutbamname, 1, args.refFasta, args.samtofastq, args.novoref, mutid=mutid, paired=False)
-                elif args.gsnap:
-                    remap_gsnap(tmpoutbamname, 1, args.refFasta, args.samtofastq, args.gsnaprefdir, args.gsnaprefname, mutid=mutid, paired=False)
-                else:
-                    remap_single(tmpoutbamname, 1, args.refFasta, mutid=mutid)
-            else:
-                if args.bwamem:
-                    remap_bwamem(tmpoutbamname, 1, args.refFasta, args.samtofastq, mutid=mutid, paired=True)
-                elif args.novoalign:
-                    remap_novoalign(tmpoutbamname, 1, args.refFasta, args.samtofastq, args.novoref, mutid=mutid, paired=True)
-                elif args.gsnap:
-                    remap_gsnap(tmpoutbamname, 1, args.refFasta, args.samtofastq, args.gsnaprefdir, args.gsnaprefname, mutid=mutid, paired=True)
-                else:
-                    remap_paired(tmpoutbamname, 1, args.refFasta, mutid=mutid)
+
+            aligners.remap_bam(args.aligner, tmpoutbamname, args.refFasta, alignopts, mutid=mutid, paired=(not args.single), samtofastq=args.samtofastq)
 
             outbam_muts = pysam.Samfile(tmpoutbamname,'rb')
             coverwindow = 1
@@ -760,7 +722,6 @@ def makemut(args, chrom, start, end, vaf, altbase, avoid):
             os.remove(tmpoutbamname + '.bai')
         return None
 
-
 def main(args):
     print "INFO\t" + now() + "\tstarting " + sys.argv[0] + " called with args: " + ' '.join(sys.argv) + "\n"
     bedfile = open(args.varFileName, 'r')
@@ -770,21 +731,11 @@ def main(args):
         sys.stderr.write("ERROR\t" + now() + "\tinput bam must be indexed, not .bai file found for " + args.bamFileName + " \n")
         sys.exit(1)
 
-    if (args.bwamem or args.novoalign or args.gsnap) and args.samtofastq is None:
-        sys.stderr.write("ERROR\t" + now() + "\t --samtofastq must be specified with --bwamem or --novoalign option\n")
-        sys.exit(1)
+    alignopts = {}
+    if args.alignopts is not None:
+        alignopts = dict([o.split(':') for o in args.alignopts.split(',')])
 
-    if sum((args.bwamem, args.novoalign, args.gsnap)) > 1:
-        sys.stderr.write("ERROR\t" + now() + "\t only one aligner allowed e.g. --bwamem and --novoalign cannot be specified together\n")
-        sys.exit(1)
-
-    if args.novoalign and args.novoref is None:
-        sys.stderr.write("ERROR\t" + now() + "\t --novoref must be be specified with --novoalign\n")
-        sys.exit(1)
-
-    if args.gsnap and (args.gsnaprefname is None or args.gsnaprefdir is None):
-        sys.stderr.write("ERROR\t" + now() + "\t --gsnaprefname and --gsnaprefdir must be be specified with --gsnap\n")
-        sys.exit(1)
+    aligners.checkoptions(args.aligner, alignopts, args.samtofastq)
     
     if args.numtargeted is not None:
         if int(args.numsnvs) != 0 and int(args.numtargeted) > int(args.numsnvs):
@@ -792,6 +743,7 @@ def main(args):
             sys.stderr.write("WARNING\t" + now() + "\t --numtargeted ignored\n")
             args.numtargeted = None
         
+
     # load readlist to avoid, if specified
     avoid = None
     if args.avoidreads is not None:
@@ -845,7 +797,7 @@ def main(args):
                 assert altbase in ['A','T','C','G'], "ERROR:\t" + now() + "\tALT " + altbase + " not A, T, C, or G!\n"
 
             # make mutation (submit job to thread pool)
-            result = pool.apply_async(makemut, [args, chrom, start, end, vaf, altbase, avoid])
+            result = pool.apply_async(makemut, [args, chrom, start, end, vaf, altbase, avoid, alignopts])
 
             if result.get() is not None and result.get():
                 # result = None if skipped
@@ -899,9 +851,9 @@ def run():
     parser.add_argument('-c', '--cnvfile', dest='cnvfile', default=None, help="tabix-indexed list of genome-wide absolute copy number values (e.g. 2 alleles = no change)")
     parser.add_argument('-d', '--coverdiff', dest='coverdiff', default=0.9, help="allow difference in input and output coverage (default=0.9)")
     parser.add_argument('-p', '--procs', dest='procs', default=1, help="split into multiple processes (default=1)")
-    parser.add_argument('--samtofastq', default=None, help='path to picard SamToFastq.jar')
-    parser.add_argument('--mindepth', default=10, help='minimum read depth to make mutation')
-    parser.add_argument('--maxdepth', default=200, help='maximum read depth to make mutation')
+    parser.add_argument('--samtofastq', default=None, help='path to picard SamToFastq.jar, required for most aligners')
+    parser.add_argument('--mindepth', default=10, help='minimum read depth to make mutation (default = 10)')
+    parser.add_argument('--maxdepth', default=2000, help='maximum read depth to make mutation (default = 2000)')
     parser.add_argument('--minmutreads', default=3, help='minimum number of mutated reads to output per site')
     parser.add_argument('--avoidreads', default=None, help='file of read names to avoid (mutations will be skipped if overlap)')
     parser.add_argument('--nomut', action='store_true', default=False, help="dry run")
@@ -911,12 +863,9 @@ def run():
     parser.add_argument('--maxopen', dest='maxopen', default=1000, help="maximum number of open files during merge (default 1000)")
     parser.add_argument('--requirepaired', action='store_true', default=False, help='skip mutations if unpaired reads are present')
     parser.add_argument('--skipmerge', action='store_true', default=False, help="final output is tmp file to be merged")
-    parser.add_argument('--bwamem', action='store_true', default=False, help='realignment with BWA MEM (instead of backtrack)')
-    parser.add_argument('--novoalign', action='store_true', default=False, help='realignment with novoalign')
-    parser.add_argument('--novoref', default=None, help='novoalign reference, must be specified with --novoalign')
-    parser.add_argument('--gsnap', action='store_true', default=False, help='realignment with gsnap')
-    parser.add_argument('--gsnaprefname', default=None, help='gsnap reference directory')
-    parser.add_argument('--gsnaprefdir', default=None, help='gsnap reference name')
+    parser.add_argument('--ignorepileup', action='store_true', default=False, help="do not check pileup depth in mutation regions")
+    parser.add_argument('--aligner', default='backtrack', help='supported aligners: ' + ','.join(aligners.supported_aligners_bam))
+    parser.add_argument('--alignopts', default=None, help='aligner-specific options as comma delimited list of option1:value1,option2:value2,...')
     parser.add_argument('--tmpdir', default='addsnv.tmp', help='temporary directory (default=addsnv.tmp)')
     args = parser.parse_args()
     main(args)
