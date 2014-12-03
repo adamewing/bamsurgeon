@@ -161,8 +161,8 @@ def have_identical_haplotypes(v1, v2, ref):
         print
 
     try:
-        assert seq[v1_offset] == v1.REF[0]
-        assert seq[v2_offset] == v2.REF[0]
+        assert seq[v1_offset] == v1.REF[0].upper()
+        assert seq[v2_offset] == v2.REF[0].upper()
         assert len(v1_seq) == len(seq) - len(v1.REF) + len(v1.ALT[0])
         assert len(v2_seq) == len(seq) - len(v2.REF) + len(v2.ALT[0])
     except AssertionError:
