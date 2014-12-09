@@ -5,6 +5,7 @@ import vcf
 import argparse
 import string
 import pysam
+from collections import OrderedDict
 
 '''
 Evaluate VCFs against BAMSurgeon "Truth" VCFs
@@ -169,6 +170,8 @@ def have_identical_haplotypes(v1, v2, ref):
         #import pdb; pdb.set_trace()
         raise
 
+    #if ''.join(v1_seq).upper() == ''.join(v2_seq).upper():
+    #    print ''.join(v1_seq).upper()
     return ''.join(v1_seq).upper() == ''.join(v2_seq).upper()
 
 
@@ -183,8 +186,17 @@ def vars_identical(v1, v2):
     return all([v1.CHROM == v2.CHROM, v1.POS == v2.POS, v1.REF == v2.REF, v1.ALT[0] == v2.ALT[0]])
 
 
+def write_var(var, fh):
+    '''write pyvcf var to fh'''
+    assert len(var.ALT)==1
+    fh.write("%s\t%d\t.\t%s\t%s\t%s\t%s\t%s\n" % (
+        var.CHROM, var.POS, var.REF,
+        str(var.ALT[0]), var.QUAL if var.QUAL else ".",
+        ';'.join(var.FILTER) if len(var.FILTER) else ".",
+        string.translate(str(var.INFO), None, "{}'[] ").replace(":", "=").replace('=True', '')))
+    
 def evaluate(submission, truth, vtype='SNV', reffa=None, ignorechroms=None, ignorepass=False, 
-             fpfh=False, tpfh=False):
+             fpfh=False, tpfh=False, fnfh=False):
     ''' return stats on sensitivity, specificity, balanced accuracy '''
 
     assert vtype in ('SNV', 'SV', 'INDEL')
@@ -203,12 +215,14 @@ def evaluate(submission, truth, vtype='SNV', reffa=None, ignorechroms=None, igno
 
     truchroms = {}
 
+    fns = OrderedDict()
+    
     ''' count records in truth vcf, track contigs/chromosomes '''
     for trurec in truvcfh:
         if relevant(trurec, vtype, ignorechroms):
             trurecs += 1
             truchroms[trurec.CHROM] = True
-
+            fns[str(trurec)] = trurec
     used_truth = {} # keep track of 'truth' sites used, they should only be usable once
 
     ''' parse submission vcf, compare to truth '''
@@ -251,29 +265,28 @@ def evaluate(submission, truth, vtype='SNV', reffa=None, ignorechroms=None, igno
             sys.stderr.write("Warning: " + str(e) + "\n")
 
         if matched:
+            if fns.has_key(str(trurec)):
+                del fns[str(trurec)]
             tpcount += 1
             if tpfh:
                 #import pdb; pdb.set_trace()
                 assert not subrec.ID
-                assert not subrec.FILTER
-                assert len(subrec.ALT)==1
-                tpfh.write("%s\t%d\t.\t%s\t%s\t%s\t.\t%s\n" % (
-                    subrec.CHROM, subrec.POS, subrec.REF,
-                    str(subrec.ALT[0]), subrec.QUAL if subrec.QUAL else ".",
-                    string.translate(str(subrec.INFO), None, "{}'[] ").replace(":", "=").replace('=True', '')))
+                write_var(subrec, tpfh)
         else:
             if relevant(subrec, vtype, ignorechroms) and passfilter(subrec, disabled=ignorepass) and not svmask(subrec, truvcfh, truchroms): 
                 fpcount += 1 # FP counting method needs to change for real tumors
                 if fpfh:
                     #import pdb; pdb.set_trace()
                     assert not subrec.ID
-                    assert not subrec.FILTER
-                    assert len(subrec.ALT)==1
-                    fpfh.write("%s\t%d\t.\t%s\t%s\t%s\t.\t%s\n" % (
-                        subrec.CHROM, subrec.POS, subrec.REF,
-                        str(subrec.ALT[0]), subrec.QUAL if subrec.QUAL else ".",
-                        string.translate(str(subrec.INFO), None, "{}'[] ").replace(":", "=").replace('=True', '')))
+                    #assert not subrec.FILTER
+                    write_var(subrec, fpfh)
 
+    if fnfh:
+        for fn in fns.values():
+            assert len(fn.ALT)==1
+            write_var(fn, fnfh)
+            
+            
     print "tpcount, fpcount, subrecs, trurecs:"
     print tpcount, fpcount, subrecs, trurecs
 
@@ -321,10 +334,18 @@ def main(args):
         print "Writing TPs to %s" % args.print_tp_to
     else:
         tpfh = False
+    if args.print_fn_to:
+        if args.print_fn_to == "-":
+            fnfh = sys.stdout
+        else:
+            fnfh = open(args.print_fn_to, 'w')
+        print "Writing FNs to %s" % args.print_fn_to
+    else:
+        fnfh = False
 
     result = evaluate(args.subvcf, args.truvcf, vtype=args.mutype, reffa=args.reffa,
                       ignorechroms=chromlist, ignorepass=args.nonpass, 
-                      fpfh=fpfh, tpfh=tpfh)
+                      fpfh=fpfh, tpfh=tpfh, fnfh=fnfh)
 
     print "precision, recall, F1 score: " + ','.join(map(str, result))
 
@@ -338,5 +359,6 @@ if __name__ == '__main__':
     parser.add_argument('--nonpass', dest='nonpass', action="store_true", help="evaluate all records (not just PASS records) in VCF")
     parser.add_argument('--print-fp-to', dest='print_fp_to', help="output false positive positions to this file")
     parser.add_argument('--print-tp-to', dest='print_tp_to', help="output true positive positions to this file")
+    parser.add_argument('--print-fn-to', dest='print_fn_to', help="output false negatives positions to this file")
     args = parser.parse_args()
     main(args)
