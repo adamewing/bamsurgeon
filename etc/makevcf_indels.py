@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import sys
+import os
 import pysam
 import textwrap
 
@@ -29,30 +30,33 @@ if len(sys.argv) == 3:
 
     fa = pysam.Fastafile(sys.argv[2])
     print_header()
+    logdir_files = os.listdir(sys.argv[1])
 
-    with open(sys.argv[1], 'r') as logfile:
-        for line in logfile:
-            ref = ''
-            alt = ''
-            start = ''
-            info = []
-            info.append('SOMATIC')
-
-            if line.startswith('indel'):
-                indelinfo = line.strip().split()[1].split(':')
-                if indelinfo[0] == 'DEL':
-                    chrom, start, end = indelinfo[1:4]
-                    ref = fa.fetch(chrom, int(start)-1, int(end)).upper()
-                    alt = ref[0].upper()
-
-                if indelinfo[0] == 'INS':
-                    chrom, start, seq = indelinfo[1:4]
-                    ref = fa.fetch(chrom, int(start)-1, int(start)).upper()
-                    alt = ref.upper() + seq.upper()
-
-                assert ref != '' and alt != '' and start != ''
-
-                print '\t'.join((chrom, start, '.', ref, alt, '100', 'PASS', ';'.join(info), 'GT', '0/1'))
-
+    for filename in logdir_files:
+        if filename.endswith('.log'):
+            with open(sys.argv[1] + '/' + filename, 'r') as infile:
+                for line in infile:
+                    ref = ''
+                    alt = ''
+                    start = ''
+                    info = []
+                    info.append('SOMATIC')
+        
+                    if line.startswith('indel'):
+                        indelinfo = line.strip().split()[1].split(':')
+                        if indelinfo[0] == 'DEL':
+                            chrom, start, end = indelinfo[1:4]
+                            ref = fa.fetch(chrom, int(start)-1, int(end)).upper()
+                            alt = ref[0].upper()
+        
+                        if indelinfo[0] == 'INS':
+                            chrom, start, seq = indelinfo[1:4]
+                            ref = fa.fetch(chrom, int(start)-1, int(start)).upper()
+                            alt = ref.upper() + seq.upper()
+        
+                        assert ref != '' and alt != '' and start != ''
+        
+                        print '\t'.join((chrom, start, '.', ref, alt, '100', 'PASS', ';'.join(info), 'GT', '0/1'))
+        
 else:
-    print "usage:",sys.argv[0],"<bamsurgeon indel .log file> <samtools faidx indexed reference>"
+    print "usage:",sys.argv[0],"<log directory> <samtools faidx indexed reference>"

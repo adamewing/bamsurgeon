@@ -91,6 +91,390 @@ def countBaseAtPos(bamfile, chrom, pos, mutid='null'):
 
     return bases
 
+def mergebams(bamlist, outbamfn, maxopen=1000):
+    """ call samtools to merge two .bams
+    """
+
+    assert outbamfn.endswith('.bam')
+    print "INFO\t" + now() + "\tlen(bamlist)", len(bamlist)
+
+    if len(bamlist) == 1:
+        print "INFO\t" + now() + "\tonly one BAM to merge, renaming",bamlist[0],"-->",outbamfn
+        move(bamlist[0], outbamfn)
+    else:
+        nmerge = 1
+        mergenum = 0
+        merge_sublists = {}
+        for tmpbam in bamlist:
+            mergetmp = "tmp.merging." + str(mergenum) + "." + outbamfn
+            if mergetmp in merge_sublists:
+                merge_sublists[mergetmp].append(tmpbam)
+            else:
+                merge_sublists[mergetmp] = []
+                merge_sublists[mergetmp].append(tmpbam)
+            if nmerge % maxopen == 0:
+                mergenum += 1
+            nmerge += 1
+
+        for submergefn, tmpbams in merge_sublists.iteritems():
+            if len(tmpbams) == 1:
+                move(tmpbams[0], submergefn)
+                print "INFO\t" + now() + "\trenamed:",tmpbams[0],"-->",submergefn
+            else:
+                args = ['samtools','merge','-f',submergefn] + tmpbams 
+                print "INFO\t" + now() + "\tmerging, cmd: ",args
+                subprocess.check_call(args)
+
+        if len(merge_sublists.keys()) == 1:
+            print "INFO\t" + now() + "\tmerge finished, renaming:",merge_sublists.keys()[0],"-->",outbamfn
+            move(merge_sublists.keys()[0], outbamfn)
+        else:
+            args = ['samtools','merge','-f',outbamfn] + merge_sublists.keys() 
+            print "INFO\t" + now() + "\tfinal merge, cmd: ",args
+            subprocess.check_call(args)
+
+        for submergefn in merge_sublists.keys():
+            if os.path.exists(submergefn):
+                os.remove(submergefn)
+
+    for bamfile in bamlist:
+        if os.path.exists(bamfile):
+            os.remove(bamfile)
+            os.remove(bamfile + '.bai')
+
+def remap_paired(bamfn, threads, bwaref, mutid='null'):
+    """ call bwa/samtools to remap .bam
+    """
+    sai1fn = bamfn + ".1.sai"
+    sai2fn = bamfn + ".2.sai"
+    samfn  = bamfn + ".sam"
+    refidx = bwaref + ".fai"
+    BWA = '/mnt/software/stow/bwa-0.7.5a/bin/bwa'
+#    sai1args = ['bwa', 'aln', '-q', '5', '-l', '32', '-k', '3', '-t', str(threads), '-o', '1', '-f', sai1fn, '-b1', bwaref, bamfn]
+#    sai2args = ['bwa', 'aln', '-q', '5', '-l', '32', '-k', '3', '-t', str(threads), '-o', '1', '-f', sai2fn, '-b2', bwaref, bamfn]
+
+    sai1args = [BWA, 'aln', '-q', '3', '-t', str(threads), '-f', sai1fn, '-b1', bwaref, bamfn]
+    sai2args = [BWA, 'aln', '-q', '3', '-t', str(threads), '-f', sai2fn, '-b2', bwaref, bamfn]
+
+
+    samargs  = [BWA, 'sampe', '-P', '-f', samfn, bwaref, sai1fn, sai2fn, bamfn, bamfn]
+    bamargs  = ['samtools', 'view', '-bt', refidx, '-o', bamfn, samfn] 
+
+    print "INFO\t" + now() + "\t" + mutid + "\tmapping 1st end, cmd: " + " ".join(sai1args)
+    subprocess.check_call(sai1args)
+    print "INFO\t" + now() + "\t" + mutid + "\tmapping 2nd end, cmd: " + " ".join(sai2args)
+    subprocess.check_call(sai2args)
+    print "INFO\t" + now() + "\t" + mutid + "\tpairing ends, building .sam, cmd: " + " ".join(samargs)
+    subprocess.check_call(samargs)
+    print "INFO\t" + now() + "\t" + mutid + "\tsam --> bam, cmd: " + " ".join(bamargs)
+    subprocess.check_call(bamargs)
+
+    sortbase = bamfn + ".sort"
+    sortfn   = sortbase + ".bam"
+    sortargs = ['samtools','sort','-m','10000000000',bamfn,sortbase]
+    print "INFO\t" + now() + "\t" + mutid + "\tsorting, cmd: " + " ".join(sortargs)
+    subprocess.check_call(sortargs)
+    move(sortfn,bamfn)
+
+    indexargs = ['samtools','index',bamfn]
+    print "INFO\t" + now() + "\t" + mutid + "\tindexing, cmd: " + " ".join(indexargs)
+    subprocess.check_call(indexargs)
+
+    # cleanup
+    os.remove(sai1fn)
+    os.remove(sai2fn)
+    os.remove(samfn)
+
+############
+
+def remap_bwamem(bamfn, threads, bwaref, samtofastq, mutid='null', paired=True):
+    """ call bwa mem and samtools to remap .bam
+    """
+    assert os.path.exists(samtofastq)
+    assert bamreadcount(bamfn) > 0 
+
+    sam_out  = bamfn + '.realign.sam'
+    sort_out = bamfn + '.realign.sorted'
+
+    print "INFO\t" + now() + "\t" + mutid + "\tconverting " + bamfn + " to fastq\n"
+    fastq = bamtofastq(bamfn, samtofastq, threads=threads, paired=paired)
+
+    sam_cmd = []
+
+    if paired:
+        sam_cmd  = ['bwa', 'mem', '-t', str(threads), '-M', '-p', bwaref, fastq] # interleaved
+    else:
+        sam_cmd  = ['bwa', 'mem', '-t', str(threads), '-M', bwaref, fastq] # single-end
+
+    assert len(sam_cmd) > 0
+
+    bam_cmd  = ['samtools', 'view', '-bt', bwaref + '.fai', '-o', bamfn, sam_out]
+    sort_cmd = ['samtools', 'sort', '-@', str(threads), '-m', '10000000000', bamfn, sort_out]
+    idx_cmd  = ['samtools', 'index', bamfn]
+
+    print "INFO\t" + now() + "\t" + mutid + "\taligning " + fastq + " with bwa mem\n"
+    with open(sam_out, 'w') as sam:
+        p = subprocess.Popen(sam_cmd, stdout=subprocess.PIPE)
+        for line in p.stdout:
+            sam.write(line)
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\twriting " + sam_out + " to BAM...\n")
+    subprocess.check_call(bam_cmd)
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tdeleting SAM: " + sam_out + "\n")
+    os.remove(sam_out)
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tsorting output: " + ' '.join(sort_cmd) + "\n")
+    subprocess.check_call(sort_cmd)
+
+    sort_out += '.bam'
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremove original bam:" + bamfn + "\n")
+    os.remove(bamfn)
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\trename sorted bam: " + sort_out + " to original name: " + bamfn + "\n")
+    move(sort_out, bamfn)
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tindexing: " + ' '.join(idx_cmd) + "\n")
+    subprocess.check_call(idx_cmd)
+
+    # check if BAM readcount looks sane
+    if bamreadcount(bamfn) < fastqreadcount(fastq): 
+        raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fastq + "\n")
+    os.remove(fastq)
+
+
+def remap_novoalign(bamfn, threads, bwaref, samtofastq, novoref, mutid='null', paired=True):
+    """ call novoalign and samtools to remap .bam
+    """
+    assert os.path.exists(samtofastq)
+    assert os.path.exists(novoref)
+    assert bamreadcount(bamfn) > 0 
+
+    sam_out  = bamfn + '.realign.sam'
+    sort_out = bamfn + '.realign.sorted'
+
+    print "INFO\t" + now() + "\t" + mutid + "\tconverting " + bamfn + " to fastq\n"
+    fastq = bamtofastq(bamfn, samtofastq, threads=threads, paired=paired, twofastq=True)
+
+    sam_cmd = []
+
+    if paired:
+        sam_cmd  = ['novoalign', '--mmapOff', '-F', 'STDFQ', '-f', fastq[0], fastq[1], '-r', 'Random', '-d', novoref, '-oSAM'] # interleaved
+    else:
+        sam_cmd  = ['novoalign', '--mmapOff', '-F', 'STDFQ', '-f', fastq, '-r', 'Random', '-d', novoref, '-oSAM'] # interleaved
+
+    assert len(sam_cmd) > 0
+
+    bam_cmd  = ['samtools', 'view', '-bt', bwaref + '.fai', '-o', bamfn, sam_out]
+    sort_cmd = ['samtools', 'sort', '-@', str(threads), '-m', '10000000000', bamfn, sort_out]
+    idx_cmd  = ['samtools', 'index', bamfn]
+
+    print "INFO\t" + now() + "\t" + mutid + "\taligning " + str(fastq) + " with novoalign\n"
+    with open(sam_out, 'w') as sam:
+        p = subprocess.Popen(sam_cmd, stdout=subprocess.PIPE)
+        for line in p.stdout:
+            sam.write(line)
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\twriting " + sam_out + " to BAM...\n")
+    subprocess.check_call(bam_cmd)
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tdeleting SAM: " + sam_out + "\n")
+    os.remove(sam_out)
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tsorting output: " + ' '.join(sort_cmd) + "\n")
+    subprocess.check_call(sort_cmd)
+
+    sort_out += '.bam'
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremove original bam:" + bamfn + "\n")
+    os.remove(bamfn)
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\trename sorted bam: " + sort_out + " to original name: " + bamfn + "\n")
+    move(sort_out, bamfn)
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tindexing: " + ' '.join(idx_cmd) + "\n")
+    subprocess.check_call(idx_cmd)
+
+    # check if BAM readcount looks sane
+    if paired:
+        if bamreadcount(bamfn) < fastqreadcount(fastq[0]) + fastqreadcount(fastq[1]): 
+            raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
+    else:
+        if bamreadcount(bamfn) < fastqreadcount(fastq): 
+            raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
+
+    if paired:
+        for fq in fastq:
+            sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fq + "\n")
+            os.remove(fq)
+    else:
+        sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fastq + "\n")
+        os.remove(fastq)
+
+
+def remap_gsnap(bamfn, threads, bwaref, samtofastq, gsnaprefdir, gsnaprefname, mutid='null', paired=True):
+    """ call gsnap and samtools to remap .bam
+    """
+    assert os.path.exists(samtofastq)
+    assert os.path.exists(gsnaprefdir)
+    assert bamreadcount(bamfn) > 0 
+
+    sam_out  = bamfn + '.realign.sam'
+    sort_out = bamfn + '.realign.sorted'
+
+    print "INFO\t" + now() + "\t" + mutid + "\tconverting " + bamfn + " to fastq\n"
+    fastq = bamtofastq(bamfn, samtofastq, threads=threads, paired=paired, twofastq=True)
+
+    sam_cmd = []
+
+    if paired:
+        sam_cmd = ['gsnap', '-D', gsnaprefdir, '-d', gsnaprefname, '-t', str(threads), '--quality-protocol=sanger', 
+                   '-M', '2', '-n', '10', '-B', '2', '-i', '1', '--pairmax-dna=1000', '--terminal-threshold=1000', 
+                   '--gmap-mode=none', '--clip-overlap', '-A', 'sam', '-a', 'paired', fastq[0], fastq[1]]
+    else:
+        sam_cmd = ['gsnap', '-D', gsnaprefdir, '-d', gsnaprefname, '-t', str(threads), '--quality-protocol=sanger', 
+                   '-M', '2', '-n', '10', '-B', '2', '-i', '1', '--terminal-threshold=1000', '--gmap-mode=none', 
+                   '--clip-overlap', '-A', 'sam', fastq[0]]
+
+    assert len(sam_cmd) > 0
+
+    bam_cmd  = ['samtools', 'view', '-bt', bwaref + '.fai', '-o', bamfn, sam_out]
+    sort_cmd = ['samtools', 'sort', '-@', str(threads), '-m', '10000000000', bamfn, sort_out]
+    idx_cmd  = ['samtools', 'index', bamfn]
+
+    print "INFO\t" + now() + "\t" + mutid + "\taligning " + str(fastq) + " with gsnap\n"
+    with open(sam_out, 'w') as sam:
+        p = subprocess.Popen(sam_cmd, stdout=subprocess.PIPE)
+        for line in p.stdout:
+            sam.write(line)
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\twriting " + sam_out + " to BAM...\n")
+    subprocess.check_call(bam_cmd)
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tdeleting SAM: " + sam_out + "\n")
+    os.remove(sam_out)
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tsorting output: " + ' '.join(sort_cmd) + "\n")
+    subprocess.check_call(sort_cmd)
+
+    sort_out += '.bam'
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremove original bam:" + bamfn + "\n")
+    os.remove(bamfn)
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\trename sorted bam: " + sort_out + " to original name: " + bamfn + "\n")
+    move(sort_out, bamfn)
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tindexing: " + ' '.join(idx_cmd) + "\n")
+    subprocess.check_call(idx_cmd)
+
+    # check if BAM readcount looks sane
+    if paired:
+        if bamreadcount(bamfn) < fastqreadcount(fastq[0]) + fastqreadcount(fastq[1]): 
+            raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
+    else:
+        if bamreadcount(bamfn) < fastqreadcount(fastq): 
+            raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
+
+    if paired:
+        for fq in fastq:
+            sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fq + "\n")
+            os.remove(fq)
+    else:
+        sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fastq + "\n")
+        os.remove(fastq)
+
+
+def bamtofastq(bam, samtofastq, threads=1, paired=True, twofastq=False):
+    ''' if twofastq is True output two fastq files instead of interleaved (default) for paired-end'''
+    assert os.path.exists(samtofastq)
+    assert bam.endswith('.bam')
+
+    outfq = None
+    outfq_pair = None
+
+    cmd = ['java', '-XX:ParallelGCThreads=' + str(threads), '-Xmx4g', '-jar', samtofastq, 'VALIDATION_STRINGENCY=SILENT', 'INPUT=' + bam]
+    if paired:
+        if twofastq: # two-fastq paired end
+            outfq_pair = [sub('bam$', '1.fastq', bam), sub('bam$', '2.fastq', bam)]
+            cmd.append('F=' + outfq_pair[0])
+            cmd.append('F2=' + outfq_pair[1])
+        else: # interleaved paired-end
+            outfq = sub('bam$', 'fastq', bam)
+            cmd.append('FASTQ=' + outfq)
+            cmd.append('INTERLEAVE=true')
+    else:
+        outfq = sub('bam$', 'fastq', bam)
+        cmd.append('FASTQ=' + outfq)
+
+    sys.stdout.write("INFO\t" + now() + "\tconverting BAM " + bam + " to FASTQ\n")
+    subprocess.check_call(cmd)
+
+    if outfq is not None:
+        assert os.path.exists(outfq) # conversion failed
+        return outfq
+
+    if outfq_pair is not None:
+        assert os.path.exists(outfq_pair[0]) and os.path.exists(outfq_pair[1])
+        return outfq_pair
+
+    return None
+
+
+def bamreadcount(bamfile):
+    bam = pysam.Samfile(bamfile, 'rb')
+    if os.path.exists(bamfile + '.bai'):
+        return bam.mapped + bam.unmapped
+    else:
+        return(list(bam.fetch(until_eof=True)))
+
+
+def fastqreadcount(fastqfile):
+    assert not fastqfile.endswith('gz') # not supported yet
+    return sum(1 for line in open(fastqfile))/4
+
+
+#########
+
+
+def remap_single(bamfn, threads, bwaref, mutid='null'):
+    """ call bwa/samtools to remap .bam
+    """
+    raise ValueError('Using remap_single ... ')
+
+    saifn = bamfn + ".sai"
+    samfn  = bamfn + ".sam"
+    refidx = bwaref + ".fai"
+
+    saiargs = ['bwa', 'aln', '-q', '5', '-l', '32', '-k', '3', '-t', str(threads), '-o', '1', '-f', saifn, '-b1', bwaref, bamfn]
+    samargs  = ['bwa', 'samse', '-f', samfn, bwaref, saifn, bamfn]
+    bamargs  = ['samtools', 'view', '-bt', refidx, '-o', bamfn, samfn] 
+
+    print "INFO\t" + now() + "\t" + mutid + "\tmapping, cmd: " + " ".join(saiargs)
+    subprocess.check_call(saiargs)
+    print "INFO\t" + now() + "\t" + mutid + "\tpairing ends, building .sam, cmd: " + " ".join(samargs)
+    subprocess.check_call(samargs)
+    print "INFO\t" + now() + "\t" + mutid + "\tsam --> bam, cmd: " + " ".join(bamargs)
+    subprocess.check_call(bamargs)
+
+    sortbase = bamfn + ".sort"
+    sortfn   = sortbase + ".bam"
+    sortargs = ['samtools','sort','-m','10000000000',bamfn,sortbase]
+    print "INFO\t" + now() + "\t" + mutid + "\tsorting, cmd: " + " ".join(sortargs)
+    subprocess.check_call(sortargs)
+    move(sortfn,bamfn)
+
+    indexargs = ['samtools','index',bamfn]
+    print "INFO\t" + now() + "\t" + mutid + "\tindexing, cmd: " + " ".join(indexargs)
+    subprocess.check_call(indexargs)
+
+    # cleanup
+    os.remove(saifn)
+    os.remove(samfn)
+
 
 def replace(origbamfile, mutbamfile, outbamfile):
     ''' open .bam file and call replacereads
@@ -352,6 +736,13 @@ def main(args):
         alignopts = dict([o.split(':') for o in args.alignopts.split(',')])
 
     aligners.checkoptions(args.aligner, alignopts, args.samtofastq)
+    
+    if args.numtargeted is not None:
+        if int(args.numsnvs) != 0 and int(args.numtargeted) > int(args.numsnvs):
+            # number of snvs tried cannot be smaller than number of snvs targeted
+            sys.stderr.write("WARNING\t" + now() + "\t --numtargeted ignored\n")
+            args.numtargeted = None
+        
 
     # load readlist to avoid, if specified
     avoid = None
@@ -379,10 +770,16 @@ def main(args):
 
     pool = Pool(processes=int(args.procs))
     results = []
-
+    
+    nmutated = 0 
     ntried = 0
     for bedline in bedfile:
-        if ntried < int(args.numsnvs) or int(args.numsnvs) == 0:
+        if args.numtargeted is None:
+            continue_assert = ntried < int(args.numsnvs) or int(args.numsnvs) == 0
+        else:
+            continue_assert = nmutated < int(args.numtargeted) and (ntried < int(args.numsnvs) or int(args.numsnvs) == 0)
+
+        if  continue_assert:
             c = bedline.strip().split()
             chrom   = c[0]
             start   = int(c[1])
@@ -401,6 +798,12 @@ def main(args):
 
             # make mutation (submit job to thread pool)
             result = pool.apply_async(makemut, [args, chrom, start, end, vaf, altbase, avoid, alignopts])
+
+            if result.get() is not None and result.get():
+                # result = None if skipped
+                # result = [] if dropped because of nearby SNPs
+                nmutated += 1
+
             results.append(result)
             ntried += 1
 
@@ -444,6 +847,7 @@ def run():
     parser.add_argument('-s', '--snvfrac', dest='snvfrac', default=1, help='maximum allowable linked SNP MAF (for avoiding haplotypes) (default = 1)')
     parser.add_argument('-m', '--mutfrac', dest='mutfrac', default=0.5, help='allelic fraction at which to make SNVs (default = 0.5)')
     parser.add_argument('-n', '--numsnvs', dest='numsnvs', default=0, help="maximum number of mutations to try (default: entire input)")
+    parser.add_argument('-t', '--numtargeted',dest='numtargeted', default=None, help="targeted number of mutations to achieve (default: undefined, rely on -n option)")
     parser.add_argument('-c', '--cnvfile', dest='cnvfile', default=None, help="tabix-indexed list of genome-wide absolute copy number values (e.g. 2 alleles = no change)")
     parser.add_argument('-d', '--coverdiff', dest='coverdiff', default=0.9, help="allow difference in input and output coverage (default=0.9)")
     parser.add_argument('-p', '--procs', dest='procs', default=1, help="split into multiple processes (default=1)")

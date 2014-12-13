@@ -101,7 +101,7 @@ def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=No
     nullcount = 0 # number of null reads
 
     for read in donorbam.fetch(until_eof=True):
-        if read.seq and not read.is_secondary: # sanity check - don't include null reads, secondary alignments
+        if read.seq and not read.is_secondary and not (read.flag & 0x800): # sanity check - don't include null reads, secondary and supplementary alignments
             if read.qname not in exclude:
                 pairname = 'F' # read is first in pair
                 if read.is_read2:
@@ -134,7 +134,7 @@ def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=No
         if progress and prog % 10000000 == 0:
             sys.stdout.write("processed " + str(prog) + " reads.\n")
 
-        if not read.is_secondary and read.qname not in exclude:
+        if not read.is_secondary and not (read.flag & 0x800) and read.qname not in exclude:
             pairname = 'F' # read is first in pair
             if read.is_read2:
                 pairname = 'S' # read is second in pair

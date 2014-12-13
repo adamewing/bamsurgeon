@@ -37,7 +37,7 @@ if len(sys.argv) == 2:
                         c = line.strip().split()
                         chrom = c[1].split(':')[0]
                         pos = c[3]
-                        mut = c[4]
+                        mut = c[4].upper()
                         dpr = c[6]
                         vaf = c[7]
                         ref,alt = mut.split('-->')
