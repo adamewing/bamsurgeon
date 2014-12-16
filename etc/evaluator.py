@@ -223,7 +223,7 @@ def evaluate(submission, truth, vtype='SNV', reffa=None, ignorechroms=None, igno
                 for trurec in truvcfh.fetch(subrec.CHROM, startpos, end=endpos):
                     if match(subrec, trurec, vtype=vtype) and str(trurec) not in used_truth:
                         matched = True
-                if not matched and subrec.is_indel and reffa_fh:# try haplotype aware comparion
+                if not matched and subrec.is_indel and reffa_fh:# try haplotype aware comparison
                     window = 100
                     for (trurec, d) in get_close_matches(subrec, truvcfh, window, indels_only=True):
                         if str(trurec) in used_truth:
@@ -231,7 +231,7 @@ def evaluate(submission, truth, vtype='SNV', reffa=None, ignorechroms=None, igno
                         if have_identical_haplotypes(subrec, trurec, reffa_fh):
                             matched = True
                             if debug:
-                                print "DEBUG: Rescueing %s which has same haplotype as %s\n" % (subrec, trurec)
+                                print "DEBUG: Rescuing %s which has same haplotype as %s" % (subrec, trurec)
                             break
             if matched:
                 used_truth[str(trurec)] = True
@@ -278,7 +278,7 @@ def main(args):
         sys.stderr.write("-m/--mutype must be either SV, SNV, or INDEL\n")
         sys.exit(1)
 
-    result = evaluate(args.subvcf, args.truvcf, vtype=args.mutype, reffa=args.reffa, ignorechroms=chromlist, ignorepass=args.nonpass, printfp=args.printfp, debug=False)
+    result = evaluate(args.subvcf, args.truvcf, vtype=args.mutype, reffa=args.reffa, ignorechroms=chromlist, ignorepass=args.nonpass, printfp=args.printfp, debug=args.debug)
 
     print "precision, recall, F1 score: " + ','.join(map(str, result))
 
@@ -291,5 +291,6 @@ if __name__ == '__main__':
     parser.add_argument('--ignore', dest='chromlist', default=None, help="(optional) comma-seperated list of chromosomes to ignore")
     parser.add_argument('--nonpass', dest='nonpass', action="store_true", help="evaluate all records (not just PASS records) in VCF")
     parser.add_argument('--printfp', dest='printfp', action="store_true", help="output false positive positions")
+    parser.add_argument('--debug', dest='debug', action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
     main(args)
