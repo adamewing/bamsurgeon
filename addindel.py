@@ -87,13 +87,15 @@ def replace(origbamfile, mutbamfile, outbamfile):
 
 def makeins(read, start, ins, debug=False):
     assert len(read.seq) > len(ins) + 2
+    
     if debug:
         print "DEBUG: INS: read.pos:", read.pos
         print "DEBUG: INS: start:   ", start
         print "DEBUG: INS: ins:     ", ins
+        print "DEBUG: DEL: cigar:     ", read.cigarstring
 
     orig_len = len(read.seq)
-    pos_in_read = start - read.pos    
+    pos_in_read = start - read.pos + read.qstart
 
 
     if pos_in_read > 0: # insertion start in read span
@@ -103,39 +105,33 @@ def makeins(read, start, ins, debug=False):
         right = read.seq[pos_in_read:]
 
         newseq = left + ins + right
-
-        if debug:
-            print "DEBUG: INS: read.seq:", read.seq
-            print "DEBUG: INS: newseq:  ", newseq[:orig_len]
-
-        return newseq[:orig_len]
+        newseq = newseq[:orig_len]
 
     else: # insertion continues to the left of read
         right = read.seq[pos_in_read:]
         newseq = ins + right
-        return newseq[-orig_len:]
+        newseq = newseq[-orig_len:]
+
+    if debug:
+        print "DEBUG: INS: orig seq:", read.seq
+        print "DEBUG: INS: newseq:  ", newseq
+    return newseq
+
 
 def makedel(read, chrom, start, end, ref, debug=False): #FIXME
     assert len(read.seq) > end-start-2
     
-    # take care of leading soft clips S=BAM_CSOFT_CLIP=4
-    if read.cigar[0][0] == 4:
-        clip_offset = read.cigar[0][1]
-    else:
-        clip_offset = 0
-        
     if debug:
         print "DEBUG: DEL: read.pos:", read.pos
         print "DEBUG: DEL: start:   ", start
         print "DEBUG: DEL: ins:     ", end
         print "DEBUG: DEL: cigar:     ", read.cigarstring
-        print "DEBUG: DEL: clip_offset:     ", clip_offset
-        print "DEBUG: DEL: orig read:     ", read.seq
+        print "DEBUG: DEL: orig seq:     ", read.seq
 
     orig_len = len(read.seq)
     #orig_end = read.pos + orig_len
-    start_in_read = start - read.pos + clip_offset
-    end_in_read = end - read.pos + clip_offset
+    start_in_read = start - read.pos + read.qstart
+    end_in_read = end - read.pos + read.qstart
 
     if debug:
         print "DEBUG: DEL: start_in_read:", start_in_read
@@ -167,7 +163,7 @@ def makedel(read, chrom, start, end, ref, debug=False): #FIXME
         right += ref.fetch(chrom, read.pos+len(read.seq), read.pos+len(read.seq)+(len(read.seq)-len(left)-len(right)))
 
     if debug:
-        print "DEBUG: DEL:  out read:     ", left + right
+        print "DEBUG: DEL:  newseq:     ", left + right
     return left + right
 
 
