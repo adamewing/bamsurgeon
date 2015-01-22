@@ -1,16 +1,17 @@
 #!/usr/bin/env python
-
-import sys, os
-import vcf
-import argparse
-import pysam
-
 '''
 Evaluate VCFs against BAMSurgeon "Truth" VCFs
 Adam Ewing, adam.ewing@mater.uq.edu.au
 Requires PyVCF (https://github.com/jamescasbon/PyVCF)
 and PySAM
 '''
+
+import sys, os
+import vcf
+import argparse
+import pysam
+from collections import OrderedDict
+
 
 def match(subrec, trurec, vtype='SNV'):
     assert vtype in ('SNV', 'SV', 'INDEL')
@@ -172,19 +173,28 @@ def have_identical_haplotypes(v1, v2, ref):
     return ''.join(v1_seq).upper() == ''.join(v2_seq).upper()
 
 
-def evaluate(submission, truth, vtype='SNV', reffa=None, ignorechroms=None, ignorepass=False, printfp=False, debug=False):
+def evaluate(submission, truth, vtype='SNV', reffa=None, ignorechroms=None, ignorepass=False, 
+             fp_vcf=None, fn_vcf=None, tp_vcf=None,
+             debug=False):
     ''' return stats on sensitivity, specificity, balanced accuracy '''
 
     assert vtype in ('SNV', 'SV', 'INDEL')
     subvcfh = vcf.Reader(filename=submission)
     truvcfh = vcf.Reader(filename=truth)
 
+    fpvcfh = fnvcfh = tpvcfh = None
+    if fp_vcf:
+        fpvcfh = vcf.Writer(open(fp_vcf, 'w'), template=subvcfh)
+    if fn_vcf:
+        fnvcfh = vcf.Writer(open(fn_vcf, 'w'), template=subvcfh)
+    if tp_vcf:
+        tpvcfh = vcf.Writer(open(tp_vcf, 'w'), template=subvcfh)
+
+    reffa_fh = None
     if reffa:
         reffa_fh  = pysam.Fastafile(reffa)
         if debug:
             print "DEBUG: Using haplotype aware indel comparison"
-    else:
-        reffa_fh = None
     
     tpcount = 0
     fpcount = 0
@@ -192,13 +202,15 @@ def evaluate(submission, truth, vtype='SNV', reffa=None, ignorechroms=None, igno
     trurecs = 0
 
     truchroms = {}
+    fns = OrderedDict()
 
     ''' count records in truth vcf, track contigs/chromosomes '''
     for trurec in truvcfh:
         if relevant(trurec, vtype, ignorechroms):
             trurecs += 1
             truchroms[trurec.CHROM] = True
-
+            fns[str(trurec)] = trurec
+            
     used_truth = {} # keep track of 'truth' sites used, they should only be usable once
 
     ''' parse submission vcf, compare to truth '''
@@ -225,7 +237,7 @@ def evaluate(submission, truth, vtype='SNV', reffa=None, ignorechroms=None, igno
                         matched = True
                 if not matched and subrec.is_indel and reffa_fh:# try haplotype aware comparison
                     window = 100
-                    for (trurec, d) in get_close_matches(subrec, truvcfh, window, indels_only=True):
+                    for (trurec, _) in get_close_matches(subrec, truvcfh, window, indels_only=True):
                         if str(trurec) in used_truth:
                             continue
                         if have_identical_haplotypes(subrec, trurec, reffa_fh):
@@ -241,11 +253,21 @@ def evaluate(submission, truth, vtype='SNV', reffa=None, ignorechroms=None, igno
 
         if matched:
             tpcount += 1
+            if tpvcfh:
+                tpvcfh.write_record(subrec)
+            if fns.has_key(str(trurec)):
+                del fns[str(trurec)]            
         else:
             if relevant(subrec, vtype, ignorechroms) and passfilter(subrec, disabled=ignorepass) and not svmask(subrec, truvcfh, truchroms): 
                 fpcount += 1 # FP counting method needs to change for real tumors
-                if printfp:
-                    print "FP:", subrec
+                if fpvcfh:
+                    fpvcfh.write_record(subrec)
+
+
+    if fnvcfh:
+        for fn in fns.values():
+            fnvcfh.write_record(fn)
+
 
     print "tpcount, fpcount, subrecs, trurecs:"
     print tpcount, fpcount, subrecs, trurecs
@@ -258,6 +280,10 @@ def evaluate(submission, truth, vtype='SNV', reffa=None, ignorechroms=None, igno
     #fdr       = 1.0 - float(fpcount) / float(subrecs)
     f1score   = 0.0 if tpcount == 0 else 2.0*(precision*recall)/(precision+recall)
 
+    for fh in [fpvcfh, fnvcfh, tpvcfh]:
+        if fh:
+            fh.close()
+            
     return precision, recall, f1score
 
 def main(args):
@@ -281,7 +307,10 @@ def main(args):
         sys.stderr.write("-m/--mutype must be either SV, SNV, or INDEL\n")
         sys.exit(1)
 
-    result = evaluate(args.subvcf, args.truvcf, vtype=args.mutype, reffa=args.reffa, ignorechroms=chromlist, ignorepass=args.nonpass, printfp=args.printfp, debug=args.debug)
+    result = evaluate(args.subvcf, args.truvcf, vtype=args.mutype, 
+                      reffa=args.reffa, ignorechroms=chromlist, ignorepass=args.nonpass, 
+                      fp_vcf=args.fp_vcf, fn_vcf=args.fn_vcf, tp_vcf=args.tp_vcf,
+                      debug=args.debug)
 
     print "precision, recall, F1 score: " + ','.join(map(str, result))
 
@@ -293,7 +322,9 @@ if __name__ == '__main__':
     parser.add_argument('-m', '--mutype', dest='mutype', required=True, help="Mutation type: must be either SNV, SV, or INDEL")
     parser.add_argument('--ignore', dest='chromlist', default=None, help="(optional) comma-seperated list of chromosomes to ignore")
     parser.add_argument('--nonpass', dest='nonpass', action="store_true", help="evaluate all records (not just PASS records) in VCF")
-    parser.add_argument('--printfp', dest='printfp', action="store_true", help="output false positive positions")
+    parser.add_argument('--fp', dest='fp_vcf', help="print false positive positions to this vcf-file")
+    parser.add_argument('--tp', dest='tp_vcf', help="print true positive positions to this file")
+    parser.add_argument('--fn', dest='fn_vcf', help="print false negatives positions to this file")
     parser.add_argument('--debug', dest='debug', action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
     main(args)
