@@ -162,7 +162,7 @@ def makemut(args, chrom, start, end, vaf, altbase, avoid, alignopts):
                         os.remove(tmpoutbamname)
                         return None
 
-                    if not pread.alignment.is_secondary: # only consider primary alignments
+                    if not pread.alignment.is_secondary and bin(pread.alignment.flag & 2048) != bin(2048): # only consider primary alignments
                         basepile += pread.alignment.seq[pread.query_position-1]
                         pairname = 'F' # read is first in pair
                         if pread.alignment.is_read2:
@@ -173,7 +173,7 @@ def makemut(args, chrom, start, end, vaf, altbase, avoid, alignopts):
                         extqname = ','.join((pread.alignment.qname,str(pread.alignment.pos),pairname))
 
                         if pcol.pos == mutpos:
-                            if not pread.alignment.is_secondary and not pread.alignment.mate_is_unmapped:
+                            if not pread.alignment.is_secondary and bin(pread.alignment.flag & 2048) != bin(2048) and not pread.alignment.mate_is_unmapped:
                                 outreads[extqname] = pread.alignment
                                 mutbases = list(pread.alignment.seq)
                                 mutbases[pread.query_position-1] = mutbase

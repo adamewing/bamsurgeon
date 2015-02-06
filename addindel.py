@@ -235,8 +235,8 @@ def makemut(args, chrom, start, end, vaf, ins, avoid, alignopts):
                         print "WARN\t" + now() + "\t" + mutid + "\tdropped mutation due to read in --avoidlist", pread.alignment.qname
                         os.remove(tmpoutbamname)
                         return None
-                    if not pread.alignment.is_secondary: # only consider primary alignments
-                        basepile += pread.alignment.seq[pread.qpos-1]
+                    if not pread.alignment.is_secondary and bin(pread.alignment.flag & 2048) != bin(2048): # only consider primary alignments
+                        basepile += pread.alignment.seq[pread.query_position-1]
                         pairname = 'F' # read is first in pair
                         if pread.alignment.is_read2:
                             pairname = 'S' # read is second in pair
@@ -247,7 +247,7 @@ def makemut(args, chrom, start, end, vaf, ins, avoid, alignopts):
                         extqname = ','.join((pread.alignment.qname,str(pread.alignment.pos),pairname))
 
                         if pcol.pos == mutpos:
-                            if not pread.alignment.is_secondary and not pread.alignment.mate_is_unmapped:
+                            if not pread.alignment.is_secondary and bin(pread.alignment.flag & 2048) != bin(2048) and not pread.alignment.mate_is_unmapped:
                                 outreads[extqname] = pread.alignment
                                 if is_insertion:
                                     mutreads[extqname] = makeins(pread.alignment, start, ins) #FIXME
