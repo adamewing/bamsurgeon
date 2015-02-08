@@ -4,8 +4,10 @@ Please see doc/Manual.pdf for instructions and contact adam.ewing@gmail.com with
 
 Prerequisites:
 
-samtools/wgsim/tabix (http://samtools.sourceforge.net/)
-pysam (http://code.google.com/p/pysam/) Version 0.8.1
+samtools/wgsim/tabix (https://github.com/samtools/samtools)
+bcftools (https://github.com/samtools/bcftools)
+pysam >= 0.8.1 (https://github.com/pysam-developers/pysam)
 bwa (http://bio-bwa.sourceforge.net/)
 velvet (http://www.ebi.ac.uk/~zerbino/velvet/)
 exonerate (http://www.ebi.ac.uk/~guy/exonerate/)
+picard tools >= 1.128 (https://github.com/broadinstitute/picard/releases/tag/1.128)

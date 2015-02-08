@@ -85,15 +85,17 @@ def mergebams(bamlist, outbamfn, maxopen=100, debug=False):
                 os.remove(bamfile + '.bai')
 
 
-def bamtofastq(bam, samtofastq, threads=1, paired=True, twofastq=False):
+def bamtofastq(bam, picardjar, threads=1, paired=True, twofastq=False):
     ''' if twofastq is True output two fastq files instead of interleaved (default) for paired-end'''
-    assert os.path.exists(samtofastq)
+    assert os.path.exists(picardjar)
     assert bam.endswith('.bam')
 
     outfq = None
     outfq_pair = None
 
-    cmd = ['java', '-XX:ParallelGCThreads=' + str(threads), '-Xmx4g', '-jar', samtofastq, 'VALIDATION_STRINGENCY=SILENT', 'INPUT=' + bam]
+    cmd = ['java', '-XX:ParallelGCThreads=' + str(threads), '-Xmx4g', '-jar', picardjar, 'SamToFastq', 'VALIDATION_STRINGENCY=SILENT', 'INPUT=' + bam]
+    cmd.append('INCLUDE_NON_PRIMARY_ALIGNMENTS=false') # in case the default ever changes
+    
     if paired:
         if twofastq: # two-fastq paired end
             outfq_pair = [sub('bam$', '1.fastq', bam), sub('bam$', '2.fastq', bam)]

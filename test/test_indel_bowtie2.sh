@@ -48,6 +48,5 @@ else
     samtools sort ../test_data/testregion_bt2_mut.bam ../test_data/testregion_bt2_mut.sorted
     mv ../test_data/testregion_bt2_mut.sorted.bam ../test_data/testregion_bt2_mut.bam
     samtools index ../test_data/testregion_bt2_mut.bam
-    samtools mpileup -ugf $2 ../test_data/testregion_bt2_mut.bam | bcftools view -bvcg - > result.raw.bcf
-    bcftools view result.raw.bcf
+    samtools mpileup -ugf $2 ../test_data/testregion_bt2_mut.bam | bcftools call -vm
 fi

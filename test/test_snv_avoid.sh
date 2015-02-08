@@ -51,7 +51,6 @@ then
  echo "addsnv.py failed. Are all the prequisites installed?"
  exit 65
 else
-  samtools mpileup -ugf $3 ../test_data/testregion_mut.bam | bcftools view -bvcg - > result.raw.bcf
-  bcftools view result.raw.bcf
+  samtools mpileup -ugf $3 ../test_data/testregion_mut.bam | bcftools call -vm
   echo "output should be 1 less snv than requested ..."
 fi

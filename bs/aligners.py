@@ -19,7 +19,7 @@ from uuid import uuid4
 supported_aligners_bam   = ['backtrack', 'mem', 'novoalign', 'gsnap', 'bowtie2']
 supported_aligners_fastq = ['backtrack', 'mem', 'novoalign']
 
-def checkoptions(name, options, samtofastq, sv=False):
+def checkoptions(name, options, picardjar, sv=False):
     ''' checks if necessary options have been specified '''
 
     if sv:
@@ -30,8 +30,8 @@ def checkoptions(name, options, samtofastq, sv=False):
             raise ValueError("ERROR\tunsupported aligner: " + name + "\n")
 
     if name != 'backtrack' and not sv:
-        if samtofastq is None:
-            raise ValueError("ERROR\t'--aligner " + name + "' requires '--samtofastq' to be specified\n")
+        if picardjar is None:
+            raise ValueError("ERROR\t'--aligner " + name + "' requires '--picardjar' to be specified\n")
 
     if name == 'novoalign':
         if 'novoref' not in options:
@@ -46,25 +46,25 @@ def checkoptions(name, options, samtofastq, sv=False):
             raise ValueError("ERROR\t'--aligner bowtie2' requires '--alignopts bowtie2ref:bowtie2_ref_basepath\n")
 
 
-def remap_bam(name, bamfn, fastaref, options, mutid='null', threads=1, paired=True, samtofastq=None):
+def remap_bam(name, bamfn, fastaref, options, mutid='null', threads=1, paired=True, picardjar=None):
     ''' remap bam file with supported alignment method. "options" param is a dict of aligner-specific required options '''
 
-    checkoptions(name, options, samtofastq)
+    checkoptions(name, options, picardjar)
 
     if name == 'backtrack':
         remap_backtrack_bam(bamfn, threads, fastaref, mutid=mutid, paired=paired)
 
     if name == 'mem':
-        remap_bwamem_bam(bamfn, threads, fastaref, samtofastq, mutid=mutid, paired=paired)
+        remap_bwamem_bam(bamfn, threads, fastaref, picardjar, mutid=mutid, paired=paired)
 
     if name == 'novoalign':
-        remap_novoalign_bam(bamfn, threads, fastaref, samtofastq, options['novoref'], mutid=mutid, paired=paired)
+        remap_novoalign_bam(bamfn, threads, fastaref, picardjar, options['novoref'], mutid=mutid, paired=paired)
 
     if name == 'gsnap':
-        remap_gsnap_bam(bamfn, threads, fastaref, samtofastq, options['gsnaprefdir'], options['gsnaprefname'], mutid=mutid, paired=paired)
+        remap_gsnap_bam(bamfn, threads, fastaref, picardjar, options['gsnaprefdir'], options['gsnaprefname'], mutid=mutid, paired=paired)
 
     if name == 'bowtie2':
-        remap_bowtie2_bam(bamfn, threads, fastaref, samtofastq, options['bowtie2ref'], mutid=mutid, paired=paired)
+        remap_bowtie2_bam(bamfn, threads, fastaref, picardjar, options['bowtie2ref'], mutid=mutid, paired=paired)
 
 
 def remap_backtrack_bam(bamfn, threads, fastaref, mutid='null', paired=True):
@@ -138,10 +138,10 @@ def remap_backtrack_bam(bamfn, threads, fastaref, mutid='null', paired=True):
         os.remove(samfn)
 
 
-def remap_bwamem_bam(bamfn, threads, fastaref, samtofastq, mutid='null', paired=True):
+def remap_bwamem_bam(bamfn, threads, fastaref, picardjar, mutid='null', paired=True):
     """ call bwa mem and samtools to remap .bam
     """
-    assert os.path.exists(samtofastq)
+    assert os.path.exists(picardjar)
     assert bamreadcount(bamfn) > 0
     if paired:
         assert bamreadcount(bamfn) > 1 
@@ -150,7 +150,7 @@ def remap_bwamem_bam(bamfn, threads, fastaref, samtofastq, mutid='null', paired=
     sort_out = bamfn + '.realign.sorted'
 
     print "INFO\t" + now() + "\t" + mutid + "\tconverting " + bamfn + " to fastq\n"
-    fastq = bamtofastq(bamfn, samtofastq, threads=threads, paired=paired)
+    fastq = bamtofastq(bamfn, picardjar, threads=threads, paired=paired)
 
     sam_cmd = []
 
@@ -199,10 +199,10 @@ def remap_bwamem_bam(bamfn, threads, fastaref, samtofastq, mutid='null', paired=
     os.remove(fastq)
 
 
-def remap_novoalign_bam(bamfn, threads, fastaref, samtofastq, novoref, mutid='null', paired=True):
+def remap_novoalign_bam(bamfn, threads, fastaref, picardjar, novoref, mutid='null', paired=True):
     """ call novoalign and samtools to remap .bam
     """
-    assert os.path.exists(samtofastq)
+    assert os.path.exists(picardjar)
     assert os.path.exists(novoref)
     assert bamreadcount(bamfn) > 0 
 
@@ -210,7 +210,7 @@ def remap_novoalign_bam(bamfn, threads, fastaref, samtofastq, novoref, mutid='nu
     sort_out = bamfn + '.realign.sorted'
 
     print "INFO\t" + now() + "\t" + mutid + "\tconverting " + bamfn + " to fastq\n"
-    fastq = bamtofastq(bamfn, samtofastq, threads=threads, paired=paired, twofastq=True)
+    fastq = bamtofastq(bamfn, picardjar, threads=threads, paired=paired, twofastq=True)
 
     sam_cmd = []
 
@@ -268,10 +268,10 @@ def remap_novoalign_bam(bamfn, threads, fastaref, samtofastq, novoref, mutid='nu
         os.remove(fastq)
 
 
-def remap_gsnap_bam(bamfn, threads, fastaref, samtofastq, gsnaprefdir, gsnaprefname, mutid='null', paired=True):
+def remap_gsnap_bam(bamfn, threads, fastaref, picardjar, gsnaprefdir, gsnaprefname, mutid='null', paired=True):
     """ call gsnap and samtools to remap .bam
     """
-    assert os.path.exists(samtofastq)
+    assert os.path.exists(picardjar)
     assert os.path.exists(gsnaprefdir)
     assert bamreadcount(bamfn) > 0 
 
@@ -279,7 +279,7 @@ def remap_gsnap_bam(bamfn, threads, fastaref, samtofastq, gsnaprefdir, gsnaprefn
     sort_out = bamfn + '.realign.sorted'
 
     print "INFO\t" + now() + "\t" + mutid + "\tconverting " + bamfn + " to fastq\n"
-    fastq = bamtofastq(bamfn, samtofastq, threads=threads, paired=paired, twofastq=True)
+    fastq = bamtofastq(bamfn, picardjar, threads=threads, paired=paired, twofastq=True)
 
     sam_cmd = []
 
@@ -341,7 +341,7 @@ def remap_gsnap_bam(bamfn, threads, fastaref, samtofastq, gsnaprefdir, gsnaprefn
         os.remove(fastq)
 
 
-def remap_bowtie2_bam(bamfn, threads, fastaref, samtofastq, bowtie2ref, mutid='null', paired=True):
+def remap_bowtie2_bam(bamfn, threads, fastaref, picardjar, bowtie2ref, mutid='null', paired=True):
     """ call bowtie2 and samtools to remap .bam
     """
 
@@ -351,7 +351,7 @@ def remap_bowtie2_bam(bamfn, threads, fastaref, samtofastq, bowtie2ref, mutid='n
     sort_out = bamfn + '.realign.sorted'
 
     print "INFO\t" + now() + "\t" + mutid + "\tconverting " + bamfn + " to fastq\n"
-    fastq = bamtofastq(bamfn, samtofastq, threads=threads, paired=paired, twofastq=True)
+    fastq = bamtofastq(bamfn, picardjar, threads=threads, paired=paired, twofastq=True)
 
     sam_cmd = []
 

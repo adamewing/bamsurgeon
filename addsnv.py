@@ -292,7 +292,7 @@ def makemut(args, chrom, start, end, vaf, altbase, avoid, alignopts):
         if not hasSNP or args.force:
             outbam_muts.close()
 
-            aligners.remap_bam(args.aligner, tmpoutbamname, args.refFasta, alignopts, mutid=mutid, paired=(not args.single), samtofastq=args.samtofastq)
+            aligners.remap_bam(args.aligner, tmpoutbamname, args.refFasta, alignopts, mutid=mutid, paired=(not args.single), picardjar=args.picardjar)
 
             outbam_muts = pysam.Samfile(tmpoutbamname,'rb')
             coverwindow = 1
@@ -351,7 +351,7 @@ def main(args):
     if args.alignopts is not None:
         alignopts = dict([o.split(':') for o in args.alignopts.split(',')])
 
-    aligners.checkoptions(args.aligner, alignopts, args.samtofastq)
+    aligners.checkoptions(args.aligner, alignopts, args.picardjar)
 
     # load readlist to avoid, if specified
     avoid = None
@@ -447,7 +447,7 @@ def run():
     parser.add_argument('-c', '--cnvfile', dest='cnvfile', default=None, help="tabix-indexed list of genome-wide absolute copy number values (e.g. 2 alleles = no change)")
     parser.add_argument('-d', '--coverdiff', dest='coverdiff', default=0.9, help="allow difference in input and output coverage (default=0.9)")
     parser.add_argument('-p', '--procs', dest='procs', default=1, help="split into multiple processes (default=1)")
-    parser.add_argument('--samtofastq', default=None, help='path to picard SamToFastq.jar, required for most aligners')
+    parser.add_argument('--picardjar', default=None, help='path to picard.jar, required for most aligners')
     parser.add_argument('--mindepth', default=10, help='minimum read depth to make mutation (default = 10)')
     parser.add_argument('--maxdepth', default=2000, help='maximum read depth to make mutation (default = 2000)')
     parser.add_argument('--minmutreads', default=3, help='minimum number of mutated reads to output per site')
