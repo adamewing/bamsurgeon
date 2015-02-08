@@ -8,6 +8,7 @@ import subprocess
 import os
 import bs.replacereads as rr
 import bs.aligners as aligners
+import bs.mutation as mutation
 import traceback
 
 from bs.common import *
@@ -43,35 +44,6 @@ def countReadCoverage(bam,chrom,start,end):
     return coverage
 
 
-def countBaseAtPos(bamfile,chrom,pos,mutid='null'):
-    """ return list of bases at position chrom,pos
-    """
-    locstr = chrom + ":" + str(pos) + "-" + str(pos)
-    args = ['samtools','mpileup',bamfile,'-r',locstr]
-
-    p = subprocess.Popen(args,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
-    p.wait()
-    pout = p.stdout.readlines()
-
-    pileup = None 
-
-    for line in pout:
-        try:
-            c = line.strip().split()
-            assert len(c) > 5
-            pileup = c[4].upper()
-        except AssertionError:
-            sys.stderr.write("INFO\t" + now() + "\t" + mutid + "\tmpileup failed, no coverage for base: " + chrom + ":" + str(pos) + "\n")
-            return []
-    bases = []
-    if pileup:
-        for b in pileup:
-            if b in ['A','T','C','G']:
-                bases.append(b)
-
-    return bases
-
-
 def replace(origbamfile, mutbamfile, outbamfile):
     ''' open .bam file and call replacereads
     '''
@@ -84,87 +56,6 @@ def replace(origbamfile, mutbamfile, outbamfile):
     origbam.close()
     mutbam.close()
     outbam.close()
-
-def makeins(read, start, ins, debug=False):
-    assert len(read.seq) > len(ins) + 2
-    
-    if debug:
-        print "DEBUG: INS: read.pos:", read.pos
-        print "DEBUG: INS: start:   ", start
-        print "DEBUG: INS: ins:     ", ins
-        print "DEBUG: DEL: cigar:     ", read.cigarstring
-
-    orig_len = len(read.seq)
-    pos_in_read = start - read.pos + read.qstart
-
-
-    if pos_in_read > 0: # insertion start in read span
-        if debug:
-            print "DEBUG: INS: pos_in_read:", pos_in_read
-        left  = read.seq[:pos_in_read]
-        right = read.seq[pos_in_read:]
-
-        newseq = left + ins + right
-        newseq = newseq[:orig_len]
-
-    else: # insertion continues to the left of read
-        right = read.seq[pos_in_read:]
-        newseq = ins + right
-        newseq = newseq[-orig_len:]
-
-    if debug:
-        print "DEBUG: INS: orig seq:", read.seq
-        print "DEBUG: INS: newseq:  ", newseq
-    return newseq
-
-
-def makedel(read, chrom, start, end, ref, debug=False): #FIXME
-    assert len(read.seq) > end-start-2
-    
-    if debug:
-        print "DEBUG: DEL: read.pos:", read.pos
-        print "DEBUG: DEL: start:   ", start
-        print "DEBUG: DEL: ins:     ", end
-        print "DEBUG: DEL: cigar:     ", read.cigarstring
-        print "DEBUG: DEL: orig seq:     ", read.seq
-
-    orig_len = len(read.seq)
-    #orig_end = read.pos + orig_len
-    start_in_read = start - read.pos + read.qstart
-    end_in_read = end - read.pos + read.qstart
-
-    if debug:
-        print "DEBUG: DEL: start_in_read:", start_in_read
-        print "DEBUG: DEL: end_in_read:  ", end_in_read
-
-    if start_in_read < 0: # deletion begins to the left of the read
-        if debug:
-            print "DEBUG: DEL: del begins to left of read." 
-
-        assert end_in_read < orig_len
-        right = read.seq[end_in_read:]
-        left  = ref.fetch(chrom, start-(len(read.seq) - len(right)), start)
-
-    elif end_in_read > orig_len: # deletion ends to the right of the read
-        if debug:
-            print "DEBUG: DEL: del ends to right of read."
-
-        assert start_in_read > 0
-        left  = read.seq[:start_in_read]
-        right = ref.fetch(chrom, end, end+(len(read.seq) - len(left)))
-
-    else:
-        if debug:
-            print "DEBUG: DEL: del starts and ends within read." 
-
-        assert end_in_read <= orig_len and start_in_read >= 0 # deletion contained within the read
-        left  = read.seq[:start_in_read]
-        right = read.seq[end_in_read:]
-        right += ref.fetch(chrom, read.pos+len(read.seq), read.pos+len(read.seq)+(len(read.seq)-len(left)-len(right)))
-
-    if debug:
-        print "DEBUG: DEL:  newseq:     ", left + right
-    return left + right
 
 
 def get_mutstr(chrom, start, end, ins, ref):
@@ -214,88 +105,17 @@ def makemut(args, chrom, start, end, vaf, ins, avoid, alignopts):
 
         log = open('addindel_logs_' + os.path.basename(args.outBamFile) + '/' + os.path.basename(args.outBamFile) + "." + "_".join((chrom,str(start),str(end))) + ".log",'w')
 
-        # keep a list of reads to modify - use hash to keep unique since each
-        # read will be visited as many times as it has bases covering the region
-        outreads = {}
-        mutreads = {} # same keys as outreads
-        mutmates = {} # same keys as outreads, keep track of mates
         numunmap = 0
-        hasSNP = False
         tmpoutbamname = args.tmpdir + "/" + mutid + ".tmpbam." + str(uuid4()) + ".bam"
         print "INFO\t" + now() + "\t" + mutid + "\tcreating tmp bam: ",tmpoutbamname #DEBUG
         outbam_muts = pysam.Samfile(tmpoutbamname, 'wb', template=bamfile)
-        maxfrac = 0.0
 
-        for pcol in bamfile.pileup(reference=chrom,start=mutpos,end=mutpos+del_ln+1):
-            # this will include all positions covered by a read that covers the region of interest
-            if pcol.pos: #> start and pcol.pos <= end:
-                basepile = ''
-                for pread in pcol.pileups:
-                    if avoid is not None and pread.alignment.qname in avoid:
-                        print "WARN\t" + now() + "\t" + mutid + "\tdropped mutation due to read in --avoidlist", pread.alignment.qname
-                        os.remove(tmpoutbamname)
-                        return None
-                    if not pread.alignment.is_secondary and bin(pread.alignment.flag & 2048) != bin(2048): # only consider primary alignments
-                        basepile += pread.alignment.seq[pread.query_position-1]
-                        pairname = 'F' # read is first in pair
-                        if pread.alignment.is_read2:
-                            pairname = 'S' # read is second in pair
-                        if not pread.alignment.is_paired:
-                            pairname = 'U' # read is unpaired
+        mutfail, hasSNP, maxfrac, outreads, mutreads, mutmates = mutation.mutate(args, log, bamfile, bammate, chrom, mutpos, mutpos+del_ln+1, mutpos, avoid=avoid, mutid=mutid, is_insertion=is_insertion, is_deletion=is_deletion, ins_seq=ins, reffile=reffile, indel_start=start, indel_end=end)
 
-                        # names of reads in a pair are identical, so add info to keep it unique
-                        extqname = ','.join((pread.alignment.qname,str(pread.alignment.pos),pairname))
-
-                        if pcol.pos == mutpos:
-                            if not pread.alignment.is_secondary and bin(pread.alignment.flag & 2048) != bin(2048) and not pread.alignment.mate_is_unmapped:
-                                outreads[extqname] = pread.alignment
-                                if is_insertion:
-                                    mutreads[extqname] = makeins(pread.alignment, start, ins) #FIXME
-                                if is_deletion:
-                                    mutreads[extqname] = makedel(pread.alignment, chrom, start, end, reffile) #FIXME
-                                mate = None
-                                if not args.single:
-                                    try:
-                                        mate = bammate.mate(pread.alignment)
-                                    except:
-                                        sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\twarning: no mate for " + pread.alignment.qname + "\n")
-                                        if args.requirepaired:
-                                            print "WARN\t" + now() + "\t" + mutid + "\tskipped mutation due to --requirepaired"
-                                            os.remove(tmpoutbamname)
-                                            return None
-
-                                mutmates[extqname] = mate
-                                log.write(" ".join(('read',extqname,mutreads[extqname],"\n")))
-                            else:
-                                numunmap += 1
-
-                            # abort if mutation list getting too long
-                            if len(mutreads) > int(args.maxdepth):
-                                sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tdepth at site is greater than cutoff, aborting mutation.\n")
-                                outbam_muts.close()
-                                os.remove(tmpoutbamname)
-                                return None
-
-                # make sure region doesn't have any changes that are likely SNPs
-                # (trying to avoid messing with haplotypes)
-                    
-                basepile = countBaseAtPos(args.bamFileName,chrom,pcol.pos,mutid=mutid)
-                if basepile:
-                    majb = majorbase(basepile)
-                    minb = minorbase(basepile)
-
-                    frac = float(minb[1])/(float(majb[1])+float(minb[1]))
-                    if minb[0] == majb[0]:
-                        frac = 0.0
-                    if frac > maxfrac:
-                        maxfrac = frac
-                    if frac > snvfrac:
-                        sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tdropped for proximity to SNP, nearby SNP MAF: " + str(frac)  + " (maxfrac: " + str(snvfrac) + ")\n")
-                        hasSNP = True
-                else:
-                    sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tcould not pileup for region: " + chrom + ":" + str(pcol.pos) + "\n")
-                    if not args.ignorepileup:
-                        hasSNP = True
+        if mutfail:
+            outbam_muts.close()
+            os.remove(tmpoutbamname)
+            return None
 
         # pick reads to change
         readlist = []
@@ -327,7 +147,6 @@ def makemut(args, chrom, start, end, vaf, ins, avoid, alignopts):
         else:
             sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tselected VAF: " + str(vaf) + "\n")
 
-        ######
         lastread = int(len(readlist)*vaf)
 
         # pick at least args.minmutreads if possible
@@ -341,7 +160,6 @@ def makemut(args, chrom, start, end, vaf, ins, avoid, alignopts):
                 return None
 
         readlist = readlist[0:lastread] 
-        ######
 
         print "INFO\t" + now() + "\t" + mutid + "\tpicked: " + str(len(readlist)) + " reads"
 

@@ -9,6 +9,7 @@ import os
 import bs.replacereads as rr
 import traceback
 import bs.aligners as aligners
+import bs.mutation as mutation
 
 from bs.common import *
 from uuid import uuid4
@@ -63,35 +64,6 @@ def countReadCoverage(bam,chrom,start,end):
     return coverage
 
 
-def countBaseAtPos(bamfile, chrom, pos, mutid='null'):
-    """ return list of bases at position chrom,pos
-    """
-    locstr = chrom + ":" + str(pos) + "-" + str(pos)
-    args = ['samtools','mpileup',bamfile,'-r',locstr]
-
-    p = subprocess.Popen(args,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
-    p.wait()
-    pout = p.stdout.readlines()
-
-    pileup = None 
-
-    for line in pout:
-        try:
-            c = line.strip().split()
-            assert len(c) > 5
-            pileup = c[4].upper()
-        except AssertionError:
-            sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tmpileup failed, no coverage for base: " + chrom + ":" + str(pos))
-            return []
-    bases = []
-    if pileup:
-        for b in pileup:
-            if b in ['A','T','C','G']:
-                bases.append(b)
-
-    return bases
-
-
 def replace(origbamfile, mutbamfile, outbamfile):
     ''' open .bam file and call replacereads
     '''
@@ -104,7 +76,6 @@ def replace(origbamfile, mutbamfile, outbamfile):
     origbam.close()
     mutbam.close()
     outbam.close()
-
 
 
 def makemut(args, chrom, start, end, vaf, altbase, avoid, alignopts):
@@ -139,87 +110,17 @@ def makemut(args, chrom, start, end, vaf, altbase, avoid, alignopts):
 
         log = open('addsnv_logs_' + os.path.basename(args.outBamFile) + '/' + os.path.basename(args.outBamFile) + "." + "_".join((chrom,str(start),str(end))) + ".log",'w')
 
-        # keep a list of reads to modify - use hash to keep unique since each
-        # read will be visited as many times as it has bases covering the region
-        outreads = {}
-        mutreads = {} # same keys as outreads
-        mutmates = {} # same keys as outreads, keep track of mates
         numunmap = 0
-        hasSNP = False
         tmpoutbamname = args.tmpdir + "/" + mutid + ".tmpbam." + str(uuid4()) + ".bam"
         print "INFO\t" + now() + "\t" + mutid + "\tcreating tmp bam: ",tmpoutbamname
         outbam_muts = pysam.Samfile(tmpoutbamname, 'wb', template=bamfile)
-        maxfrac = 0.0
 
-        for pcol in bamfile.pileup(reference=chrom,start=mutpos,end=mutpos+1):
-            # this will include all positions covered by a read that covers the region of interest
-            if pcol.pos: #> start and pcol.pos <= end:
-                refbase = reffile.fetch(chrom,pcol.pos-1,pcol.pos)
-                basepile = ''
-                for pread in pcol.pileups:
-                    if avoid is not None and pread.alignment.qname in avoid:
-                        print "WARN\t" + now() + "\t" + mutid + "\tdropped mutation due to read in --avoidlist", pread.alignment.qname
-                        os.remove(tmpoutbamname)
-                        return None
+        mutfail, hasSNP, maxfrac, outreads, mutreads, mutmates = mutation.mutate(args, log, bamfile, bammate, chrom, mutpos, mutpos+1, mutpos, avoid=avoid, mutid=mutid, is_snv=True, mutbase=mutbase, reffile=reffile)
 
-                    if not pread.alignment.is_secondary and bin(pread.alignment.flag & 2048) != bin(2048): # only consider primary alignments
-                        basepile += pread.alignment.seq[pread.query_position-1]
-                        pairname = 'F' # read is first in pair
-                        if pread.alignment.is_read2:
-                            pairname = 'S' # read is second in pair
-                        if not pread.alignment.is_paired:
-                            pairname = 'U' # read is unpaired
-
-                        extqname = ','.join((pread.alignment.qname,str(pread.alignment.pos),pairname))
-
-                        if pcol.pos == mutpos:
-                            if not pread.alignment.is_secondary and bin(pread.alignment.flag & 2048) != bin(2048) and not pread.alignment.mate_is_unmapped:
-                                outreads[extqname] = pread.alignment
-                                mutbases = list(pread.alignment.seq)
-                                mutbases[pread.query_position-1] = mutbase
-                                mutread = ''.join(mutbases)
-                                mutreads[extqname] = mutread
-                                mate = None
-                                if not args.single:
-                                    try:
-                                        mate = bammate.mate(pread.alignment)
-                                    except:
-                                        print "WARN\t" + now() + "\t" + mutid + "\twarning: no mate for", pread.alignment.qname
-                                        if args.requirepaired:
-                                            print "WARN\t" + now() + "\t" + mutid + "\tskipped mutation due to --requirepaired"
-                                            os.remove(tmpoutbamname)
-                                            return None
-                                mutmates[extqname] = mate
-                                log.write(" ".join(('read',extqname,mutread,"\n")))
-                            else:
-                                numunmap += 1
-
-                            if len(mutreads) > int(args.maxdepth):
-                                sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tdepth at site is greater than cutoff, aborting mutation.\n")
-                                outbam_muts.close()
-                                os.remove(tmpoutbamname)
-                                return None
-
-                # make sure region doesn't have any changes that are likely SNPs
-                # (trying to avoid messing with haplotypes)
-                    
-                basepile = countBaseAtPos(args.bamFileName,chrom,pcol.pos,mutid=mutid)
-                if basepile:
-                    majb = majorbase(basepile)
-                    minb = minorbase(basepile)
-
-                    frac = float(minb[1])/(float(majb[1])+float(minb[1]))
-                    if minb[0] == majb[0]:
-                        frac = 0.0
-                    if frac > maxfrac:
-                        maxfrac = frac
-                    if (not args.ignoresnps) and (frac > snvfrac or majb[0].upper() != refbase.upper()):
-                        print "WARN\t" + now() + "\t" + mutid + "\tdropped for proximity to SNP, nearby SNP MAF:",frac,"maxfrac:",snvfrac
-                        hasSNP = True
-                else:
-                    print "WARN\t" + now() + "\t" + mutid + "\tcould not pileup for region:",chrom,pcol.pos
-                    if not args.ignorepileup:
-                        hasSNP = True
+        if mutfail:
+            outbam_muts.close()
+            os.remove(tmpoutbamname)
+            return None
 
         # pick reads to change
         readlist = []
@@ -251,7 +152,6 @@ def makemut(args, chrom, start, end, vaf, altbase, avoid, alignopts):
         else:
             print "INFO\t" + now() + "\t" + mutid + "\tselected VAF: " + str(vaf) + "\n"
 
-        ######
         lastread = int(len(readlist)*vaf)
 
         # pick at least args.minmutreads if possible
@@ -265,8 +165,6 @@ def makemut(args, chrom, start, end, vaf, altbase, avoid, alignopts):
                 return None
 
         readlist = readlist[0:lastread] 
-
-        ######
 
         print "INFO\t" + now() + "\t" + mutid + "\tpicked:",str(len(readlist))
 
