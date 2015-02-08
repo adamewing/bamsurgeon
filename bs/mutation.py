@@ -115,12 +115,14 @@ def makedel(read, chrom, start, end, ref, debug=False): #FIXME
     return left + right
 
 
-def mutate(args, log, bamfile, bammate, chrom, mutstart, mutend, mutpos, avoid=None, mutid=None, is_snv=False, mutbase=None, is_insertion=False, is_deletion=False, ins_seq=None, reffile=None, indel_start=None, indel_end=None):
+def mutate(args, log, bamfile, bammate, chrom, mutstart, mutend, mutpos_list, avoid=None, mutid_list=None, is_snv=False, mutbase_list=None, is_insertion=False, is_deletion=False, ins_seq=None, reffile=None, indel_start=None, indel_end=None):
     assert mutend > mutstart, "mutation start must occur before mutation end: " + mutid
 
     outreads = {}
     mutreads = {}
     mutmates = {}
+
+    region = 'haplo_' + chrom + '_' + str(mutstart) + '_' + str(mutend)
 
     for pcol in bamfile.pileup(reference=chrom, start=mutstart, end=mutend):
         if pcol.pos:
@@ -128,7 +130,7 @@ def mutate(args, log, bamfile, bammate, chrom, mutstart, mutend, mutpos, avoid=N
             basepile = ''
             for pread in pcol.pileups:
                 if avoid is not None and pread.alignment.qname in avoid:
-                    print "WARN\t" + now() + "\t" + mutid + "\tdropped mutation due to read in --avoidlist", pread.alignment.qname
+                    print "WARN\t" + now() + "\t" + region + "\tdropped mutation due to read in --avoidlist", pread.alignment.qname
                     return True, False, {}, {}, {}
 
                 if not pread.alignment.is_secondary and bin(pread.alignment.flag & 2048) != bin(2048): # only consider primary alignments
@@ -141,12 +143,17 @@ def mutate(args, log, bamfile, bammate, chrom, mutstart, mutend, mutpos, avoid=N
 
                     extqname = ','.join((pread.alignment.qname,str(pread.alignment.pos),pairname))
 
-                    if pcol.pos == mutpos:
+                    if pcol.pos in mutpos_list:
                         if not pread.alignment.is_secondary and bin(pread.alignment.flag & 2048) != bin(2048) and not pread.alignment.mate_is_unmapped:
                             outreads[extqname] = pread.alignment
-                            
+                            mutid = mutid_list[mutpos_list.index(pcol.pos)]
+
                             if is_snv:
-                                mutbases = list(pread.alignment.seq)
+                                if extqname not in mutreads:
+                                    mutreads[extqname] = pread.alignment.seq
+
+                                mutbase = mutbase_list[mutpos_list.index(pcol.pos)]
+                                mutbases = list(mutreads[extqname])
                                 mutbases[pread.query_position-1] = mutbase
                                 mutread = ''.join(mutbases)
                                 mutreads[extqname] = mutread
@@ -181,7 +188,7 @@ def mutate(args, log, bamfile, bammate, chrom, mutstart, mutend, mutpos, avoid=N
             maxfrac = 0.0
             hasSNP  = False
 
-            basepile = countBaseAtPos(args.bamFileName,chrom,pcol.pos,mutid=mutid)
+            basepile = countBaseAtPos(args.bamFileName,chrom,pcol.pos,mutid=region)
             if basepile:
                 majb = majorbase(basepile)
                 minb = minorbase(basepile)
@@ -192,10 +199,10 @@ def mutate(args, log, bamfile, bammate, chrom, mutstart, mutend, mutpos, avoid=N
                 if frac > maxfrac:
                     maxfrac = frac
                 if frac > float(args.snvfrac):
-                    sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tdropped for proximity to SNP, nearby SNP MAF: " + str(frac)  + " (max snv frac: " + args.snvfrac + ")\n")
+                    sys.stderr.write("WARN\t" + now() + "\t" + region + "\tdropped for proximity to SNP, nearby SNP MAF: " + str(frac)  + " (max snv frac: " + args.snvfrac + ")\n")
                     hasSNP = True
             else:
-                sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tcould not pileup for region: " + chrom + ":" + str(pcol.pos) + "\n")
+                sys.stderr.write("WARN\t" + now() + "\t" + region + "\tcould not pileup for region: " + chrom + ":" + str(pcol.pos) + "\n")
                 if not args.ignorepileup:
                     hasSNP = True
 

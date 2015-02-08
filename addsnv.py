@@ -11,6 +11,7 @@ import traceback
 import bs.aligners as aligners
 import bs.mutation as mutation
 
+from operator import itemgetter
 from bs.common import *
 from uuid import uuid4
 from shutil import move
@@ -78,44 +79,78 @@ def replace(origbamfile, mutbamfile, outbamfile):
     outbam.close()
 
 
-def makemut(args, chrom, start, end, vaf, altbase, avoid, alignopts):
-    mutid = chrom + '_' + str(start) + '_' + str(end) + '_' + str(vaf) + '_' + str(altbase)
+def makemut(args, hc, avoid, alignopts):
+    mutid_list = []
+    for site in hc:
+        mutid_list.append(site['chrom'] + '_' + str(site['start']) + '_' + str(site['end']) + '_' + str(site['vaf']) + '_' + str(site['altbase']))
+
     try:
         bamfile = pysam.Samfile(args.bamFileName, 'rb')
         bammate = pysam.Samfile(args.bamFileName, 'rb') # use for mates to avoid iterator problems
         reffile = pysam.Fastafile(args.refFasta)
         tmpbams = []
 
-        snvfrac = float(args.snvfrac)
+        #snvfrac = float(args.snvfrac)
 
-        mutpos = int(random.uniform(start,end+1)) # position of mutation in genome
-        refbase = reffile.fetch(chrom,mutpos-1,mutpos)
+        chrom = None
+        vaf   = None
 
-        if altbase == refbase.upper():
-            sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tspecified ALT base matches reference, skipping mutation\n")
-            return None
+        mutpos_list = []
+        altbase_list = []
+        
+        for site in hc:
+            if chrom is None:
+                chrom = site['chrom']
+            else:
+                assert chrom == site['chrom'], "haplotype clusters cannot span multiple chromosomes!"
 
-        try:
-            mutbase = mut(refbase, altbase)
-        except ValueError as e:
-            sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\t" + ' '.join(("skipped site:",chrom,str(start),str(end),"due to N base:",str(e),"\n")))
-            return None
+            if vaf is None:
+                vaf = site['vaf']
+                
+            elif vaf != site['vaf']:
+                sys.stderr.write("WARN\t" + now() + "\tmultiple VAFs for single haplotype, using first encountered VAF: " + str(vaf) + "\n")
 
-        mutstr = refbase + "-->" + mutbase
+            mutpos = int(random.uniform(site['start'],site['end']+1)) # position of mutation in genome
+            mutpos_list.append(mutpos) # FIXME
+            altbase_list.append(site['altbase'])
+
+        mutbase_list = []
+        refbase_list = []
+        mutstr_list  = []
+
+        for n, mutpos in enumerate(mutpos_list):
+            refbase = reffile.fetch(chrom,mutpos-1,mutpos)
+            altbase = altbase_list[n]
+            refbase_list.append(refbase)
+
+            if altbase == refbase.upper():
+                sys.stderr.write("WARN\t" + now() + "\t" + mutid_list[n] + "\tspecified ALT base matches reference, skipping mutation\n")
+                return None
+
+            try:
+                mutbase = mut(refbase, altbase)
+                mutbase_list.append(mutbase)
+
+            except ValueError as e:
+                sys.stderr.write("WARN\t" + now() + "\t" + mutid_list[n] + "\t" + ' '.join(("skipped site:",chrom,str(hc[n]['start']),str(hc[n]['end']),"due to N base:",str(e),"\n")))
+                return None
+
+            mutstr_list.append(refbase + "-->" + str(mutbase))
 
         # optional CNV file
         cnv = None
         if (args.cnvfile):
             cnv = pysam.Tabixfile(args.cnvfile, 'r')
 
-        log = open('addsnv_logs_' + os.path.basename(args.outBamFile) + '/' + os.path.basename(args.outBamFile) + "." + "_".join((chrom,str(start),str(end))) + ".log",'w')
+        hapstr = "_".join(('haplo',chrom,str(min(mutpos_list)),str(max(mutpos_list))))
+        log = open('addsnv_logs_' + os.path.basename(args.outBamFile) + '/' + os.path.basename(args.outBamFile) + "." + hapstr + ".log",'w')
 
         numunmap = 0
-        tmpoutbamname = args.tmpdir + "/" + mutid + ".tmpbam." + str(uuid4()) + ".bam"
-        print "INFO\t" + now() + "\t" + mutid + "\tcreating tmp bam: ",tmpoutbamname
+        tmpoutbamname = args.tmpdir + "/" + hapstr + ".tmpbam." + str(uuid4()) + ".bam"
+        print "INFO\t" + now() + "\t" + hapstr + "\tcreating tmp bam: ",tmpoutbamname
         outbam_muts = pysam.Samfile(tmpoutbamname, 'wb', template=bamfile)
 
-        mutfail, hasSNP, maxfrac, outreads, mutreads, mutmates = mutation.mutate(args, log, bamfile, bammate, chrom, mutpos, mutpos+1, mutpos, avoid=avoid, mutid=mutid, is_snv=True, mutbase=mutbase, reffile=reffile)
+        mutfail, hasSNP, maxfrac, outreads, mutreads, mutmates = mutation.mutate(args, log, bamfile, bammate, chrom, min(mutpos_list), max(mutpos_list)+1, mutpos_list, avoid=avoid, mutid_list=mutid_list, is_snv=True, mutbase_list=mutbase_list, reffile=reffile)
 
         if mutfail:
             outbam_muts.close()
@@ -128,11 +163,11 @@ def makemut(args, chrom, start, end, vaf, altbase, avoid, alignopts):
             if read.seq != mutreads[extqname]:
                 readlist.append(extqname)
 
-        print "INFO\t" + now() + "\t" + mutid + "\tlen(readlist): " + str(len(readlist))
+        print "INFO\t" + now() + "\t" + hapstr + "\tlen(readlist): " + str(len(readlist))
         random.shuffle(readlist)
 
         if len(readlist) < int(args.mindepth):
-            print "WARN\t" + now() + "\t" + mutid + "\ttoo few reads in region (" + str(len(readlist)) + ") skipping..."
+            print "WARN\t" + now() + "\t" + hapstr + "\ttoo few reads in region (" + str(len(readlist)) + ") skipping..."
             outbam_muts.close()
             os.remove(tmpoutbamname)
             return None
@@ -141,16 +176,16 @@ def makemut(args, chrom, start, end, vaf, altbase, avoid, alignopts):
             vaf = float(args.mutfrac) # default minor allele freq if not otherwise specified
         if cnv: # cnv file is present
             if chrom in cnv.contigs:
-                for cnregion in cnv.fetch(chrom,start,end):
+                for cnregion in cnv.fetch(chrom,min(mutpos_list),max(mutpos_list)+1):
                     cn = float(cnregion.strip().split()[3]) # expect chrom,start,end,CN
-                    print "INFO\t" + now() + "\t" + mutid + "\t" + ' '.join(("copy number in snp region:",chrom,str(start),str(end),"=",str(cn))) + "\n"
+                    print "INFO\t" + now() + "\t" + hapstr + "\t" + ' '.join(("copy number in snp region:",chrom,str(min(mutpos_list)),str(max(mutpos_list)),"=",str(cn))) + "\n"
                     if float(cn) > 0.0:
                         vaf = 1.0/float(cn)
                     else:
                         vaf = 0.0
                     print "adjusted VAF: " + str(vaf) + "\n"
         else:
-            print "INFO\t" + now() + "\t" + mutid + "\tselected VAF: " + str(vaf) + "\n"
+            print "INFO\t" + now() + "\t" + hapstr + "\tselected VAF: " + str(vaf) + "\n"
 
         lastread = int(len(readlist)*vaf)
 
@@ -158,15 +193,15 @@ def makemut(args, chrom, start, end, vaf, altbase, avoid, alignopts):
         if lastread < int(args.minmutreads):
             if len(readlist) > int(args.minmutreads):
                 lastread = int(args.minmutreads)
-                sys.stdout.write("WARN\t" + now() + "\t" + mutid + "\tforced " + str(lastread) + " reads.\n")
+                sys.stdout.write("WARN\t" + now() + "\t" + hapstr + "\tforced " + str(lastread) + " reads.\n")
             else:
-                print "WARN\t" + now() + "\t" + mutid + "\tdropped site with fewer reads than --minmutreads"
+                print "WARN\t" + now() + "\t" + hapstr + "\tdropped site with fewer reads than --minmutreads"
                 os.remove(tmpoutbamname)
                 return None
 
         readlist = readlist[0:lastread] 
 
-        print "INFO\t" + now() + "\t" + mutid + "\tpicked:",str(len(readlist))
+        print "INFO\t" + now() + "\t" + hapstr + "\tpicked:",str(len(readlist))
 
         wrote = 0
         nmut = 0
@@ -185,22 +220,22 @@ def makemut(args, chrom, start, end, vaf, altbase, avoid, alignopts):
                     outbam_muts.write(mutmates[extqname])
                 elif mutmates[extqname] is not None:
                     outbam_muts.write(mutmates[extqname])
-        print "INFO\t" + now() + "\t" + mutid + "\twrote: ",wrote,"mutated:",nmut
+        print "INFO\t" + now() + "\t" + hapstr + "\twrote: ",wrote,"mutated:",nmut
 
         if not hasSNP or args.force:
             outbam_muts.close()
 
-            aligners.remap_bam(args.aligner, tmpoutbamname, args.refFasta, alignopts, mutid=mutid, paired=(not args.single), picardjar=args.picardjar)
+            aligners.remap_bam(args.aligner, tmpoutbamname, args.refFasta, alignopts, mutid=hapstr, paired=(not args.single), picardjar=args.picardjar)
 
             outbam_muts = pysam.Samfile(tmpoutbamname,'rb')
             coverwindow = 1
-            incover  = countReadCoverage(bamfile,chrom,mutpos-coverwindow,mutpos+coverwindow)
-            outcover = countReadCoverage(outbam_muts,chrom,mutpos-coverwindow,mutpos+coverwindow)
+            incover  = countReadCoverage(bamfile,chrom,min(mutpos_list)-coverwindow,max(mutpos_list)+coverwindow)
+            outcover = countReadCoverage(outbam_muts,chrom,min(mutpos_list)-coverwindow,max(mutpos_list)+coverwindow)
 
             avgincover  = float(sum(incover))/float(len(incover)) 
             avgoutcover = float(sum(outcover))/float(len(outcover))
 
-            print "INFO\t" + now() + "\t" + mutid + "\tavgincover: " + str(avgincover) + " avgoutcover: " + str(avgoutcover)
+            print "INFO\t" + now() + "\t" + hapstr + "\tavgincover: " + str(avgincover) + " avgoutcover: " + str(avgoutcover)
 
             spikein_snvfrac = 0.0
             if wrote > 0:
@@ -209,8 +244,9 @@ def makemut(args, chrom, start, end, vaf, altbase, avoid, alignopts):
             # qc cutoff for final snv depth 
             if (avgoutcover > 0 and avgincover > 0 and avgoutcover/avgincover >= float(args.coverdiff)) or args.force:
                 tmpbams.append(tmpoutbamname)
-                snvstr = chrom + ":" + str(start) + "-" + str(end) + " (VAF=" + str(vaf) + ")"
-                log.write("\t".join(("snv",snvstr,str(mutpos),mutstr,str(avgoutcover),str(avgoutcover),str(spikein_snvfrac),str(maxfrac)))+"\n")
+                for n,site in enumerate(hc):
+                    snvstr = chrom + ":" + str(site['start']) + "-" + str(site['end']) + " (VAF=" + str(vaf) + ")"
+                    log.write("\t".join(("snv",snvstr,str(mutpos_list[n]),mutstr_list[n],str(avgoutcover),str(avgoutcover),str(spikein_snvfrac),str(maxfrac)))+"\n")
             else:
                 outbam_muts.close()
                 os.remove(tmpoutbamname)
@@ -227,7 +263,7 @@ def makemut(args, chrom, start, end, vaf, altbase, avoid, alignopts):
         return tmpbams
 
     except Exception, e:
-        sys.stderr.write("*"*60 + "\nERROR\t" + now() + "\tencountered error in mutation spikein: " + mutid + "\n")
+        sys.stderr.write("*"*60 + "\nERROR\t" + now() + "\tencountered error in mutation spikein: " + str(mutid_list) + "\n")
         traceback.print_exc(file=sys.stdout)
         sys.stderr.write("*"*60 + "\n")
         if os.path.exists(tmpoutbamname):
@@ -279,28 +315,73 @@ def main(args):
     results = []
 
     ntried = 0
+
+    targets = []
     for bedline in bedfile:
         if ntried < int(args.numsnvs) or int(args.numsnvs) == 0:
             c = bedline.strip().split()
-            chrom   = c[0]
-            start   = int(c[1])
-            end     = int(c[2])
-            vaf     = None
-            altbase = None
+            target = {
+            'chrom'   : c[0],
+            'start'   : int(c[1]),
+            'end'     : int(c[2]),
+            'vaf'     : None,
+            'altbase' : None
+            }
 
             # VAF is 4th column, if present
             if len(c) > 3:
-                vaf = float(c[3])
+                target['vaf'] = float(c[3])
 
             # ALT is 5th column, if present
             if len(c) == 5:
                 altbase = c[4].upper()
                 assert altbase in ['A','T','C','G'], "ERROR:\t" + now() + "\tALT " + altbase + " not A, T, C, or G!\n"
+                target['altbase'] = altbase
 
-            # make mutation (submit job to thread pool)
-            result = pool.apply_async(makemut, [args, chrom, start, end, vaf, altbase, avoid, alignopts])
-            results.append(result)
+            targets.append(target)
             ntried += 1
+
+    targets = sorted(targets, key=itemgetter('chrom', 'start')) # sort list of dicts by chrom, start
+
+    haploclusters = []
+
+    hc = []
+    lastchrom = None
+    laststart = None
+
+    hapsize = int(args.haplosize)
+    for target in targets:
+        if lastchrom is None:
+            lastchrom = target['chrom']
+            laststart = target['start']
+            hc.append(target)
+
+        elif target['chrom'] == lastchrom:
+            if laststart is None:
+                laststart = target['start']
+                hc.append(target)
+            elif target['start'] - laststart < hapsize:
+                hc.append(target)
+            else:
+                haploclusters.append(hc)
+                hc = []
+                hc.append(target)
+
+        elif target['chrom'] != lastchrom:
+            haploclusters.append(hc)
+            hc = []
+            laststart = None
+            hc.append(target)
+
+    haploclusters.append(hc)
+
+    print "Debug, haploclusters:" + str(haploclusters)
+
+    for hc in haploclusters:
+        # make mutation (submit job to thread pool)
+        result = pool.apply_async(makemut, [args, hc, avoid, alignopts])
+        results.append(result)
+
 
     for result in results:
         tmpbamlist = result.get()
@@ -344,6 +425,7 @@ def run():
     parser.add_argument('-n', '--numsnvs', dest='numsnvs', default=0, help="maximum number of mutations to try (default: entire input)")
     parser.add_argument('-c', '--cnvfile', dest='cnvfile', default=None, help="tabix-indexed list of genome-wide absolute copy number values (e.g. 2 alleles = no change)")
     parser.add_argument('-d', '--coverdiff', dest='coverdiff', default=0.9, help="allow difference in input and output coverage (default=0.9)")
+    parser.add_argument('-z', '--haplosize', default=0, help='haplotype size (default = 0)')
     parser.add_argument('-p', '--procs', dest='procs', default=1, help="split into multiple processes (default=1)")
     parser.add_argument('--picardjar', default=None, help='path to picard.jar, required for most aligners')
     parser.add_argument('--mindepth', default=10, help='minimum read depth to make mutation (default = 10)')

@@ -97,6 +97,7 @@ def makemut(args, chrom, start, end, vaf, ins, avoid, alignopts):
             del_ln = end-start
 
         mutpos = start
+        mutpos_list = [start]
 
         # optional CNV file
         cnv = None
@@ -110,7 +111,7 @@ def makemut(args, chrom, start, end, vaf, ins, avoid, alignopts):
         print "INFO\t" + now() + "\t" + mutid + "\tcreating tmp bam: ",tmpoutbamname #DEBUG
         outbam_muts = pysam.Samfile(tmpoutbamname, 'wb', template=bamfile)
 
-        mutfail, hasSNP, maxfrac, outreads, mutreads, mutmates = mutation.mutate(args, log, bamfile, bammate, chrom, mutpos, mutpos+del_ln+1, mutpos, avoid=avoid, mutid=mutid, is_insertion=is_insertion, is_deletion=is_deletion, ins_seq=ins, reffile=reffile, indel_start=start, indel_end=end)
+        mutfail, hasSNP, maxfrac, outreads, mutreads, mutmates = mutation.mutate(args, log, bamfile, bammate, chrom, mutpos, mutpos+del_ln+1, mutpos_list, avoid=avoid, mutid=mutid, is_insertion=is_insertion, is_deletion=is_deletion, ins_seq=ins, reffile=reffile, indel_start=start, indel_end=end)
 
         if mutfail:
             outbam_muts.close()
