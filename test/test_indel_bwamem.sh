@@ -4,7 +4,7 @@
 
 if [ $# -ne 3 ]
 then
-    echo "usage: $0 <number of threads> <reference indexed with bwa index> <path to SamToFastq.jar provided by picard tools>"
+    echo "usage: $0 <number of threads> <reference indexed with bwa index> <path to picard.jar>"
     exit 65
 fi
 
@@ -33,7 +33,7 @@ then
 fi
 
 
-../addindel.py -v ../test_data/test_indels.txt -f ../test_data/testregion.bam -r $2 -o ../test_data/testregion_mut.bam -c ../test_data/test_cnvlist.txt.gz -p $1 --samtofastq $3 --aligner mem
+../addindel.py -v ../test_data/test_indels.txt -f ../test_data/testregion.bam -r $2 -o ../test_data/testregion_mut.bam -c ../test_data/test_cnvlist.txt.gz -p $1 --picardjar $3 --aligner mem
 if [ $? -ne 0 ]
 then
  echo "addindel.py failed."

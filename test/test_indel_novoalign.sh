@@ -4,7 +4,7 @@
 
 if [ $# -ne 4 ]
 then
-    echo "usage: $0 <number of threads> <reference indexed with bwa index> <path to SamToFastq.jar provided by picard tools> <novoalign index>"
+    echo "usage: $0 <number of threads> <reference indexed with bwa index> <path to picard.jar> <novoalign index>"
     exit 65
 fi
 
@@ -39,7 +39,7 @@ then
 fi
 
 
-../addindel.py -v ../test_data/test_indels.txt -f ../test_data/testregion_novo.bam -r $2 -o ../test_data/testregion_novo_mut.bam -p $1 --samtofastq $3 --aligner novoalign --alignopts novoref:$4
+../addindel.py -v ../test_data/test_indels.txt -f ../test_data/testregion_novo.bam -r $2 -o ../test_data/testregion_novo_mut.bam -p $1 --picardjar $3 --aligner novoalign --alignopts novoref:$4
 if [ $? -ne 0 ]
 then
  echo "addindel.py failed."

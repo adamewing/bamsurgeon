@@ -4,7 +4,7 @@
 
 if [ $# -ne 5 ]
 then
-    echo "usage: $0 <number of threads> <reference indexed with samtools> <path to SamToFastq.jar provided by picard tools> <gsnap reference dir> <gsnap reference name>"
+    echo "usage: $0 <number of threads> <reference indexed with samtools> <path to picard.jar> <gsnap reference dir> <gsnap reference name>"
     exit 65
 fi
 
@@ -39,7 +39,7 @@ then
 fi
 
 
-../addindel.py -v ../test_data/test_indels.txt -f ../test_data/testregion_gsnap.bam -r $2 -o ../test_data/testregion_gsnap_mut.bam -p $1 --samtofastq $3 --aligner gsnap --alignopts gsnaprefdir:$4,gsnaprefname:$5
+../addindel.py -v ../test_data/test_indels.txt -f ../test_data/testregion_gsnap.bam -r $2 -o ../test_data/testregion_gsnap_mut.bam -p $1 --picardjar $3 --aligner gsnap --alignopts gsnaprefdir:$4,gsnaprefname:$5
 if [ $? -ne 0 ]
 then
  echo "addindel.py failed."

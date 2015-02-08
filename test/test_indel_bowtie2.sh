@@ -4,7 +4,7 @@
 
 if [ $# -ne 4 ]
 then
-    echo "usage: $0 <number of threads> <reference indexed with bwa index> <path to SamToFastq.jar provided by picard tools> <bowtie2 index>"
+    echo "usage: $0 <number of threads> <reference indexed with bwa index> <path to picard.jar> <bowtie2 index>"
     exit 65
 fi
 
@@ -39,7 +39,7 @@ then
 fi
 
 
-../addindel.py -v ../test_data/test_indels.txt -f ../test_data/testregion_bt2.bam -r $2 -o ../test_data/testregion_bt2_mut.bam -p $1 --samtofastq $3 --aligner bowtie2 --alignopts bowtie2ref:$4
+../addindel.py -v ../test_data/test_indels.txt -f ../test_data/testregion_bt2.bam -r $2 -o ../test_data/testregion_bt2_mut.bam -p $1 --picardjar $3 --aligner bowtie2 --alignopts bowtie2ref:$4
 if [ $? -ne 0 ]
 then
  echo "addindel.py failed."

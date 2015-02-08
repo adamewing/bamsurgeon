@@ -5,7 +5,7 @@
 
 if [ $# -ne 6 ]
 then
-    echo "usage: $0 <number of SNPs> <number of threads> <reference indexed with samtools> <path to SamToFastq.jar provided by picard tools> <gsnap reference dir> <gsnap reference name>"
+    echo "usage: $0 <number of SNPs> <number of threads> <reference indexed with samtools> <path to picard.jar> <gsnap reference dir> <gsnap reference name>"
     exit 65
 fi
 
@@ -51,7 +51,7 @@ then
     exit 65
 fi
 
-../addsnv.py -v ../test_data/random_snvs.txt -f ../test_data/testregion_gsnap.bam -r $3 -o ../test_data/testregion_gsnap_mut.bam -n $1 -c ../test_data/test_cnvlist.txt.gz -p $2 --ignoresnps --samtofastq $4 --aligner gsnap --alignopts gsnaprefdir:$5,gsnaprefname:$6
+../addsnv.py -v ../test_data/random_snvs.txt -f ../test_data/testregion_gsnap.bam -r $3 -o ../test_data/testregion_gsnap_mut.bam -n $1 -c ../test_data/test_cnvlist.txt.gz -p $2 --ignoresnps --picardjar $4 --aligner gsnap --alignopts gsnaprefdir:$5,gsnaprefname:$6
 if [ $? -ne 0 ]
 then
  echo "addsnv.py failed. Are all the prequisites installed?"

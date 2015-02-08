@@ -5,7 +5,7 @@
 
 if [ $# -ne 4 ]
 then
-    echo "usage: $0 <number of SNPs> <number of threads> <reference indexed with bwa index> <path to SamToFastq.jar provided by picard tools>"
+    echo "usage: $0 <number of SNPs> <number of threads> <reference indexed with bwa index> <path to picard.jar>"
     exit 65
 fi
 
@@ -51,7 +51,7 @@ then
     exit 65
 fi
 
-../addsnv.py -v ../test_data/random_snvs.txt -f ../test_data/testregion.bam -r $3 -o ../test_data/testregion_mut.bam -n $1 -c ../test_data/test_cnvlist.txt.gz -p $2 --samtofastq $4 --aligner mem 
+../addsnv.py -v ../test_data/random_snvs.txt -f ../test_data/testregion.bam -r $3 -o ../test_data/testregion_mut.bam -n $1 -c ../test_data/test_cnvlist.txt.gz -p $2 --picardjar $4 --aligner mem 
 
 if [ $? -ne 0 ]
 then

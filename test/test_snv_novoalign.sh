@@ -5,7 +5,7 @@
 
 if [ $# -ne 5 ]
 then
-    echo "usage: $0 <number of SNPs> <number of threads> <reference indexed with bwa index> <path to SamToFastq.jar provided by picard tools> <novoalign index>"
+    echo "usage: $0 <number of SNPs> <number of threads> <reference indexed with bwa index> <path to picard.jar> <novoalign index>"
     exit 65
 fi
 
@@ -57,7 +57,7 @@ then
     exit 65
 fi
 
-../addsnv.py -v ../test_data/random_snvs.txt -f ../test_data/testregion_novo.bam -r $3 -o ../test_data/testregion_novo_mut.bam -n $1 -p $2 --samtofastq $4 --aligner novoalign --alignopts novoref:$5
+../addsnv.py -v ../test_data/random_snvs.txt -f ../test_data/testregion_novo.bam -r $3 -o ../test_data/testregion_novo_mut.bam -n $1 -p $2 --picardjar $4 --aligner novoalign --alignopts novoref:$5
 
 if [ $? -ne 0 ]
 then
