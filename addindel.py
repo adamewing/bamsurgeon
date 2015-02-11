@@ -106,7 +106,6 @@ def makemut(args, chrom, start, end, vaf, ins, avoid, alignopts):
 
         log = open('addindel_logs_' + os.path.basename(args.outBamFile) + '/' + os.path.basename(args.outBamFile) + "." + "_".join((chrom,str(start),str(end))) + ".log",'w')
 
-        numunmap = 0
         tmpoutbamname = args.tmpdir + "/" + mutid + ".tmpbam." + str(uuid4()) + ".bam"
         print "INFO\t" + now() + "\t" + mutid + "\tcreating tmp bam: ",tmpoutbamname #DEBUG
         outbam_muts = pysam.Samfile(tmpoutbamname, 'wb', template=bamfile)

@@ -176,8 +176,6 @@ def mutate(args, log, bamfile, bammate, chrom, mutstart, mutend, mutpos_list, av
 
                             mutmates[extqname] = mate
                             log.write(" ".join(('read',extqname,mutreads[extqname],"\n")))
-                        else:
-                            numunmap += 1
 
                         if len(mutreads) > int(args.maxdepth):
                             sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tdepth at site is greater than cutoff, aborting mutation.\n")

@@ -145,7 +145,6 @@ def makemut(args, hc, avoid, alignopts):
         hapstr = "_".join(('haplo',chrom,str(min(mutpos_list)),str(max(mutpos_list))))
         log = open('addsnv_logs_' + os.path.basename(args.outBamFile) + '/' + os.path.basename(args.outBamFile) + "." + hapstr + ".log",'w')
 
-        numunmap = 0
         tmpoutbamname = args.tmpdir + "/" + hapstr + ".tmpbam." + str(uuid4()) + ".bam"
         print "INFO\t" + now() + "\t" + hapstr + "\tcreating tmp bam: ",tmpoutbamname
         outbam_muts = pysam.Samfile(tmpoutbamname, 'wb', template=bamfile)
