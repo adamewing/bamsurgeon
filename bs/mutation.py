@@ -66,7 +66,7 @@ def makeins(read, start, ins, debug=False):
     return newseq
 
 
-def makedel(read, chrom, start, end, ref, debug=False): #FIXME
+def makedel(read, chrom, start, end, ref, debug=False):
     assert len(read.seq) > end-start-2
     
     if debug:
@@ -120,7 +120,7 @@ def mutate(args, log, bamfile, bammate, chrom, mutstart, mutend, mutpos_list, av
 
     outreads = {}
     mutreads = {}
-    mutmates = {}
+    #mutmates = {}
 
     region = 'haplo_' + chrom + '_' + str(mutstart) + '_' + str(mutend)
 
@@ -174,7 +174,9 @@ def mutate(args, log, bamfile, bammate, chrom, mutstart, mutend, mutpos_list, av
                                         print "WARN\t" + now() + "\t" + mutid + "\tskipped mutation due to --requirepaired"
                                         return True, False, {}, {}, {}
 
-                            mutmates[extqname] = mate
+                            #if extqname not in mutmates:
+                            #    mutmates[extqname] = mate
+
                             log.write(" ".join(('read',extqname,mutreads[extqname],"\n")))
 
                         if len(mutreads) > int(args.maxdepth):
@@ -204,4 +206,4 @@ def mutate(args, log, bamfile, bammate, chrom, mutstart, mutend, mutpos_list, av
                 if not args.ignorepileup:
                     hasSNP = True
 
-    return False, hasSNP, maxfrac, outreads, mutreads, mutmates # todo: convert to class
+    return False, hasSNP, maxfrac, outreads, mutreads # todo: convert to class

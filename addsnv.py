@@ -149,7 +149,7 @@ def makemut(args, hc, avoid, alignopts):
         print "INFO\t" + now() + "\t" + hapstr + "\tcreating tmp bam: ",tmpoutbamname
         outbam_muts = pysam.Samfile(tmpoutbamname, 'wb', template=bamfile)
 
-        mutfail, hasSNP, maxfrac, outreads, mutreads, mutmates = mutation.mutate(args, log, bamfile, bammate, chrom, min(mutpos_list), max(mutpos_list)+1, mutpos_list, avoid=avoid, mutid_list=mutid_list, is_snv=True, mutbase_list=mutbase_list, reffile=reffile)
+        mutfail, hasSNP, maxfrac, outreads, mutreads = mutation.mutate(args, log, bamfile, bammate, chrom, min(mutpos_list), max(mutpos_list)+1, mutpos_list, avoid=avoid, mutid_list=mutid_list, is_snv=True, mutbase_list=mutbase_list, reffile=reffile)
 
         if mutfail:
             outbam_muts.close()
@@ -215,10 +215,10 @@ def makemut(args, hc, avoid, alignopts):
             if not hasSNP or args.force:
                 wrote += 1
                 outbam_muts.write(read)
-                if args.single:
-                    outbam_muts.write(mutmates[extqname])
-                elif mutmates[extqname] is not None:
-                    outbam_muts.write(mutmates[extqname])
+                #if args.single:
+                #    outbam_muts.write(mutmates[extqname])
+                #elif mutmates[extqname] is not None:
+                #    outbam_muts.write(mutmates[extqname])
         print "INFO\t" + now() + "\t" + hapstr + "\twrote: ",wrote,"mutated:",nmut
 
         if not hasSNP or args.force:
