@@ -409,7 +409,7 @@ def main(args):
         print "INFO\t" + now() + "\tdone making mutations, merging mutations into", args.bamFileName, "-->", args.outBamFile
         replace(args.bamFileName, outbam_mutsfile, args.outBamFile)
 
-        cleanup
+        #cleanup
         os.remove(outbam_mutsfile)
 
 
