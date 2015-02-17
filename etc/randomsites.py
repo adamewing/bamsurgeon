@@ -11,7 +11,7 @@ Tool for generating random sites for bamsurgeon input
 '''
 
 class Genome:
-    def __init__(self, gfn):
+    def __init__(self, gfn, bedfile=None):
         ''' gfn = genome file name '''
         self.chrlen = {} # length of each chromosome
         self.chrmap = [] # used for picking chromosomes
@@ -29,21 +29,42 @@ class Genome:
         for chrom, length in self.chrlen.iteritems():
             self.chrmap += [chrom] * int(float(length) / float(bp) * bins)
 
-    def pick(self, mutlen, avoidN=False):
+        self.bed = []
+        self.bedfile = None
+
+        if bedfile is not None:
+            self.bedfile = bedfile
+            with open(self.bedfile, 'r') as bed:
+                for line in bed:
+                    chrom, start, end = line.strip().split()[:3]
+                    start = int(start)
+                    end   = int(end)
+                    assert start < end, "start >= end in BED line: " + line.strip()
+                    self.bed.append((chrom, start, end))
+
+
+    def pick(self, mutlen, avoidN=False, usebed=False):
         ''' return a random chromosome and position '''
         goodmut = False
 
-        while not goodmut: 
-            rchrom = random.choice(self.chrmap)
-            rpos   = int(random.uniform(1, self.chrlen[rchrom]))
+        if usebed:
+            seg = random.choice(self.bed)
+            rpos = int(random.uniform(seg[1], seg[2]))
+            return seg[0], rpos, rpos + mutlen
 
-            if avoidN and 'N' not in self.ref.fetch(rchrom, rpos-1, rpos+mutlen):
-                goodmut = True
+        else:
+            goodmut = False
+            while not goodmut: 
+                rchrom = random.choice(self.chrmap)
+                rpos   = int(random.uniform(1, self.chrlen[rchrom]))
 
-            if not avoidN:
-                goodmut = True
+                if avoidN and 'N' not in self.ref.fetch(rchrom, rpos-1, rpos+mutlen):
+                    goodmut = True
 
-        return rchrom, rpos, rpos + mutlen
+                if not avoidN:
+                    goodmut = True
+
+            return rchrom, rpos, rpos + mutlen
 
 
 def randomseq(len):
@@ -83,8 +104,10 @@ def run_snv(g, args):
     vaf = betafunc(args.vafbeta1, args.vafbeta2)
     vafscale = scalefunc(args.minvaf, args.maxvaf)
 
+    usebed = args.bed is not None
+
     for _ in range(int(args.numpicks)):
-        rchrom, rstart, rend = g.pick(0, avoidN=args.avoidN)
+        rchrom, rstart, rend = g.pick(0, avoidN=args.avoidN, usebed=usebed)
         info = [rchrom, rstart, rend, vafscale(vaf())]
         print '\t'.join(map(str, info))
 
@@ -97,9 +120,11 @@ def run_indel(g, args):
     vafscale = scalefunc(args.minvaf, args.maxvaf)
     lenscale = scalefunc(args.minlen, args.maxlen)
 
+    usebed = args.bed is not None
+
     for _ in range(int(args.numpicks)):
         mutlen = int(lenscale(len()))
-        rchrom, rstart, rend = g.pick(mutlen, avoidN=args.avoidN)
+        rchrom, rstart, rend = g.pick(mutlen, avoidN=args.avoidN, usebed=usebed)
         if random.uniform(0,1) < 0.5: # deletion
             info = [rchrom, rstart, rend, vafscale(vaf()), 'DEL']
         else: # insertion
@@ -116,10 +141,12 @@ def run_sv(g, args):
     vafscale = scalefunc(args.minvaf, args.maxvaf)
     lenscale = scalefunc(args.minlen, args.maxlen)
 
+    usebed = args.bed is not None
+
     with open(args.cnvfile, 'w') as cnv:
         for _ in range(int(args.numpicks)):
             mutlen = int(lenscale(len()))
-            rchrom, rstart, rend = g.pick(mutlen, avoidN=args.avoidN)
+            rchrom, rstart, rend = g.pick(mutlen, avoidN=args.avoidN, usebed=usebed)
             info = [rchrom, rstart, rend, randomsv()]
             cnvinfo = [rchrom, rstart, rend, 1.0/(vafscale(vaf()))]
             print '\t'.join(map(str, info))
@@ -131,7 +158,7 @@ def main(args):
 
     assert os.path.exists(args.genome + '.fai'), "reference FASTA not indexed: " + args.genome
 
-    g = Genome(args.genome)
+    g = Genome(args.genome, bedfile=args.bed)
 
     args.func(g, args)
 
@@ -139,6 +166,7 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='make random sites for bamsurgeon')
     parser.add_argument('-g', '--genome', required=True, help='Genome FASTA, indexed with samtools faidx (expects .fai file exists)')
+    parser.add_argument('-b', '--bed', default=None, help='use segments in specified BED file to choose mutations')
     parser.add_argument('-s', '--seed', default=None, help='use a seed to make reproducible random picks')
     parser.add_argument('-n', '--numpicks', default=1000, help='number of sites to generate (default = 1000)')
     parser.add_argument('--avoidN', default=False, action='store_true', help='avoid picking sites with N characters in ref')
