@@ -114,7 +114,6 @@ def makedel(read, chrom, start, end, ref, debug=False):
         print "DEBUG: DEL:  newseq:     ", left + right
     return left + right
 
-
 def mutate(args, log, bamfile, bammate, chrom, mutstart, mutend, mutpos_list, avoid=None, mutid_list=None, is_snv=False, mutbase_list=None, is_insertion=False, is_deletion=False, ins_seq=None, reffile=None, indel_start=None, indel_end=None):
     assert mutend > mutstart, "mutation start must occur before mutation end: " + mutid
 
