@@ -185,12 +185,6 @@ def singleseqfa(file,mutid='null'):
     return seq
 
 
-def pickseq(inslib, mutid='null'):
-    pick = random.choice(inslib.keys())
-    print "INFO\t" + now() + "\t" + mutid + "\tchose sequence from insertion library: " + pick
-    return inslib[pick]
-
-
 def load_inslib(infa):
     seqdict = {}
 
@@ -432,7 +426,9 @@ def makemut(args, bedline, alignopts):
                     if insseqfile: # seq in file
                         if insseqfile == 'RND':
                             assert args.inslib is not None # insertion library needs to exist
-                            mutseq.insertion(mutseq.length()/2,pickseq(args.inslib, mutid=mutid),tsdlen)
+                            insseqfile = random.choice(args.inslib.keys())
+                            print "INFO\t" + now() + "\t" + mutid + "\tchose sequence from insertion library: " + insseqfile
+                            mutseq.insertion(mutseq.length()/2,args.inslib[insseqfile],tsdlen)
                         else:
                             mutseq.insertion(mutseq.length()/2,singleseqfa(insseqfile, mutid=mutid),tsdlen)
                     else: # seq is input

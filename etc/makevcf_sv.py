@@ -29,7 +29,7 @@ def print_header():
     ##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
     #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tSPIKEIN""")
 
-def printvcf(chrom, bnd1, bnd2, precise, type, svlen, ref):
+def printvcf(chrom, bnd1, bnd2, precise, type, svlen, ref, id):
     base1 = ref.fetch(chrom, bnd1, bnd1+1) 
     base2 = ref.fetch(chrom, bnd2, bnd2+1)
 
@@ -48,7 +48,7 @@ def printvcf(chrom, bnd1, bnd2, precise, type, svlen, ref):
     
     infostr = ';'.join(info)
 
-    print '\t'.join((chrom, str(bnd1), '.', base1, alt, '100', 'PASS', infostr, 'GT', './.'))
+    print '\t'.join((chrom, str(bnd1), id, base1, alt, '100', 'PASS', infostr, 'GT', './.'))
 
 
 def precise_interval(mutline, ref):
@@ -57,10 +57,12 @@ def precise_interval(mutline, ref):
     chrom, refstart, refend = m[1:4]
     refstart = int(refstart)
     refend   = int(refend)
+    id = '.'
 
     if m[0] == 'ins':
         bnd1 = (refstart+refend)/2 - 1
         bnd2 = (refstart+refend)/2 + 1
+        id = m[7]
     else:
         contigstart = int(m[6])
         contigend   = int(m[7])
@@ -70,7 +72,7 @@ def precise_interval(mutline, ref):
 
     assert bnd1 < bnd2
 
-    printvcf(chrom, bnd1, bnd2, precise, m[0], bnd2-bnd1, ref)
+    printvcf(chrom, bnd1, bnd2, precise, m[0], bnd2-bnd1, ref, id)
 
 
 def ignore_interval(mutline, ref):
