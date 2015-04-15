@@ -3,7 +3,7 @@
 import sys
 import pysam
 import argparse
-from random import randint
+import random
 from string import maketrans
 
 def rc(dna):
@@ -44,7 +44,7 @@ def cleanup(read,orig,RG):
 
         if not hasRG:
             # give up and add random read group from list in header (e.g. for simulated reads)
-            newRG = RG[randint(0,len(RG)-1)]
+            newRG = RG[random.randint(0,len(RG)-1)]
             read.tags = read.tags + [("RG",newRG)]
     return read
 
@@ -76,11 +76,13 @@ def compare_ref(targetbam, donorbam):
     return True
     
 
-def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=None, allreads=False, keepqual=False, progress=False, keepsecondary=False):
+def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=None, allreads=False, keepqual=False, progress=False, keepsecondary=False, seed=None):
     ''' targetbam, donorbam, and outputbam are pysam.Samfile objects
         outputbam must be writeable and use targetbam as template
         read names in excludefile will not appear in final output
     '''
+
+    if seed is not None: random.seed(int(seed))
 
     # check whether references are compatible
     if not compare_ref(targetbam, donorbam):

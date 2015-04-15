@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 
-import re, os, sys, random
+import re
+import os
+import sys
+import random
 import subprocess
 import traceback
 import argparse
@@ -24,7 +27,7 @@ sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)
 sys.stderr = os.fdopen(sys.stderr.fileno(), 'w', 0)
 
 
-def runwgsim(contig, newseq, svfrac, svtype, exclude, pemean, pesd, tmpdir, mutid='null'):
+def runwgsim(contig, newseq, svfrac, svtype, exclude, pemean, pesd, tmpdir, mutid='null', seed=None):
     ''' wrapper function for wgsim
     '''
     namecount = Counter([read.name for read in contig.reads.reads.values()])
@@ -80,6 +83,9 @@ def runwgsim(contig, newseq, svfrac, svtype, exclude, pemean, pesd, tmpdir, muti
             maxqlen = len(qual)
 
     args = ['wgsim','-e','0','-d',str(pemean),'-s',str(pesd),'-N',str(nsimreads),'-1',str(maxqlen),'-2','101','-r','0','-R','0',fasta,fq1,fq2]
+
+    if seed is not None: args += ['-S', str(seed)]
+
     print args
     subprocess.call(args)
 
@@ -241,14 +247,14 @@ def align(qryseq, refseq):
     return best
 
 
-def replace(origbamfile, mutbamfile, outbamfile, excludefile, keepsecondary=False):
+def replace(origbamfile, mutbamfile, outbamfile, excludefile, keepsecondary=False, seed=None):
     ''' open .bam file and call replacereads
     '''
     origbam = pysam.Samfile(origbamfile, 'rb')
     mutbam  = pysam.Samfile(mutbamfile, 'rb')
     outbam  = pysam.Samfile(outbamfile, 'wb', template=origbam)
 
-    rr.replaceReads(origbam, mutbam, outbam, excludefile=excludefile, allreads=True, keepsecondary=keepsecondary)
+    rr.replaceReads(origbam, mutbam, outbam, excludefile=excludefile, allreads=True, keepsecondary=keepsecondary, seed=seed)
 
     origbam.close()
     mutbam.close()
@@ -271,6 +277,9 @@ def discordant_fraction(bamfile, chrom, start, end):
 
 
 def makemut(args, bedline, alignopts):
+
+    if args.seed is not None: random.seed(int(args.seed))
+
     mutid = '_'.join(map(str, bedline.strip().split()))
     try:
         bamfile = pysam.Samfile(args.bamFileName, 'rb')
@@ -474,7 +483,7 @@ def makemut(args, bedline, alignopts):
             print "INFO\t" + now() + "\t" + mutid + "\tset paired end distance stddev: " + str(args.issd)
 
             # simulate reads
-            (fq1, fq2) = runwgsim(maxcontig, mutseq.seq, svfrac, actions, exclude, pemean, pesd, args.tmpdir, mutid=mutid)
+            (fq1, fq2) = runwgsim(maxcontig, mutseq.seq, svfrac, actions, exclude, pemean, pesd, args.tmpdir, mutid=mutid, seed=args.seed)
 
             outreads = aligners.remap_fastq(args.aligner, fq1, fq2, args.refFasta, outbam_mutsfile, alignopts, mutid=mutid, threads=1)
 
@@ -612,7 +621,7 @@ def main(args):
 
     else:
         print "INFO\t" + now() + "\tswapping reads into original and writing to ", args.outBamFile
-        replace(args.bamFileName, mergedtmp, args.outBamFile, excl_merged, keepsecondary=args.keepsecondary)
+        replace(args.bamFileName, mergedtmp, args.outBamFile, excl_merged, keepsecondary=args.keepsecondary, seed=args.seed)
 
         if not args.debug:
             os.remove(excl_merged)
@@ -668,6 +677,7 @@ if __name__ == '__main__':
     parser.add_argument('--keepsecondary', action='store_true', default=False, help='keep secondary reads in final BAM')
     parser.add_argument('--debug', action='store_true', default=False, help='output read tracking info to debug file, retain all intermediates')
     parser.add_argument('--tmpdir', default='addsv.tmp', help='temporary directory (default=addsv.tmp)')
+    parser.add_argument('--seed', default=None, help='seed random number generation')
     args = parser.parse_args()
     main(args)
 

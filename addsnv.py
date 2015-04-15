@@ -16,7 +16,7 @@ from bs.common import *
 from uuid import uuid4
 from shutil import move
 from re import sub
-from multiprocessing import Pool, Value, Lock
+from multiprocessing import Pool
 
 
 sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)
@@ -65,14 +65,14 @@ def countReadCoverage(bam,chrom,start,end):
     return coverage
 
 
-def replace(origbamfile, mutbamfile, outbamfile):
+def replace(origbamfile, mutbamfile, outbamfile, seed=None):
     ''' open .bam file and call replacereads
     '''
     origbam = pysam.Samfile(origbamfile, 'rb')
     mutbam  = pysam.Samfile(mutbamfile, 'rb')
     outbam  = pysam.Samfile(outbamfile, 'wb', template=origbam)
 
-    rr.replaceReads(origbam, mutbam, outbam, keepqual=True)
+    rr.replaceReads(origbam, mutbam, outbam, keepqual=True, seed=seed)
 
     origbam.close()
     mutbam.close()
@@ -80,6 +80,9 @@ def replace(origbamfile, mutbamfile, outbamfile):
 
 
 def makemut(args, hc, avoid, alignopts):
+
+    if args.seed is not None: random.seed(int(args.seed))
+
     mutid_list = []
     for site in hc:
         mutid_list.append(site['chrom'] + '_' + str(site['start']) + '_' + str(site['end']) + '_' + str(site['vaf']) + '_' + str(site['altbase']))
@@ -163,6 +166,7 @@ def makemut(args, hc, avoid, alignopts):
                 readlist.append(extqname)
 
         print "INFO\t" + now() + "\t" + hapstr + "\tlen(readlist): " + str(len(readlist))
+        readlist.sort()
         random.shuffle(readlist)
 
         if len(readlist) < int(args.mindepth):
@@ -407,7 +411,7 @@ def main(args):
         print "INFO\t" + now() + "\tskipping merge, plase merge reads from", outbam_mutsfile, "manually."
     else:
         print "INFO\t" + now() + "\tdone making mutations, merging mutations into", args.bamFileName, "-->", args.outBamFile
-        replace(args.bamFileName, outbam_mutsfile, args.outBamFile)
+        replace(args.bamFileName, outbam_mutsfile, args.outBamFile, seed=args.seed)
 
         #cleanup
         os.remove(outbam_mutsfile)
@@ -442,6 +446,7 @@ def run():
     parser.add_argument('--aligner', default='backtrack', help='supported aligners: ' + ','.join(aligners.supported_aligners_bam))
     parser.add_argument('--alignopts', default=None, help='aligner-specific options as comma delimited list of option1:value1,option2:value2,...')
     parser.add_argument('--tmpdir', default='addsnv.tmp', help='temporary directory (default=addsnv.tmp)')
+    parser.add_argument('--seed', default=None, help='seed random number generation')
     args = parser.parse_args()
     main(args)
 

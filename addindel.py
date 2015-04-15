@@ -15,7 +15,7 @@ from bs.common import *
 from uuid import uuid4
 from re import sub
 from shutil import move
-from multiprocessing import Pool, Value, Lock
+from multiprocessing import Pool
 
 sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)
 sys.stderr = os.fdopen(sys.stderr.fileno(), 'w', 0)
@@ -44,14 +44,14 @@ def countReadCoverage(bam,chrom,start,end):
     return coverage
 
 
-def replace(origbamfile, mutbamfile, outbamfile):
+def replace(origbamfile, mutbamfile, outbamfile, seed=None):
     ''' open .bam file and call replacereads
     '''
     origbam = pysam.Samfile(origbamfile, 'rb')
     mutbam  = pysam.Samfile(mutbamfile, 'rb')
     outbam  = pysam.Samfile(outbamfile, 'wb', template=origbam)
 
-    rr.replaceReads(origbam, mutbam, outbam, keepqual=True)
+    rr.replaceReads(origbam, mutbam, outbam, keepqual=True, seed=seed)
 
     origbam.close()
     mutbam.close()
@@ -72,6 +72,8 @@ def dictlist(fn):
 
 def makemut(args, chrom, start, end, vaf, ins, avoid, alignopts):
     ''' is ins is a sequence, it will is inserted at start, otherwise delete from start to end'''
+
+    if args.seed is not None: random.seed(int(args.seed))
 
     mutid = chrom + '_' + str(start) + '_' + str(end) + '_' + str(vaf)
     if ins is None:
@@ -124,6 +126,7 @@ def makemut(args, chrom, start, end, vaf, ins, avoid, alignopts):
                 readlist.append(extqname)
 
         print "len(readlist):",str(len(readlist))
+        readlist.sort()
         random.shuffle(readlist)
 
         if len(readlist) < int(args.mindepth):
@@ -220,7 +223,7 @@ def makemut(args, chrom, start, end, vaf, ins, avoid, alignopts):
         bammate.close()
         log.close() 
 
-        return tmpbams
+        return sorted(tmpbams)
         
     except Exception, e:
         sys.stderr.write("*"*60 + "\nencountered error in mutation spikein: " + mutid + "\n")
@@ -306,6 +309,8 @@ def main(args):
             print "* WARNING: assertion failed somewhere, check logs. *"
             print "****************************************************"
 
+    tmpbams.sort()
+
     # merge tmp bams
     if len(tmpbams) == 1:
         os.rename(tmpbams[0],outbam_mutsfile)
@@ -325,7 +330,7 @@ def main(args):
         print "INFO\t" + now() + "\tskipping merge, plase merge reads from", outbam_mutsfile, "manually."
     else:
         print "INFO\t" + now() + "\tdone making mutations, merging mutations into", args.bamFileName, "-->", args.outBamFile
-        replace(args.bamFileName, outbam_mutsfile, args.outBamFile)
+        replace(args.bamFileName, outbam_mutsfile, args.outBamFile, seed=args.seed)
 
         #cleanup
         os.remove(outbam_mutsfile)
@@ -359,6 +364,7 @@ def run():
     parser.add_argument('--skipmerge', action='store_true', default=False, help="final output is tmp file to be merged")
     parser.add_argument('--ignorepileup', action='store_true', default=False, help="do not check pileup depth in mutation regions")
     parser.add_argument('--tmpdir', default='addindel.tmp', help='temporary directory (default=addindel.tmp)')
+    parser.add_argument('--seed', default=None, help='seed random number generation')
     args = parser.parse_args()
     main(args)
 

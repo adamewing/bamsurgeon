@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 from common import *
+from collections import OrderedDict as od
 import subprocess
 
 
@@ -119,9 +120,9 @@ def mutate(args, log, bamfile, bammate, chrom, mutstart, mutend, mutpos_list, av
 
     hasSNP = False
 
-    outreads = {}
-    mutreads = {}
-    mutmates = {}
+    outreads = od()
+    mutreads = od()
+    mutmates = od()
 
     region = 'haplo_' + chrom + '_' + str(mutstart) + '_' + str(mutend)
 
