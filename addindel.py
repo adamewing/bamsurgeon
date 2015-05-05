@@ -329,6 +329,13 @@ def main(args):
     if args.skipmerge:
         print "INFO\t" + now() + "\tskipping merge, plase merge reads from", outbam_mutsfile, "manually."
     else:
+        if args.tagreads:
+            from bs.markreads import markreads
+            tmp_tag_bam = 'tag.%s.bam' % str(uuid4())
+            markreads(mergedtmp, tmp_tag_bam)
+            move(tmp_tag_bam, mergedtmp)
+            print "INFO\t" + now() + "\ttagged reads."
+
         print "INFO\t" + now() + "\tdone making mutations, merging mutations into", args.bamFileName, "-->", args.outBamFile
         replace(args.bamFileName, outbam_mutsfile, args.outBamFile, seed=args.seed)
 
@@ -361,6 +368,7 @@ def run():
     parser.add_argument('--requirepaired', action='store_true', default=False, help='skip mutations if unpaired reads are present')
     parser.add_argument('--aligner', default='backtrack', help='supported aligners: ' + ','.join(aligners.supported_aligners_bam))
     parser.add_argument('--alignopts', default=None, help='aligner-specific options as comma delimited list of option1:value1,option2:value2,...')
+    parser.add_argument('--tagreads', action='store_true', default=False, help='add BS tag to altered reads')
     parser.add_argument('--skipmerge', action='store_true', default=False, help="final output is tmp file to be merged")
     parser.add_argument('--ignorepileup', action='store_true', default=False, help="do not check pileup depth in mutation regions")
     parser.add_argument('--tmpdir', default='addindel.tmp', help='temporary directory (default=addindel.tmp)')

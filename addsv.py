@@ -620,6 +620,13 @@ def main(args):
                     os.remove(tmpbam + '.bai')
 
     else:
+        if args.tagreads:
+            from bs.markreads import markreads
+            tmp_tag_bam = 'tag.%s.bam' % str(uuid4())
+            markreads(mergedtmp, tmp_tag_bam)
+            move(tmp_tag_bam, mergedtmp)
+            print "INFO\t" + now() + "\ttagged reads."
+
         print "INFO\t" + now() + "\tswapping reads into original and writing to ", args.outBamFile
         replace(args.bamFileName, mergedtmp, args.outBamFile, excl_merged, keepsecondary=args.keepsecondary, seed=args.seed)
 
@@ -673,6 +680,7 @@ if __name__ == '__main__':
     parser.add_argument('--recycle', action='store_true', default=False)
     parser.add_argument('--aligner', default='backtrack', help='supported aligners: ' + ','.join(aligners.supported_aligners_fastq))
     parser.add_argument('--alignopts', default=None, help='aligner-specific options as comma delimited list of option1:value1,option2:value2,...')
+    parser.add_argument('--tagreads', action='store_true', default=False, help='add BS tag to altered reads')
     parser.add_argument('--skipmerge', action='store_true', default=False, help='do not merge spike-in reads back into original BAM')
     parser.add_argument('--keepsecondary', action='store_true', default=False, help='keep secondary reads in final BAM')
     parser.add_argument('--debug', action='store_true', default=False, help='output read tracking info to debug file, retain all intermediates')
