@@ -135,7 +135,8 @@ def mutate(args, log, bamfile, bammate, chrom, mutstart, mutend, mutpos_list, av
                     print "WARN\t" + now() + "\t" + region + "\tdropped mutation due to read in --avoidlist", pread.alignment.qname
                     return True, False, {}, {}, {}
 
-                if not pread.alignment.is_secondary and bin(pread.alignment.flag & 2048) != bin(2048): # only consider primary alignments
+                # only consider primary alignments
+                if pread.query_position is not None and not pread.alignment.is_secondary and bin(pread.alignment.flag & 2048) != bin(2048):
                     basepile += pread.alignment.seq[pread.query_position-1]
                     pairname = 'F' # read is first in pair
                     if pread.alignment.is_read2:

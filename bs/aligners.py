@@ -216,8 +216,10 @@ def remap_novoalign_bam(bamfn, threads, fastaref, picardjar, novoref, mutid='nul
 
     if paired:
         sam_cmd  = ['novoalign', '--mmapOff', '-F', 'STDFQ', '-f', fastq[0], fastq[1], '-r', 'Random', '-d', novoref, '-oSAM'] # interleaved
+        #sam_cmd  = ['novoalign', '-F', 'STDFQ', '-f', fastq[0], fastq[1], '-r', 'Random', '-d', novoref, '-oSAM'] # uncomment for unlicensed
     else:
         sam_cmd  = ['novoalign', '--mmapOff', '-F', 'STDFQ', '-f', fastq, '-r', 'Random', '-d', novoref, '-oSAM'] # interleaved
+        #sam_cmd  = ['novoalign', '-F', 'STDFQ', '-f', fastq, '-r', 'Random', '-d', novoref, '-oSAM'] # uncomment for unlicensed
 
     assert len(sam_cmd) > 0
 

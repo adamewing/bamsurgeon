@@ -17,7 +17,7 @@ fi
 
 if [ ! -e $4 ]
 then
-    echo "cannot find SamToFastq.jar"
+    echo "cannot find picard.jar"
     exit 65
 fi
 
@@ -30,12 +30,6 @@ fi
 if [ ! -e $3 ]
 then
     echo "can't find reference .fasta: $3, please supply a bwa-indexed .fasta"
-    exit 65
-fi
-
-if [ ! -e $3.bwt ]
-then
-    echo "can't find $3.bwt: is $3 indexed with bwa?"
     exit 65
 fi
 
