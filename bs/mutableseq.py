@@ -64,5 +64,11 @@ class MutableSeq:
         for i in range(fold):
             dupseq = dupseq + self.seq[start:end]
         self.seq = self.seq[:start] + dupseq + self.seq[end:]
+
+    def fusion(self, loc1, other, loc2):
+        loc1 = int(loc1)
+        loc2 = int(loc2)
+        self.seq = self.seq[:loc1] + other.seq[loc2:]
+
         
         

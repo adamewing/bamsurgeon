@@ -7,6 +7,8 @@ import pysam
 import textwrap
 import argparse
 
+from uuid import uuid4
+
 def print_header():
     print textwrap.dedent("""\
     ##fileformat=VCFv4.1
@@ -30,8 +32,8 @@ def print_header():
     #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tSPIKEIN""")
 
 def printvcf(chrom, bnd1, bnd2, precise, type, svlen, ref, id):
-    base1 = ref.fetch(chrom, bnd1, bnd1+1) 
-    base2 = ref.fetch(chrom, bnd2, bnd2+1)
+    base1 = ref.fetch(chrom, bnd1-1, bnd1) 
+    base2 = ref.fetch(chrom, bnd2-1, bnd2)
 
     alt = '<' + type.upper() + '>'
 
@@ -63,6 +65,25 @@ def precise_interval(mutline, ref):
         bnd1 = (refstart+refend)/2 - 1
         bnd2 = (refstart+refend)/2 + 1
         id = m[7]
+    elif m[0] == 'trn':
+        chr1 = chrom
+        chr2 = m[6]
+
+        bnd1 = (refstart+refend)/2
+        bnd2 = (int(m[7])+int(m[8]))/2
+
+        id1 = str(uuid4()).split('-')[0]
+        id2 = str(uuid4()).split('-')[0]
+
+        base1 = ref.fetch(chrom, bnd1-1, bnd1) 
+        base2 = ref.fetch(chrom, bnd2-1, bnd2)
+
+        alt1 = '%s[%s:%d[' % (base1, chr2, bnd2) 
+        alt2 = ']%s:%d]%s' % (chr1, bnd1, base2) 
+
+        print '\t'.join((chr1, str(bnd1), id1, base1, alt1, '100', 'PASS', 'SOMATIC;SVTYPE=BND;PRECISE;MATEID='+id2, 'GT', './.'))
+        print '\t'.join((chr2, str(bnd2), id2, base2, alt2, '100', 'PASS', 'SOMATIC;SVTYPE=BND;PRECISE;MATEID='+id1, 'GT', './.'))
+
     else:
         contigstart = int(m[6])
         contigend   = int(m[7])
@@ -72,7 +93,7 @@ def precise_interval(mutline, ref):
 
     assert bnd1 < bnd2
 
-    printvcf(chrom, bnd1, bnd2, precise, m[0], bnd2-bnd1, ref, id)
+    if m[0] != 'trn': printvcf(chrom, bnd1, bnd2, precise, m[0], bnd2-bnd1, ref, id)
 
 
 def ignore_interval(mutline, ref):
@@ -84,6 +105,7 @@ def ignore_interval(mutline, ref):
     assert refstart < refend
 
     printvcf(chrom, refstart, refend, True, 'IGN', refend-refstart, ref)
+    if m[0] == 'trn': printvcf(m[6], int(m[7]), int(m[8]), True, 'IGN', int(m[8])-int(m[7]), ref)
 
 
 def main(args):
@@ -93,7 +115,7 @@ def main(args):
 
     with open(args.log, 'r') as log:
         for line in log:
-            for mutype in ('ins', 'del', 'inv', 'dup'):
+            for mutype in ('ins', 'del', 'inv', 'dup', 'trn'):
                 if line.startswith(mutype):
                     precise_interval(line.strip(), ref)
                     if args.mask:

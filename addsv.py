@@ -27,10 +27,14 @@ sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)
 sys.stderr = os.fdopen(sys.stderr.fileno(), 'w', 0)
 
 
-def runwgsim(contig, newseq, svfrac, svtype, exclude, pemean, pesd, tmpdir, mutid='null', seed=None):
+def runwgsim(contig, newseq, svfrac, svtype, exclude, pemean, pesd, tmpdir, mutid='null', seed=None, trn_contig=None):
     ''' wrapper function for wgsim
     '''
-    namecount = Counter([read.name for read in contig.reads.reads.values()])
+
+    readnames = [read.name for read in contig.reads.reads.values()]
+    if trn_contig: readnames += [read.name for read in trn_contig.reads.reads.values()]
+
+    namecount = Counter(readnames)
 
     basefn = tmpdir + '/' + mutid + ".wgsimtmp." + str(uuid4())
     fasta = basefn + ".fasta"
@@ -57,15 +61,18 @@ def runwgsim(contig, newseq, svfrac, svtype, exclude, pemean, pesd, tmpdir, muti
         else:
             discard += 1
 
+    ctg_len = len(contig)
+    if trn_contig: ctg_len += len(trn_contig)
+
     print "INFO\t" + now() + "\t" + mutid + "\tpaired  reads :", paired
     print "INFO\t" + now() + "\t" + mutid + "\tsingle  reads :", single
     print "INFO\t" + now() + "\t" + mutid + "\tdiscard reads :", discard
     print "INFO\t" + now() + "\t" + mutid + "\ttotal   reads :", totalreads
 
     # adjustment factor for length of new contig vs. old contig
-    lenfrac = float(len(newseq))/float(len(contig.seq))
+    lenfrac = float(len(newseq))/float(ctg_len)
 
-    print "INFO\t" + now() + "\t" + mutid + "\told ctg len:", len(contig.seq)
+    print "INFO\t" + now() + "\t" + mutid + "\told ctg len:", ctg_len
     print "INFO\t" + now() + "\t" + mutid + "\tnew ctg len:", len(newseq)
     print "INFO\t" + now() + "\t" + mutid + "\tadj. factor:", lenfrac
 
@@ -76,9 +83,16 @@ def runwgsim(contig, newseq, svfrac, svtype, exclude, pemean, pesd, tmpdir, muti
     print "INFO\t" + now() + "\t" + mutid + "\tPE mean outer distance:", pemean
     print "INFO\t" + now() + "\t" + mutid + "\tPE outer distance SD:", pesd
 
+    rquals = contig.rquals
+    mquals = contig.mquals
+
+    if trn_contig:
+        rquals += trn_contig.rquals
+        mquals += trn_contig.mquals
+
     # length of quality score comes from original read, used here to set length of read
     maxqlen = 0
-    for qual in (contig.rquals + contig.mquals):
+    for qual in (rquals + mquals):
         if len(qual) > maxqlen:
             maxqlen = len(qual)
 
@@ -276,6 +290,36 @@ def discordant_fraction(bamfile, chrom, start, end):
         return 0.0
 
 
+def trim_contig(mutid, chrom, start, end, contig, reffile):
+    # trim contig to get best ungapped aligned region to ref.
+
+    refseq = reffile.fetch(chrom,start,end)
+    alignstats = align(contig.seq, refseq)
+    
+    if len(alignstats) < 6:
+        sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\talignstats:" + str(alignstats) + "\n")
+        sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tNo good alignment between mutated contig and original, aborting mutation!\n")
+        return None, None
+    
+    qrystart, qryend = map(int, alignstats[2:4])
+    tgtstart, tgtend = map(int, alignstats[4:6])
+
+    refseq = refseq[tgtstart:tgtend]
+    
+    print "INFO\t" + now() + "\t" + mutid + "\talignment result:", alignstats
+
+    contig.trimseq(qrystart, qryend)
+    print "INFO\t" + now() + "\t" + mutid + "\ttrimmed contig length:", contig.len
+
+    refstart = start + tgtstart
+    refend = start + tgtend
+
+    if refstart > refend:
+        refstart, refend = refend, refstart
+
+    return contig, refseq, alignstats, refstart, refend, qrystart, qryend, tgtstart, tgtend
+
+
 def makemut(args, bedline, alignopts):
 
     if args.seed is not None: random.seed(int(args.seed))
@@ -303,6 +347,23 @@ def makemut(args, bedline, alignopts):
         end    = int(c[2])
         araw   = c[3:len(c)] # INV, DEL, INS seqfile.fa TSDlength, DUP
  
+        # translocation specific
+        trn_chrom = None
+        trn_start = None
+        trn_end   = None
+
+        is_transloc = c[3] == 'TRN'
+
+        if is_transloc:
+            start -= 3000
+            end   += 3000
+            if start < 0: start = 0
+
+            trn_chrom = c[4]
+            trn_start = int(c[5]) - 3000
+            trn_end   = int(c[5]) + 3000
+            if trn_start < 0: trn_start = 0
+
         actions = map(lambda x: x.strip(),' '.join(araw).split(','))
 
         svfrac = float(args.svfrac) # default, can be overridden by cnv file
@@ -339,16 +400,21 @@ def makemut(args, bedline, alignopts):
 
         contigs = ar.asm(chrom, start, end, args.bamFileName, reffile, int(args.kmersize), args.tmpdir, args.noref, args.recycle, mutid=mutid, debug=args.debug)
 
-        # find the largest contig        
-        maxlen = 0
-        maxcontig = None
-        for contig in contigs:
-            if contig.len > maxlen:
-                maxlen = contig.len
-                maxcontig = contig
+        trn_contigs = None
+        if is_transloc:
+            trn_contigs = ar.asm(trn_chrom, trn_start, trn_end, args.bamFileName, reffile, int(args.kmersize), args.tmpdir, args.noref, args.recycle, mutid=mutid, debug=args.debug)
+
+        maxcontig = sorted(contigs)[-1]
+
+        trn_maxcontig = None
+        if is_transloc: trn_maxcontig = sorted(trn_contigs)[-1]
 
         # be strict about contig quality
         if re.search('N', maxcontig.seq):
+            sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tcontig dropped due to ambiguous base (N), aborting mutation.\n")
+            return None, None
+
+        if is_transloc and re.search('N', trn_maxcontig.seq):
             sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tcontig dropped due to ambiguous base (N), aborting mutation.\n")
             return None, None
 
@@ -356,143 +422,146 @@ def makemut(args, bedline, alignopts):
             sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tmaxcontig has length 0, aborting mutation!\n")
             return None, None
 
-        # trim contig to get best ungapped aligned region to ref.
-
-        refseq = reffile.fetch(chrom,start,end)
-        alignstats = align(maxcontig.seq, refseq)
-        
-        if len(alignstats) < 6:
-            sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\talignstats:" + str(alignstats) + "\n")
-            sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tNo good alignment between mutated contig and original, aborting mutation!\n")
+        if is_transloc and trn_maxcontig is None:
+            sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\ttransloc maxcontig has length 0, aborting mutation!\n")
             return None, None
-        
-        qrystart, qryend = map(int, alignstats[2:4])
-        tgtstart, tgtend = map(int, alignstats[4:6])
 
-        refseq = refseq[tgtstart:tgtend]
+        print "INFO\t" + now() + "\t" + mutid + "\tbest contig length:", sorted(contigs)[-1].len
 
-        print "INFO\t" + now() + "\t" + mutid + "\tbest contig length:", maxlen
-        print "INFO\t" + now() + "\t" + mutid + "\talignment result:", alignstats
+        if is_transloc:
+            print "INFO\t" + now() + "\t" + mutid + "\tbest transloc contig length:", sorted(trn_contigs)[-1].len
 
-        maxcontig.trimseq(qrystart, qryend)
-        print "INFO\t" + now() + "\t" + mutid + "\ttrimmed contig length:", maxcontig.len
-
-        refstart = start + tgtstart
-        refend = start + tgtend
-
-        if refstart > refend:
-            refstart, refend = refend, refstart
+        # trim contig to get best ungapped aligned region to ref.
+        maxcontig, refseq, alignstats, refstart, refend, qrystart, qryend, tgtstart, tgtend = trim_contig(mutid, chrom, start, end, maxcontig, reffile)
     
         print "INFO\t" + now() + "\t" + mutid + "\tstart, end, tgtstart, tgtend, refstart, refend:", start, end, tgtstart, tgtend, refstart, refend
 
+        if is_transloc:
+            trn_maxcontig, trn_refseq, trn_alignstats, trn_refstart, trn_refend, trn_qrystart, trn_qryend, trn_tgtstart, trn_tgtend = trim_contig(mutid, trn_chrom, trn_start, trn_end, trn_maxcontig, reffile)
+            print "INFO\t" + now() + "\t" + mutid + "\ttrn_start, trn_end, trn_tgtstart, trn_tgtend, trn_refstart, trn_refend:", trn_start, trn_end, trn_tgtstart, trn_tgtend, trn_refstart, trn_refend
+
         # is there anough room to make mutations?
-        if maxcontig.len > 3*int(args.maxlibsize):
-            # make mutation in the largest contig
-            mutseq = ms.MutableSeq(maxcontig.seq)
-
-            # support for multiple mutations
-            for actionstr in actions:
-                a = actionstr.split()
-                action = a[0]
-
-                print "INFO\t" + now() + "\t" + mutid + "\taction: ", actionstr, action
-
-                insseqfile = None
-                insseq = ''
-                tsdlen = 0  # target site duplication length
-                ndups = 0   # number of tandem dups
-                dsize = 0.0 # deletion size fraction
-                dlen = 0
-                if action == 'INS':
-                    assert len(a) > 1 # insertion syntax: INS <file.fa> [optional TSDlen]
-                    insseqfile = a[1]
-                    if not (os.path.exists(insseqfile) or insseqfile == 'RND'): # not a file... is it a sequence? (support indel ins.)
-                        assert re.search('^[ATGCatgc]*$',insseqfile) # make sure it's a sequence
-                        insseq = insseqfile.upper()
-                        insseqfile = None
-                    if len(a) > 2:
-                        tsdlen = int(a[2])
-
-                if action == 'DUP':
-                    if len(a) > 1:
-                        ndups = int(a[1])
-                    else:
-                        ndups = 1
-
-                if action == 'DEL':
-                    if len(a) > 1:
-                        dsize = float(a[1])
-                        if dsize >= 1.0: # if DEL size is not a fraction, interpret as bp
-                            # since DEL 1 is default, if DEL 1 is specified, interpret as 1 bp deletion
-                            dlen = int(dsize)
-                            dsize = 1.0
-                    else:
-                        dsize = 1.0
-
-                logfile.write(">" + chrom + ":" + str(refstart) + "-" + str(refend) + " BEFORE\n" + str(mutseq) + "\n")
-
-                if action == 'INS':
-                    if insseqfile: # seq in file
-                        if insseqfile == 'RND':
-                            assert args.inslib is not None # insertion library needs to exist
-                            insseqfile = random.choice(args.inslib.keys())
-                            print "INFO\t" + now() + "\t" + mutid + "\tchose sequence from insertion library: " + insseqfile
-                            mutseq.insertion(mutseq.length()/2,args.inslib[insseqfile],tsdlen)
-                        else:
-                            mutseq.insertion(mutseq.length()/2,singleseqfa(insseqfile, mutid=mutid),tsdlen)
-                    else: # seq is input
-                        mutseq.insertion(mutseq.length()/2,insseq,tsdlen)
-                    logfile.write("\t".join(('ins',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(mutseq.length()/2),str(insseqfile),str(tsdlen))) + "\n")
-
-                elif action == 'INV':
-                    invstart = int(args.maxlibsize)
-                    invend = mutseq.length() - invstart
-                    mutseq.inversion(invstart,invend)
-                    logfile.write("\t".join(('inv',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(invstart),str(invend))) + "\n")
-
-                elif action == 'DEL':
-                    delstart = int(args.maxlibsize)
-                    delend = mutseq.length() - delstart
-                    if dlen == 0: # bp size not specified, delete fraction of contig
-                        dlen = int((float(delend-delstart) * dsize)+0.5) 
-
-                    dadj = delend-delstart-dlen
-                    if dadj < 0:
-                        dadj = 0
-                        sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\twarning: deletion of length 0\n")
-    
-                    delstart += dadj/2
-                    delend   -= dadj/2
-
-                    mutseq.deletion(delstart,delend)
-                    logfile.write("\t".join(('del',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(delstart),str(delend),str(dlen))) + "\n")
-
-                elif action == 'DUP':
-                    dupstart = int(args.maxlibsize)
-                    dupend = mutseq.length() - dupstart
-                    mutseq.duplication(dupstart,dupend,ndups)
-                    logfile.write("\t".join(('dup',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(dupstart),str(dupend),str(ndups))) + "\n")
-
-                else:
-                    raise ValueError("ERROR\t" + now() + "\t" + mutid + "\t: mutation not one of: INS,INV,DEL,DUP\n")
-
-                logfile.write(">" + chrom + ":" + str(refstart) + "-" + str(refend) +" AFTER\n" + str(mutseq) + "\n")
-
-            pemean, pesd = float(args.ismean), float(args.issd) 
-            print "INFO\t" + now() + "\t" + mutid + "\tset paired end mean distance: " + str(args.ismean)
-            print "INFO\t" + now() + "\t" + mutid + "\tset paired end distance stddev: " + str(args.issd)
-
-            # simulate reads
-            (fq1, fq2) = runwgsim(maxcontig, mutseq.seq, svfrac, actions, exclude, pemean, pesd, args.tmpdir, mutid=mutid, seed=args.seed)
-
-            outreads = aligners.remap_fastq(args.aligner, fq1, fq2, args.refFasta, outbam_mutsfile, alignopts, mutid=mutid, threads=1)
-
-            if outreads == 0:
-                sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\toutbam " + outbam_mutsfile + " has no mapped reads!\n")
-                return None, None
-
-        else:
+        if maxcontig.len < 3*int(args.maxlibsize):
             sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tbest contig too short to make mutation!\n")
+            return None, None
+
+        if is_transloc and trn_maxcontig.len < 3*int(args.maxlibsize):
+            sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tbest transloc contig too short to make mutation!\n")
+            return None, None
+
+        # make mutation in the largest contig
+        mutseq = ms.MutableSeq(maxcontig.seq)
+
+        if is_transloc: trn_mutseq = ms.MutableSeq(trn_maxcontig.seq)
+
+        # support for multiple mutations
+        for actionstr in actions:
+            a = actionstr.split()
+            action = a[0]
+
+            print "INFO\t" + now() + "\t" + mutid + "\taction: ", actionstr, action
+
+            insseqfile = None
+            insseq = ''
+            tsdlen = 0  # target site duplication length
+            ndups = 0   # number of tandem dups
+            dsize = 0.0 # deletion size fraction
+            dlen = 0
+
+            if action == 'INS':
+                assert len(a) > 1 # insertion syntax: INS <file.fa> [optional TSDlen]
+                insseqfile = a[1]
+                if not (os.path.exists(insseqfile) or insseqfile == 'RND'): # not a file... is it a sequence? (support indel ins.)
+                    assert re.search('^[ATGCatgc]*$',insseqfile) # make sure it's a sequence
+                    insseq = insseqfile.upper()
+                    insseqfile = None
+                if len(a) > 2:
+                    tsdlen = int(a[2])
+
+            if action == 'DUP':
+                if len(a) > 1:
+                    ndups = int(a[1])
+                else:
+                    ndups = 1
+
+            if action == 'DEL':
+                if len(a) > 1:
+                    dsize = float(a[1])
+                    if dsize >= 1.0: # if DEL size is not a fraction, interpret as bp
+                        # since DEL 1 is default, if DEL 1 is specified, interpret as 1 bp deletion
+                        dlen = int(dsize)
+                        dsize = 1.0
+                else:
+                    dsize = 1.0
+
+            if action == 'TRN':
+                pass
+
+
+            logfile.write(">" + chrom + ":" + str(refstart) + "-" + str(refend) + " BEFORE\n" + str(mutseq) + "\n")
+
+            if action == 'INS':
+                if insseqfile: # seq in file
+                    if insseqfile == 'RND':
+                        assert args.inslib is not None # insertion library needs to exist
+                        insseqfile = random.choice(args.inslib.keys())
+                        print "INFO\t" + now() + "\t" + mutid + "\tchose sequence from insertion library: " + insseqfile
+                        mutseq.insertion(mutseq.length()/2,args.inslib[insseqfile],tsdlen)
+                    else:
+                        mutseq.insertion(mutseq.length()/2,singleseqfa(insseqfile, mutid=mutid),tsdlen)
+                else: # seq is input
+                    mutseq.insertion(mutseq.length()/2,insseq,tsdlen)
+                logfile.write("\t".join(('ins',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(mutseq.length()/2),str(insseqfile),str(tsdlen))) + "\n")
+
+            elif action == 'INV':
+                invstart = int(args.maxlibsize)
+                invend = mutseq.length() - invstart
+                mutseq.inversion(invstart,invend)
+                logfile.write("\t".join(('inv',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(invstart),str(invend))) + "\n")
+
+            elif action == 'DEL':
+                delstart = int(args.maxlibsize)
+                delend = mutseq.length() - delstart
+                if dlen == 0: # bp size not specified, delete fraction of contig
+                    dlen = int((float(delend-delstart) * dsize)+0.5) 
+
+                dadj = delend-delstart-dlen
+                if dadj < 0:
+                    dadj = 0
+                    sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\twarning: deletion of length 0\n")
+
+                delstart += dadj/2
+                delend   -= dadj/2
+
+                mutseq.deletion(delstart,delend)
+                logfile.write("\t".join(('del',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(delstart),str(delend),str(dlen))) + "\n")
+
+            elif action == 'DUP':
+                dupstart = int(args.maxlibsize)
+                dupend = mutseq.length() - dupstart
+                mutseq.duplication(dupstart,dupend,ndups)
+                logfile.write("\t".join(('dup',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(dupstart),str(dupend),str(ndups))) + "\n")
+
+            elif action == 'TRN':
+                mutseq.fusion(mutseq.length()/2, trn_mutseq, trn_mutseq.length()/2)
+                logfile.write("\t".join(('trn',chrom,str(refstart),str(refend),action,str(mutseq.length()),trn_chrom,str(trn_refstart),str(trn_refend),str(trn_mutseq.length()))) + "\n")
+
+            else:
+                raise ValueError("ERROR\t" + now() + "\t" + mutid + "\t: mutation not one of: INS,INV,DEL,DUP,TRN\n")
+
+            logfile.write(">" + chrom + ":" + str(refstart) + "-" + str(refend) +" AFTER\n" + str(mutseq) + "\n")
+
+        pemean, pesd = float(args.ismean), float(args.issd) 
+        print "INFO\t" + now() + "\t" + mutid + "\tset paired end mean distance: " + str(args.ismean)
+        print "INFO\t" + now() + "\t" + mutid + "\tset paired end distance stddev: " + str(args.issd)
+
+        # simulate reads
+        (fq1, fq2) = runwgsim(maxcontig, mutseq.seq, svfrac, actions, exclude, pemean, pesd, args.tmpdir, mutid=mutid, seed=args.seed, trn_contig=trn_maxcontig)
+
+        outreads = aligners.remap_fastq(args.aligner, fq1, fq2, args.refFasta, outbam_mutsfile, alignopts, mutid=mutid, threads=1)
+
+        if outreads == 0:
+            sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\toutbam " + outbam_mutsfile + " has no mapped reads!\n")
             return None, None
 
         print "INFO\t" + now() + "\t" + mutid + "\ttemporary bam: " + outbam_mutsfile

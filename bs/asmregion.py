@@ -77,6 +77,11 @@ class Contig:
         assert new_reads is not None
         self.reads = new_reads
 
+    def __len__(self): return self.len
+
+    def __gt__(self, other):
+        return self.len > other.len
+
     def __str__(self):
         return ">" + self.name + "\n" + self.seq
 
