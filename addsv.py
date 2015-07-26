@@ -45,7 +45,7 @@ def runwgsim(contig, newseq, svfrac, svtype, exclude, pemean, pesd, tmpdir, muti
     fout.write(">target\n" + newseq + "\n")
     fout.close()
 
-    totalreads = len(contig.reads.reads)
+    totalreads = len(readnames)
     paired = 0
     single = 0
     discard = 0
@@ -96,7 +96,7 @@ def runwgsim(contig, newseq, svfrac, svtype, exclude, pemean, pesd, tmpdir, muti
         if len(qual) > maxqlen:
             maxqlen = len(qual)
 
-    args = ['wgsim','-e','0','-d',str(pemean),'-s',str(pesd),'-N',str(nsimreads),'-1',str(maxqlen),'-2','101','-r','0','-R','0',fasta,fq1,fq2]
+    args = ['wgsim','-e','0','-d',str(pemean),'-s',str(pesd),'-N',str(nsimreads),'-1',str(maxqlen),'-2', str(maxqlen),'-r','0','-R','0',fasta,fq1,fq2]
 
     if seed is not None: args += ['-S', str(seed)]
 
@@ -105,8 +105,8 @@ def runwgsim(contig, newseq, svfrac, svtype, exclude, pemean, pesd, tmpdir, muti
 
     os.remove(fasta)
 
-    fqReplaceList(fq1, pairednames, contig.rquals, svfrac, svtype, exclude, mutid=mutid)
-    fqReplaceList(fq2, pairednames, contig.mquals, svfrac, svtype, exclude, mutid=mutid)
+    fqReplaceList(fq1, pairednames, rquals, svfrac, svtype, exclude, mutid=mutid)
+    fqReplaceList(fq2, pairednames, mquals, svfrac, svtype, exclude, mutid=mutid)
 
     return (fq1,fq2)
 
