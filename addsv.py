@@ -642,13 +642,17 @@ def main(args):
 
         tmpbam, exclfn = result.get()
 
-        if tmpbam is not None and exclfn is not None:
+        if os.path.exists(tmpbam) and os.path.exists(exclfn):
             if bamreadcount(tmpbam) > 0:
                 tmpbams.append(tmpbam)
                 exclfns.append(exclfn)
             else:
                 os.remove(tmpbam)
                 os.remove(exclfn)
+
+    if len(tmpbams) == 0:
+        print "INFO\t" + now() + "\tno succesful mutations"
+        sys.exit()
 
     print "INFO\t" + now() + "\ttmpbams:",tmpbams
     print "INFO\t" + now() + "\texclude:",exclfns

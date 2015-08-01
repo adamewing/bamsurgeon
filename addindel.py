@@ -303,11 +303,16 @@ def main(args):
             tmpbamlist = result.get()
             if tmpbamlist is not None:
                 for tmpbam in tmpbamlist:
-                    tmpbams.append(tmpbam)
+                    if os.path.exists(tmpbam):
+                        tmpbams.append(tmpbam)
         except AssertionError:
             print "****************************************************"
             print "* WARNING: assertion failed somewhere, check logs. *"
             print "****************************************************"
+
+    if len(tmpbams) == 0:
+        print "INFO\t" + now() + "\tno succesful mutations"
+        sys.exit()
 
     tmpbams.sort()
 

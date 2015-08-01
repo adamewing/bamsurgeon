@@ -390,7 +390,12 @@ def main(args):
         tmpbamlist = result.get()
         if tmpbamlist is not None:
             for tmpbam in tmpbamlist:
-                tmpbams.append(tmpbam)
+                if os.path.exists(tmpbam):
+                    tmpbams.append(tmpbam)
+
+    if len(tmpbams) == 0:
+        print "INFO\t" + now() + "\tno succesful mutations"
+        sys.exit()        
 
     # merge tmp bams
     if len(tmpbams) == 1:
