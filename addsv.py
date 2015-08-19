@@ -642,7 +642,7 @@ def main(args):
 
         tmpbam, exclfn = result.get()
 
-        if os.path.exists(tmpbam) and os.path.exists(exclfn):
+        if None not in (tmpbam, exclfn) and os.path.exists(tmpbam) and os.path.exists(exclfn):
             if bamreadcount(tmpbam) > 0:
                 tmpbams.append(tmpbam)
                 exclfns.append(exclfn)
@@ -682,9 +682,10 @@ def main(args):
         print "INFO\t" + now() + "\tcleaning up..."
 
         if not args.debug:
-            for exclfn in exclfns:
-                if os.path.isfile(exclfn):
-                    os.remove(exclfn)
+            if exclfn is not None:
+                for exclfn in exclfns:
+                    if os.path.isfile(exclfn):
+                        os.remove(exclfn)
 
             for tmpbam in tmpbams:
                 if os.path.isfile(tmpbam):
