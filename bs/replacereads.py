@@ -72,6 +72,7 @@ def compare_ref(targetbam, donorbam):
     '''
     for ref in targetbam.references:
         if ref not in donorbam.references or donorbam.gettid(ref) != targetbam.gettid(ref):
+            sys.stderr.write("contig mismatch: %s\n" % ref)
             return False
     return True
     
