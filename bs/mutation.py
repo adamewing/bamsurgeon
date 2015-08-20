@@ -126,6 +126,8 @@ def mutate(args, log, bamfile, bammate, chrom, mutstart, mutend, mutpos_list, av
 
     region = 'haplo_' + chrom + '_' + str(mutstart) + '_' + str(mutend)
 
+    maxfrac = None
+
     for pcol in bamfile.pileup(reference=chrom, start=mutstart, end=mutend):
         if pcol.pos:
             refbase = reffile.fetch(chrom, pcol.pos-1, pcol.pos)
@@ -208,5 +210,7 @@ def mutate(args, log, bamfile, bammate, chrom, mutstart, mutend, mutpos_list, av
                 sys.stderr.write("WARN\t" + now() + "\t" + region + "\tcould not pileup for region: " + chrom + ":" + str(pcol.pos) + "\n")
                 if not args.ignorepileup:
                     hasSNP = True
+
+    assert maxfrac is not None, "Error: %s: could not pile up over region: %s" % (mutid, region)
 
     return False, hasSNP, maxfrac, outreads, mutreads, mutmates # todo: convert to class
