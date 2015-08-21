@@ -380,15 +380,15 @@ def makemut(args, bedline, alignopts):
         print "INFO\t" + now() + "\t" + mutid + "\tinterval:", c
         print "INFO\t" + now() + "\t" + mutid + "\tlength:", end-start
 
-        # modify start and end if interval is too long
-#        maxctglen = int(args.maxctglen)
-#        assert maxctglen > 3*int(args.maxlibsize) # maxctglen is too short
-#        if end-start > maxctglen:
-#            adj   = (end-start) - maxctglen
-#            rndpt = random.randint(0,adj)
-#            start = start + rndpt
-#            end   = end - (adj-rndpt)
-#            print "INFO\t" + now() + "\t" + mutid + "\tnote: interval size too long, adjusted:",chrom,start,end
+       # modify start and end if interval is too long
+       maxctglen = int(args.maxctglen)
+       assert maxctglen > 3*int(args.maxlibsize) # maxctglen is too short
+       if end-start > maxctglen:
+           adj   = (end-start) - maxctglen
+           rndpt = random.randint(0,adj)
+           start = start + rndpt
+           end   = end - (adj-rndpt)
+           print "INFO\t" + now() + "\t" + mutid + "\tnote: interval size too long, adjusted:",chrom,start,end
 
         dfrac = discordant_fraction(args.bamFileName, chrom, start, end)
         print "INFO\t" + now() + "\t" + mutid + "\tdiscordant fraction:", dfrac
