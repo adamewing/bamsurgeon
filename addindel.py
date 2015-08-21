@@ -337,8 +337,8 @@ def main(args):
         if args.tagreads:
             from bs.markreads import markreads
             tmp_tag_bam = 'tag.%s.bam' % str(uuid4())
-            markreads(mergedtmp, tmp_tag_bam)
-            move(tmp_tag_bam, mergedtmp)
+            markreads(outbam_mutsfile, tmp_tag_bam)
+            move(tmp_tag_bam, outbam_mutsfile)
             print "INFO\t" + now() + "\ttagged reads."
 
         print "INFO\t" + now() + "\tdone making mutations, merging mutations into", args.bamFileName, "-->", args.outBamFile
