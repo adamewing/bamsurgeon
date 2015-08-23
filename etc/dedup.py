@@ -2,6 +2,8 @@
 
 import sys
 
+pad = 10000
+
 class Interval:
     def __init__(self,chr,start,end,etc):
         self.chr = chr
@@ -25,11 +27,10 @@ class Interval:
         return False
 
     def __str__(self):
-        out = "\t".join((self.chr,str(self.start),str(self.end))) + "\t" + " ".join(self.info)
+        out = "\t".join((self.chr,str(self.start+pad),str(self.end-pad))) + "\t" + " ".join(self.info)
         return out
 
 if len(sys.argv) == 2:
-    pad = 10000
     f = open(sys.argv[1])
     ivl_list = []
     for line in f:
