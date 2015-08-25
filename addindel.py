@@ -179,9 +179,7 @@ def makemut(args, chrom, start, end, vaf, ins, avoid, alignopts):
             if not hasSNP or args.force:
                 wrote += 1
                 outbam_muts.write(read)
-                if args.single:
-                    outbam_muts.write(mutmates[extqname])
-                elif mutmates[extqname] is not None:
+                if mutmates[extqname] is not None:
                     outbam_muts.write(mutmates[extqname])
         print "INFO\t" + now() + "\t" + mutid + "\twrote: " + str(wrote) + " reads, mutated: " + str(nmut) + " reads"
 

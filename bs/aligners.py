@@ -16,7 +16,7 @@ from uuid import uuid4
 #
 
 
-supported_aligners_bam   = ['backtrack', 'mem', 'novoalign', 'gsnap', 'bowtie2']
+supported_aligners_bam   = ['backtrack', 'mem', 'novoalign', 'gsnap', 'bowtie2', 'tmap']
 supported_aligners_fastq = ['backtrack', 'mem', 'novoalign']
 
 def checkoptions(name, options, picardjar, sv=False):
@@ -65,6 +65,9 @@ def remap_bam(name, bamfn, fastaref, options, mutid='null', threads=1, paired=Tr
 
     if name == 'bowtie2':
         remap_bowtie2_bam(bamfn, threads, fastaref, picardjar, options['bowtie2ref'], mutid=mutid, paired=paired)
+
+    if name == 'tmap':
+        remap_tmap_bam(bamfn, threads, fastaref, picardjar, mutid=mutid, paired=paired)
 
 
 def remap_backtrack_bam(bamfn, threads, fastaref, mutid='null', paired=True):
@@ -150,7 +153,7 @@ def remap_bwamem_bam(bamfn, threads, fastaref, picardjar, mutid='null', paired=T
     sort_out = bamfn + '.realign.sorted'
 
     print "INFO\t" + now() + "\t" + mutid + "\tconverting " + bamfn + " to fastq\n"
-    fastq = bamtofastq(bamfn, picardjar, threads=threads, paired=paired)
+    fastq = bamtofastq(bamfn, picardjar, threads=threads, paired=paired)[0]
 
     sam_cmd = []
 
@@ -218,7 +221,7 @@ def remap_novoalign_bam(bamfn, threads, fastaref, picardjar, novoref, mutid='nul
         sam_cmd  = ['novoalign', '--mmapOff', '-F', 'STDFQ', '-f', fastq[0], fastq[1], '-r', 'Random', '-d', novoref, '-oSAM'] # interleaved
         #sam_cmd  = ['novoalign', '-F', 'STDFQ', '-f', fastq[0], fastq[1], '-r', 'Random', '-d', novoref, '-oSAM'] # uncomment for unlicensed
     else:
-        sam_cmd  = ['novoalign', '--mmapOff', '-F', 'STDFQ', '-f', fastq, '-r', 'Random', '-d', novoref, '-oSAM'] # interleaved
+        sam_cmd  = ['novoalign', '--mmapOff', '-F', 'STDFQ', '-f', fastq[0], '-r', 'Random', '-d', novoref, '-oSAM'] # interleaved
         #sam_cmd  = ['novoalign', '-F', 'STDFQ', '-f', fastq, '-r', 'Random', '-d', novoref, '-oSAM'] # uncomment for unlicensed
 
     assert len(sam_cmd) > 0
@@ -258,7 +261,7 @@ def remap_novoalign_bam(bamfn, threads, fastaref, picardjar, novoref, mutid='nul
         if bamreadcount(bamfn) < fastqreadcount(fastq[0]) + fastqreadcount(fastq[1]): 
             raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
     else:
-        if bamreadcount(bamfn) < fastqreadcount(fastq): 
+        if bamreadcount(bamfn) < fastqreadcount(fastq[0]): 
             raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
 
     if paired:
@@ -266,8 +269,8 @@ def remap_novoalign_bam(bamfn, threads, fastaref, picardjar, novoref, mutid='nul
             sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fq + "\n")
             os.remove(fq)
     else:
-        sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fastq + "\n")
-        os.remove(fastq)
+        sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fastq[0] + "\n")
+        os.remove(fastq[0])
 
 
 def remap_gsnap_bam(bamfn, threads, fastaref, picardjar, gsnaprefdir, gsnaprefname, mutid='null', paired=True):
@@ -331,7 +334,7 @@ def remap_gsnap_bam(bamfn, threads, fastaref, picardjar, gsnaprefdir, gsnaprefna
         if bamreadcount(bamfn) < fastqreadcount(fastq[0]) + fastqreadcount(fastq[1]): 
             raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
     else:
-        if bamreadcount(bamfn) < fastqreadcount(fastq): 
+        if bamreadcount(bamfn) < fastqreadcount(fastq[0]): 
             raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
 
     if paired:
@@ -339,8 +342,8 @@ def remap_gsnap_bam(bamfn, threads, fastaref, picardjar, gsnaprefdir, gsnaprefna
             sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fq + "\n")
             os.remove(fq)
     else:
-        sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fastq + "\n")
-        os.remove(fastq)
+        sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fastq[0] + "\n")
+        os.remove(fastq[0])
 
 
 def remap_bowtie2_bam(bamfn, threads, fastaref, picardjar, bowtie2ref, mutid='null', paired=True):
@@ -399,7 +402,7 @@ def remap_bowtie2_bam(bamfn, threads, fastaref, picardjar, bowtie2ref, mutid='nu
         if bamreadcount(bamfn) < fastqreadcount(fastq[0]) + fastqreadcount(fastq[1]): 
             raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
     else:
-        if bamreadcount(bamfn) < fastqreadcount(fastq): 
+        if bamreadcount(bamfn) < fastqreadcount(fastq[0]): 
             raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
 
     if paired:
@@ -407,8 +410,76 @@ def remap_bowtie2_bam(bamfn, threads, fastaref, picardjar, bowtie2ref, mutid='nu
             sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fq + "\n")
             os.remove(fq)
     else:
-        sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fastq + "\n")
-        os.remove(fastq)
+        sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fastq[0] + "\n")
+        os.remove(fastq[0])
+
+
+def remap_tmap_bam(bamfn, threads, fastaref, picardjar, mutid='null', paired=False):
+    """ call bowtie2 and samtools to remap .bam
+    """
+
+    assert bamreadcount(bamfn) > 0 
+
+    sam_out  = bamfn + '.realign.sam'
+    sort_out = bamfn + '.realign.sorted'
+
+    print "INFO\t" + now() + "\t" + mutid + "\tconverting " + bamfn + " to fastq\n"
+    fastq = bamtofastq(bamfn, picardjar, threads=threads, paired=paired, twofastq=True)
+
+    sam_cmd = []
+
+    if paired:
+        raise ValueError('tmap only supported in --single mode.')
+    else:
+        sam_cmd = ['tmap', 'mapall', '-f', fastaref, '-r', fastq[0], '-n', str(threads), '-v', '-u', '-o', '0', 'stage1', 'map4']
+
+    assert len(sam_cmd) > 0
+
+    bam_cmd  = ['samtools', 'view', '-bt', fastaref + '.fai', '-o', bamfn, sam_out]
+    sort_cmd = ['samtools', 'sort', '-@', str(threads), '-m', '10000000000', bamfn, sort_out]
+    idx_cmd  = ['samtools', 'index', bamfn]
+
+    print "INFO\t" + now() + "\t" + mutid + "\taligning " + str(fastq) + " with tmap\n"
+    with open(sam_out, 'w') as sam:
+        p = subprocess.Popen(sam_cmd, stdout=subprocess.PIPE)
+        for line in p.stdout:
+            sam.write(line)
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\twriting " + sam_out + " to BAM...\n")
+    subprocess.call(bam_cmd)
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tdeleting SAM: " + sam_out + "\n")
+    os.remove(sam_out)
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tsorting output: " + ' '.join(sort_cmd) + "\n")
+    subprocess.call(sort_cmd)
+
+    sort_out += '.bam'
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremove original bam:" + bamfn + "\n")
+    os.remove(bamfn)
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\trename sorted bam: " + sort_out + " to original name: " + bamfn + "\n")
+    move(sort_out, bamfn)
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tindexing: " + ' '.join(idx_cmd) + "\n")
+    subprocess.call(idx_cmd)
+
+    # check if BAM readcount looks sane
+    if paired:
+        if bamreadcount(bamfn) < fastqreadcount(fastq[0]) + fastqreadcount(fastq[1]): 
+            raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
+    else:
+        if bamreadcount(bamfn) < fastqreadcount(fastq[0]): 
+            raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
+
+    if paired:
+        for fq in fastq:
+            sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fq + "\n")
+            os.remove(fq)
+    else:
+        sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fastq[0] + "\n")
+        os.remove(fastq[0])
 
 
 #

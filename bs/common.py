@@ -114,7 +114,7 @@ def bamtofastq(bam, picardjar, threads=1, paired=True, twofastq=False):
 
     if outfq is not None:
         assert os.path.exists(outfq) # conversion failed
-        return outfq
+        return [outfq]
 
     if outfq_pair is not None:
         assert os.path.exists(outfq_pair[0]) and os.path.exists(outfq_pair[1])
