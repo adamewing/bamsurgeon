@@ -128,7 +128,7 @@ def mutate(args, log, bamfile, bammate, chrom, mutstart, mutend, mutpos_list, av
 
     maxfrac = None
 
-    for pcol in bamfile.pileup(reference=chrom, start=mutstart, end=mutend):
+    for pcol in bamfile.pileup(reference=chrom, start=mutstart, end=mutend, max_depth=int(args.maxdepth)):
         if pcol.pos:
             refbase = reffile.fetch(chrom, pcol.pos-1, pcol.pos)
             basepile = ''

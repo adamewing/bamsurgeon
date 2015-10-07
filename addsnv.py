@@ -208,6 +208,7 @@ def makemut(args, hc, avoid, alignopts):
 
         wrote = 0
         nmut = 0
+        mut_out = {}
         # change reads from .bam to mutated sequences
         for extqname,read in outreads.iteritems():
             if read.seq != mutreads[extqname]:
@@ -218,10 +219,36 @@ def makemut(args, hc, avoid, alignopts):
                     nmut += 1
             if not hasSNP or args.force:
                 wrote += 1
-                outbam_muts.write(read)
+                mut_out[extqname] = read
+                #outbam_muts.write(read)
+
+        muts_written = {}
+
+        for extqname in mut_out:
+            if extqname not in muts_written:
+                outbam_muts.write(mut_out[extqname])
+                muts_written[extqname] = True
 
                 if mutmates[extqname] is not None:
-                    outbam_muts.write(mutmates[extqname])
+                    # is mate also in mutated list?
+                    mate_read = mutmates[extqname]
+
+                    pairname = 'F' # read is first in pair
+                    if mate_read.is_read2:
+                        pairname = 'S' # read is second in pair
+                    if not mate_read.is_paired:
+                        pairname = 'U' # read is unpaired
+
+                    mateqname = ','.join((mate_read.qname,str(mate_read.pos),pairname))
+
+                    if mateqname in mut_out:
+                        # yes: output mutated mate
+                        outbam_muts.write(mut_out[mateqname])
+                        muts_written[mateqname] = True
+
+                    else:
+                        # no: output original mate
+                        outbam_muts.write(mate_read)
 
         print "INFO\t" + now() + "\t" + hapstr + "\twrote: ",wrote,"mutated:",nmut
 
