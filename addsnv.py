@@ -126,7 +126,7 @@ def makemut(args, hc, avoid, alignopts):
             altbase = altbase_list[n]
             refbase_list.append(refbase)
 
-            if altbase == refbase.upper():
+            if altbase == refbase.upper() and not args.ignoreref:
                 sys.stderr.write("WARN\t" + now() + "\t" + mutid_list[n] + "\tspecified ALT base matches reference, skipping mutation\n")
                 return None
 
@@ -476,6 +476,7 @@ def run():
     parser.add_argument('--avoidreads', default=None, help='file of read names to avoid (mutations will be skipped if overlap)')
     parser.add_argument('--nomut', action='store_true', default=False, help="dry run")
     parser.add_argument('--ignoresnps', action='store_true', default=False, help="make mutations even if there are non-reference alleles sharing the relevant reads")
+    parser.add_argument('--ignoreref', action='store_true', default=False, help="make mutations even if the mutation is back to the reference allele")
     parser.add_argument('--force', action='store_true', default=False, help="force mutation to happen regardless of nearby SNP or low coverage")
     parser.add_argument('--single', action='store_true', default=False, help="input BAM is simgle-ended (default is paired-end)")
     parser.add_argument('--maxopen', dest='maxopen', default=1000, help="maximum number of open files during merge (default 1000)")
