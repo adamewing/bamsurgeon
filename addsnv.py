@@ -278,11 +278,12 @@ def makemut(args, hc, avoid, alignopts):
                     snvstr = chrom + ":" + str(site['start']) + "-" + str(site['end']) + " (VAF=" + str(vaf) + ")"
                     log.write("\t".join(("snv",snvstr,str(mutpos_list[n]),mutstr_list[n],str(avgoutcover),str(avgoutcover),str(spikein_snvfrac),str(maxfrac)))+"\n")
             else:
+
                 outbam_muts.close()
                 os.remove(tmpoutbamname)
                 if os.path.exists(tmpoutbamname + '.bai'):
                     os.remove(tmpoutbamname + '.bai')
-
+                print "WARN\t" + now() + "\t" + hapstr + "\tdropped for outcover/incover < " + str(args.coverdiff)
                 return None
 
         outbam_muts.close()

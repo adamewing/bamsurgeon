@@ -242,6 +242,8 @@ def makemut(args, chrom, start, end, vaf, ins, avoid, alignopts):
                 os.remove(tmpoutbamname)
                 if os.path.exists(tmpoutbamname + '.bai'):
                     os.remove(tmpoutbamname + '.bai')
+                    
+                print "WARN\t" + now() + "\t" + mutid + "\tdropped for outcover/incover < " + str(args.coverdiff)
                 return None
 
         outbam_muts.close()
