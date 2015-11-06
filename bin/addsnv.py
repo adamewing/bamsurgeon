@@ -6,13 +6,13 @@ import argparse
 import random
 import subprocess
 import os
-import bs.replacereads as rr
+import bamsurgeon.replacereads as rr
 import traceback
-import bs.aligners as aligners
-import bs.mutation as mutation
+import bamsurgeon.aligners as aligners
+import bamsurgeon.mutation as mutation
 
 from operator import itemgetter
-from bs.common import *
+from bamsurgeon.common import *
 from uuid import uuid4
 from shutil import move
 from re import sub
@@ -444,7 +444,7 @@ def main(args):
         print "INFO\t" + now() + "\tskipping merge, plase merge reads from", outbam_mutsfile, "manually."
     else:
         if args.tagreads:
-            from bs.markreads import markreads
+            from bamsurgeon.markreads import markreads
             tmp_tag_bam = 'tag.%s.bam' % str(uuid4())
             markreads(outbam_mutsfile, tmp_tag_bam)
             move(tmp_tag_bam, outbam_mutsfile)

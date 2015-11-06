@@ -8,12 +8,12 @@ import subprocess
 import traceback
 import argparse
 import pysam
-import bs.replacereads as rr
-import bs.asmregion as ar
-import bs.mutableseq as ms
-import bs.aligners as aligners
+import bamsurgeon.replacereads as rr
+import bamsurgeon.asmregion as ar
+import bamsurgeon.mutableseq as ms
+import bamsurgeon.aligners as aligners
 
-from bs.common import *
+from bamsurgeon.common import *
 from uuid import uuid4
 from time import sleep
 from shutil import move
@@ -695,7 +695,7 @@ def main(args):
 
     else:
         if args.tagreads:
-            from bs.markreads import markreads
+            from bamsurgeon.markreads import markreads
             tmp_tag_bam = 'tag.%s.bam' % str(uuid4())
             markreads(mergedtmp, tmp_tag_bam)
             move(tmp_tag_bam, mergedtmp)
