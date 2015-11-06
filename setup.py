@@ -4,6 +4,6 @@ setup(name='bamsurgeon',
 	version='1.0',
 	author='Adam Ewing',
 	license='MIT',
-	scripts=['bin/*']
+	scripts=['bin/addindel.py', 'addsnv.py', 'addsv.py']
 	packages=find_packages(),
 	)
