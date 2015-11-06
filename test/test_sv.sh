@@ -9,11 +9,7 @@ then
     exit 65
 fi
 
-if [ ! -e ../addsv.py ]
-then
-    echo "addsnv.py isn't one directory level down (../addsnv.py) as expected"
-    exit 65
-fi
+command -v addsv.py >/dev/null 2>&1 || { echo "addsv.py isn't installed" >&2; exit 65; }
 
 if ! [[ $1 =~ ^[0-9]+$ ]]
 then
@@ -39,7 +35,7 @@ then
     exit 65
 fi
 
-../addsv.py -p $1 -v ../test_data/test_sv.txt -f ../test_data/testregion.bam -r $2 -o ../test_data/testregion_sv_mut.bam -c ../test_data/test_cnvlist.txt.gz --seed 1234
+addsv.py -p $1 -v ../test_data/test_sv.txt -f ../test_data/testregion.bam -r $2 -o ../test_data/testregion_sv_mut.bam -c ../test_data/test_cnvlist.txt.gz --seed 1234
 if [ $? -ne 0 ]
 then
   echo "addsv.py failed."
@@ -51,7 +47,7 @@ else
 
   echo "indexing output bam..."
   samtools index ../test_data/testregion_sv_mut.bam
-  
+
   echo "making pileups..."
   samtools mpileup -f $2 ../test_data/testregion_sv_mut.bam ../test_data/testregion.bam > test_sv.pileup.txt
   echo "done. output in test_sv.pileup.txt"

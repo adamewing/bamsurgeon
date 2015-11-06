@@ -9,11 +9,7 @@ then
     exit 65
 fi
 
-if [ ! -e ../addsnv.py ]
-then
-    echo "addsnv.py isn't one directory level down (../addsnv.py) as expected"
-    exit 65
-fi
+command -v addsnv.py >/dev/null 2>&1 || { echo "addsnv.py isn't installed" >&2; exit 65; }
 
 if [ ! -e $4 ]
 then
@@ -57,7 +53,7 @@ then
     exit 65
 fi
 
-../addsnv.py -v ../test_data/random_snvs.txt -f ../test_data/testregion_bt2.bam -r $3 -o ../test_data/testregion_bt2_mut.bam -n $1 -p $2 --picardjar $4 --aligner bowtie2 --alignopts bowtie2ref:$5
+addsnv.py -v ../test_data/random_snvs.txt -f ../test_data/testregion_bt2.bam -r $3 -o ../test_data/testregion_bt2_mut.bam -n $1 -p $2 --picardjar $4 --aligner bowtie2 --alignopts bowtie2ref:$5
 
 if [ $? -ne 0 ]
 then
