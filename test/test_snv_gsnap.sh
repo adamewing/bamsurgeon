@@ -9,11 +9,7 @@ then
     exit 65
 fi
 
-if [ ! -e ../addsnv.py ]
-then
-    echo "addsnv.py isn't one directory level down (../addsnv.py) as expected"
-    exit 65
-fi
+command -v addsnv.py >/dev/null 2>&1 || { echo "addsnv.py isn't installed" >&2; exit 65; }
 
 if [ ! -e $3 ]
 then
@@ -51,7 +47,7 @@ then
     exit 65
 fi
 
-../addsnv.py -v ../test_data/random_snvs.txt -f ../test_data/testregion_gsnap.bam -r $3 -o ../test_data/testregion_gsnap_mut.bam -n $1 -c ../test_data/test_cnvlist.txt.gz -p $2 --ignoresnps --picardjar $4 --aligner gsnap --alignopts gsnaprefdir:$5,gsnaprefname:$6
+addsnv.py -v ../test_data/random_snvs.txt -f ../test_data/testregion_gsnap.bam -r $3 -o ../test_data/testregion_gsnap_mut.bam -n $1 -c ../test_data/test_cnvlist.txt.gz -p $2 --ignoresnps --picardjar $4 --aligner gsnap --alignopts gsnaprefdir:$5,gsnaprefname:$6
 if [ $? -ne 0 ]
 then
  echo "addsnv.py failed. Are all the prequisites installed?"

@@ -5,15 +5,11 @@
 
 if [ $# -ne 2 ]
 then
-    echo "usage: $0 <reference indexed with bwa index> <novoindex reference>" 
+    echo "usage: $0 <reference indexed with bwa index> <novoindex reference>"
     exit 65
 fi
 
-if [ ! -e ../addsv.py ]
-then
-    echo "addsv.py isn't one directory level down (../addsv.py) as expected"
-    exit 65
-fi
+command -v addsv.py >/dev/null 2>&1 || { echo "addsv.py isn't installed" >&2; exit 65; }
 
 if [ ! -e $1 ]
 then
@@ -33,7 +29,7 @@ then
     exit 65
 fi
 
-../addsv.py -p 1 -v ../test_data/test_sv.txt -f ../test_data/testregion_novo.bam -r $1 -o ../test_data/testregion_sv_mut.bam -c ../test_data/test_cnvlist.txt.gz --aligner novoalign --alignopts novoref:$2
+addsv.py -p 1 -v ../test_data/test_sv.txt -f ../test_data/testregion_novo.bam -r $1 -o ../test_data/testregion_sv_mut.bam -c ../test_data/test_cnvlist.txt.gz --aligner novoalign --alignopts novoref:$2
 if [ $? -ne 0 ]
 then
   echo "addsv.py failed."
@@ -45,7 +41,7 @@ else
 
   echo "indexing output bam..."
   samtools index ../test_data/testregion_sv_mut.bam
-  
+
   echo "making pileups..."
   samtools mpileup $2 ../test_data/testregion_sv_mut.bam ../test_data/testregion.bam > test_sv.pileup.txt
   echo "done. output in test_sv.pileup.txt"

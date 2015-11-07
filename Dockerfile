@@ -53,4 +53,5 @@ RUN tar xvzf exonerate-2.2.0-x86_64.tar.gz
 RUN cp exonerate-2.2.0-x86_64/bin/* $HOME/bin
 
 RUN git clone https://github.com/adamewing/bamsurgeon.git
-
+RUN cd bamsurgeon
+RUN python setup.py install

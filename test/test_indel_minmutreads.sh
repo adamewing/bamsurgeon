@@ -8,11 +8,7 @@ then
     exit 65
 fi
 
-if [ ! -e ../addindel.py ]
-then
-    echo "addsnv.py isn't one directory level down (../addsnv.py) as expected"
-    exit 65
-fi
+command -v addindel.py >/dev/null 2>&1 || { echo "addindel.py isn't installed" >&2; exit 65; }
 
 if [ ! -e $2 ]
 then
@@ -27,7 +23,7 @@ then
 fi
 
 
-../addindel.py -v ../test_data/test_indels.txt -f ../test_data/testregion.bam -r $2 -o ../test_data/testregion_mut.bam -c ../test_data/test_cnvlist.txt.gz -p $1 --minmutreads 50 
+addindel.py -v ../test_data/test_indels.txt -f ../test_data/testregion.bam -r $2 -o ../test_data/testregion_mut.bam -c ../test_data/test_cnvlist.txt.gz -p $1 --minmutreads 50 
 if [ $? -ne 0 ]
 then
  echo "addindel.py failed."
