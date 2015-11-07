@@ -48,6 +48,10 @@ RUN cp bcftools/bcftools $HOME/bin
 RUN wget https://github.com/broadinstitute/picard/releases/download/1.131/picard-tools-1.131.zip
 RUN unzip picard-tools-1.131.zip
 
+RUN git clone https://github.com/adamewing/exonerate.git
+RUN cd exonerate
+RUN ./configure && make && make install
+
 RUN wget https://www.ebi.ac.uk/~guy/exonerate/exonerate-2.2.0-x86_64.tar.gz
 RUN tar xvzf exonerate-2.2.0-x86_64.tar.gz
 RUN cp exonerate-2.2.0-x86_64/bin/* $HOME/bin
