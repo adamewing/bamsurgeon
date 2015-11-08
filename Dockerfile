@@ -52,10 +52,6 @@ RUN git clone https://github.com/adamewing/exonerate.git
 RUN cd exonerate
 RUN ./configure && make && make install
 
-RUN wget https://www.ebi.ac.uk/~guy/exonerate/exonerate-2.2.0-x86_64.tar.gz
-RUN tar xvzf exonerate-2.2.0-x86_64.tar.gz
-RUN cp exonerate-2.2.0-x86_64/bin/* $HOME/bin
-
 RUN git clone https://github.com/adamewing/bamsurgeon.git
 RUN cd bamsurgeon
 RUN python setup.py install
