@@ -31,7 +31,7 @@ def print_header():
     ##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
     #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tSPIKEIN""")
 
-def printvcf(chrom, bnd1, bnd2, precise, type, svlen, ref, id):
+def printvcf(chrom, bnd1, bnd2, precise, type, svlen, ref, id, svfrac):
     base1 = ref.fetch(chrom, bnd1-1, bnd1) 
     base2 = ref.fetch(chrom, bnd2-1, bnd2)
 
@@ -47,6 +47,7 @@ def printvcf(chrom, bnd1, bnd2, precise, type, svlen, ref, id):
     info.append('SVTYPE=' + type.upper())
     info.append('END=' + str(bnd2))
     info.append('SVLEN=' + str(svlen))
+    info.append('VAF=' + svfrac)
     
     infostr = ';'.join(info)
 
@@ -57,6 +58,7 @@ def precise_interval(mutline, ref):
     precise = True 
     m = mutline.split()
     chrom, refstart, refend = m[1:4]
+    svfrac = m[-1]
     refstart = int(refstart)
     refend   = int(refend)
     id = '.'
@@ -81,8 +83,8 @@ def precise_interval(mutline, ref):
         alt1 = '%s[%s:%d[' % (base1, chr2, bnd2) 
         alt2 = ']%s:%d]%s' % (chr1, bnd1, base2) 
 
-        print '\t'.join((chr1, str(bnd1), id1, base1, alt1, '100', 'PASS', 'SOMATIC;SVTYPE=BND;PRECISE;MATEID='+id2, 'GT', './.'))
-        print '\t'.join((chr2, str(bnd2), id2, base2, alt2, '100', 'PASS', 'SOMATIC;SVTYPE=BND;PRECISE;MATEID='+id1, 'GT', './.'))
+        print '\t'.join((chr1, str(bnd1), id1, base1, alt1, '100', 'PASS', 'SOMATIC;SVTYPE=BND;PRECISE;MATEID='+id2+';VAF='+svfrac, 'GT', './.'))
+        print '\t'.join((chr2, str(bnd2), id2, base2, alt2, '100', 'PASS', 'SOMATIC;SVTYPE=BND;PRECISE;MATEID='+id1+';VAF='+svfrac, 'GT', './.'))
 
     else:
         contigstart = int(m[6])
@@ -93,7 +95,7 @@ def precise_interval(mutline, ref):
 
     assert bnd1 < bnd2
 
-    if m[0] != 'trn': printvcf(chrom, bnd1, bnd2, precise, m[0], bnd2-bnd1, ref, id)
+    if m[0] != 'trn': printvcf(chrom, bnd1, bnd2, precise, m[0], bnd2-bnd1, ref, id, svfrac)
 
 
 def ignore_interval(mutline, ref):

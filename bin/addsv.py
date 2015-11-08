@@ -511,13 +511,13 @@ def makemut(args, bedline, alignopts):
                         mutseq.insertion(mutseq.length()/2,singleseqfa(insseqfile, mutid=mutid),tsdlen)
                 else: # seq is input
                     mutseq.insertion(mutseq.length()/2,insseq,tsdlen)
-                logfile.write("\t".join(('ins',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(mutseq.length()/2),str(insseqfile),str(tsdlen))) + "\n")
+                logfile.write("\t".join(('ins',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(mutseq.length()/2),str(insseqfile),str(tsdlen),str(svfrac))) + "\n")
 
             elif action == 'INV':
                 invstart = int(args.maxlibsize)
                 invend = mutseq.length() - invstart
                 mutseq.inversion(invstart,invend)
-                logfile.write("\t".join(('inv',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(invstart),str(invend))) + "\n")
+                logfile.write("\t".join(('inv',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(invstart),str(invend),str(svfrac))) + "\n")
 
             elif action == 'DEL':
                 delstart = int(args.maxlibsize)
@@ -534,17 +534,17 @@ def makemut(args, bedline, alignopts):
                 delend   -= dadj/2
 
                 mutseq.deletion(delstart,delend)
-                logfile.write("\t".join(('del',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(delstart),str(delend),str(dlen))) + "\n")
+                logfile.write("\t".join(('del',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(delstart),str(delend),str(dlen),str(svfrac))) + "\n")
 
             elif action == 'DUP':
                 dupstart = int(args.maxlibsize)
                 dupend = mutseq.length() - dupstart
                 mutseq.duplication(dupstart,dupend,ndups)
-                logfile.write("\t".join(('dup',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(dupstart),str(dupend),str(ndups))) + "\n")
+                logfile.write("\t".join(('dup',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(dupstart),str(dupend),str(ndups),str(svfrac))) + "\n")
 
             elif action == 'TRN':
                 mutseq.fusion(mutseq.length()/2, trn_mutseq, trn_mutseq.length()/2)
-                logfile.write("\t".join(('trn',chrom,str(refstart),str(refend),action,str(mutseq.length()),trn_chrom,str(trn_refstart),str(trn_refend),str(trn_mutseq.length()))) + "\n")
+                logfile.write("\t".join(('trn',chrom,str(refstart),str(refend),action,str(mutseq.length()),trn_chrom,str(trn_refstart),str(trn_refend),str(trn_mutseq.length()),str(svfrac))) + "\n")
 
             else:
                 raise ValueError("ERROR\t" + now() + "\t" + mutid + "\t: mutation not one of: INS,INV,DEL,DUP,TRN\n")
