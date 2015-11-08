@@ -23,7 +23,7 @@ then
     exit 65
 fi
 
-addsv.py -p 1 -v ../test_data/test_sv_inslib.txt -f ../test_data/testregion.bam -r $1 -o ../test_data/testregion_sv_mut.bam -c ../test_data/test_cnvlist.txt.gz --inslib ../test_data/test_inslib.fa --bwamem
+addsv.py -p 1 -v ../test_data/test_sv_inslib.txt -f ../test_data/testregion.bam -r $1 -o ../test_data/testregion_sv_mut.bam -c ../test_data/test_cnvlist.txt.gz --inslib ../test_data/test_inslib.fa
 if [ $? -ne 0 ]
 then
   echo "addsv.py failed."
