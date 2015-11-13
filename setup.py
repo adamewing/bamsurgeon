@@ -23,6 +23,7 @@ setup(name='bamsurgeon',
 		'scripts/randomsites.py',
 		'scripts/remove_unpaired.py',
 		'scripts/rename_reads.py',
-		'scripts/seperation.py'],
+		'scripts/seperation.py',
+        'scripts/match_fasta_to_bam.py'],
 	packages=find_packages(),
 	)
