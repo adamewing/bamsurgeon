@@ -104,44 +104,28 @@ def n50(contigs):
     return median(nlist)
 
 
-def runVelvet(reads,refseqname,refseq,kmer,addsv_tmpdir,isPaired=True,long=False,inputContigs=False,cov_cutoff=False,noref=False,mutid='null',debug=False):
+def runVelvet(reads,refseqname,refseq,kmer,addsv_tmpdir,isPaired=True,long=False,cov_cutoff=False,mutid='null',debug=False):
     """
-    reads is either a dictionary of ReadPair objects, (if inputContigs=False) or a list of 
-    Contig objects (if inputContigs=True), refseq is a single sequence, kmer is an odd int
+    reads is either a dictionary of ReadPair objects, kmer is an odd int
     """
     reads_fasta_tmpfn = addsv_tmpdir + '/' + '.'.join((mutid, 'tmpreads', 'fasta'))
-    ref_fasta_tmpfn   = addsv_tmpdir + '/' + '.'.join((mutid, 'tmpref', 'fasta'))
 
     reads_fasta = open(reads_fasta_tmpfn, 'w')
-    ref_fasta   = open(ref_fasta_tmpfn, 'w')
 
-    if inputContigs:
-        for contig in reads:
-            reads_fasta.write(str(contig) + "\n")
-    else:
-        for readpair in reads.values():
-            reads_fasta.write(readpair.fasta())
 
-    if refseq:
-        ref_fasta.write(">%s\n%s\n" % (refseqname,refseq))
+    for readpair in reads.values():
+        reads_fasta.write(readpair.fasta())
 
     reads_fasta.close()
-    ref_fasta.close()
 
     tmpdir = addsv_tmpdir + '/' + mutid + '.' + str(uuid4()).split('-')[0]
 
     print tmpdir
 
-    if noref:
-        if long:
-            argsvelveth = ['velveth', tmpdir, str(kmer), '-long', reads_fasta_tmpfn]
-        else:
-            argsvelveth = ['velveth', tmpdir, str(kmer), '-shortPaired', reads_fasta_tmpfn]
+    if long:
+        argsvelveth = ['velveth', tmpdir, str(kmer), '-long', reads_fasta_tmpfn]
     else:
-        if long: 
-            argsvelveth = ['velveth', tmpdir, str(kmer), '-reference', ref_fasta_tmpfn, '-long', reads_fasta_tmpfn]
-        else:
-            argsvelveth = ['velveth', tmpdir, str(kmer), '-reference', ref_fasta_tmpfn, '-shortPaired', reads_fasta_tmpfn]
+        argsvelveth = ['velveth', tmpdir, str(kmer), '-shortPaired', reads_fasta_tmpfn]
 
     if cov_cutoff:
         argsvelvetg = ['velvetg', tmpdir, '-exp_cov', 'auto', '-cov_cutoff', 'auto', '-unused_reads', 'yes', '-read_trkg', 'yes', '-amos_file', 'yes']
@@ -157,7 +141,6 @@ def runVelvet(reads,refseqname,refseq,kmer,addsv_tmpdir,isPaired=True,long=False
     if not debug:
         shutil.rmtree(tmpdir)
         os.unlink(reads_fasta_tmpfn)
-        os.unlink(ref_fasta_tmpfn)
 
     return vcontigs
 
@@ -192,7 +175,7 @@ class ReadPair:
         return output
 
 
-def asm(chr, start, end, bamfilename, reffile, kmersize, tmpdir, noref=False, recycle=False, mutid='null', debug=False):
+def asm(chrom, start, end, bamfilename, reffile, kmersize, tmpdir, mutid='null', debug=False):
     bamfile  = pysam.Samfile(bamfilename,'rb')
     matefile = pysam.Samfile(bamfilename,'rb')
 
@@ -203,9 +186,8 @@ def asm(chr, start, end, bamfilename, reffile, kmersize, tmpdir, noref=False, re
     mquals = []
 
 
-    for read in bamfile.fetch(chr,start,end):
+    for read in bamfile.fetch(chrom,start,end):
         if not read.mate_is_unmapped and read.is_paired:
-            # FIXME add try/except to prevent crash if mate doesn't exist
             try:
                 mate = matefile.mate(read)
                 readpairs[read.qname] = ReadPair(read,mate)
@@ -238,19 +220,12 @@ def asm(chr, start, end, bamfilename, reffile, kmersize, tmpdir, noref=False, re
 
     refseq = None
     if reffile:
-        refseq = reffile.fetch(chr,start,end)
+        refseq = reffile.fetch(chrom,start,end)
 
-    region = chr + ":" + str(start) + "-" + str(end)
+    region = "%s:%d-%d" % (chrom, start, end)
 
-    contigs = runVelvet(readpairs, region, refseq, kmersize, tmpdir, cov_cutoff=True, noref=noref, mutid=mutid, debug=debug)
+    contigs = runVelvet(readpairs, region, refseq, kmersize, tmpdir, cov_cutoff=True, mutid=mutid, debug=debug)
     newcontigs = None
-
-    if recycle:
-        if len(contigs) > 1:
-            newcontigs = runVelvet(contigs, region, refseq, kmersize, tmpdir, long=True, inputContigs=True, noref=noref, mutid=mutid, debug=debug)
-
-        if newcontigs and n50(newcontigs) > n50(contigs):
-            contigs = newcontigs
 
     for contig in contigs:
         contig.rquals = rquals

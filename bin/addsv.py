@@ -380,15 +380,19 @@ def makemut(args, bedline, alignopts):
         print "INFO\t" + now() + "\t" + mutid + "\tinterval:", c
         print "INFO\t" + now() + "\t" + mutid + "\tlength:", end-start
 
-       # modify start and end if interval is too long
-        maxctglen = int(args.maxctglen)
-        assert maxctglen > 3*int(args.maxlibsize) # maxctglen is too short
-        if end-start > maxctglen:
-            adj   = (end-start) - maxctglen
-            rndpt = random.randint(0,adj)
-            start = start + rndpt
-            end   = end - (adj-rndpt)
-            print "INFO\t" + now() + "\t" + mutid + "\tnote: interval size too long, adjusted:",chrom,start,end
+       # modify start and end if interval is too short
+        minctglen = int(args.minctglen)
+
+        # adjust if minctglen is too short
+        if minctglen < 3*int(args.maxlibsize):
+            minctglen = 3*int(args.maxlibsize)
+
+        if end-start < minctglen:
+            adj   = minctglen - (end-start)
+            start = start - adj/2
+            end   = end + adj/2
+
+            print "INFO\t" + now() + "\t" + mutid + "\tnote: interval size was too short, adjusted: %s:%d-%d" % (chrom,start,end)
 
         dfrac = discordant_fraction(args.bamFileName, chrom, start, end)
         print "INFO\t" + now() + "\t" + mutid + "\tdiscordant fraction:", dfrac
@@ -398,11 +402,11 @@ def makemut(args, bedline, alignopts):
             sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tdiscordant fraction > " + str(maxdfrac) + " aborting mutation!\n")
             return None, None
 
-        contigs = ar.asm(chrom, start, end, args.bamFileName, reffile, int(args.kmersize), args.tmpdir, args.noref, args.recycle, mutid=mutid, debug=args.debug)
+        contigs = ar.asm(chrom, start, end, args.bamFileName, reffile, int(args.kmersize), args.tmpdir, mutid=mutid, debug=args.debug)
 
         trn_contigs = None
         if is_transloc:
-            trn_contigs = ar.asm(trn_chrom, trn_start, trn_end, args.bamFileName, reffile, int(args.kmersize), args.tmpdir, args.noref, args.recycle, mutid=mutid, debug=args.debug)
+            trn_contigs = ar.asm(trn_chrom, trn_start, trn_end, args.bamFileName, reffile, int(args.kmersize), args.tmpdir, mutid=mutid, debug=args.debug)
 
         maxcontig = sorted(contigs)[-1]
 
@@ -731,35 +735,46 @@ if __name__ == '__main__':
                         help='reference genome, fasta indexed with bwa index -a stdsw _and_ samtools faidx')
     parser.add_argument('-o', '--outbam', dest='outBamFile', required=True,
                         help='.bam file name for output')
-    parser.add_argument('-l', '--maxlibsize', dest='maxlibsize', default=600, help="maximum fragment length of seq. library")
+    parser.add_argument('-l', '--maxlibsize', dest='maxlibsize', default=600,
+                        help="maximum fragment length of seq. library")
     parser.add_argument('-k', '--kmer', dest='kmersize', default=31, 
                         help="kmer size for assembly (default = 31)")
     parser.add_argument('-s', '--svfrac', dest='svfrac', default=1.0, 
                         help="allele fraction of variant (default = 1.0)")
-    parser.add_argument('--maxctglen', dest='maxctglen', default=32000, 
-                        help="maximum contig length for assembly - can increase if velvet is compiled with LONGSEQUENCES")
+    parser.add_argument('--minctglen', dest='minctglen', default=3000,
+                        help="pad input intervals out to a minimum length for contig generation (default=3000)")
     parser.add_argument('-n', dest='maxmuts', default=None,
                         help="maximum number of mutations to make")
     parser.add_argument('-c', '--cnvfile', dest='cnvfile', default=None, 
                         help="tabix-indexed list of genome-wide absolute copy number values (e.g. 2 alleles = no change)")
-    parser.add_argument('--ismean', dest='ismean', default=300, help="mean insert size (default = estimate from region)")
-    parser.add_argument('--issd', dest='issd', default=70, help="insert size standard deviation (default = estimate from region)")
-    parser.add_argument('-p', '--procs', dest='procs', default=1, help="split into multiple processes (default=1)")
-    parser.add_argument('--inslib', default=None, help='FASTA file containing library of possible insertions, use INS RND instead of INS filename to pick one')
-    parser.add_argument('--delay', default=None, help='time delay between jobs (try to avoid thrashing disks)')
-    parser.add_argument('--nomut', action='store_true', default=False, help="dry run")
-    parser.add_argument('--noremap', action='store_true', default=False, help="dry run")
+    parser.add_argument('--ismean', dest='ismean', default=300, 
+                        help="mean insert size (default = estimate from region)")
+    parser.add_argument('--issd', dest='issd', default=70, 
+                        help="insert size standard deviation (default = estimate from region)")
+    parser.add_argument('-p', '--procs', dest='procs', default=1, 
+                        help="split into multiple processes (default=1)")
+    parser.add_argument('--inslib', default=None,
+                        help='FASTA file containing library of possible insertions, use INS RND instead of INS filename to pick one')
+    parser.add_argument('--delay', default=None, 
+                        help='time delay between jobs (try to avoid thrashing disks)')
     parser.add_argument('--noref', action='store_true', default=False, 
                         help="do not perform reference based assembly")
-    parser.add_argument('--recycle', action='store_true', default=False)
-    parser.add_argument('--aligner', default='backtrack', help='supported aligners: ' + ','.join(aligners.supported_aligners_fastq))
-    parser.add_argument('--alignopts', default=None, help='aligner-specific options as comma delimited list of option1:value1,option2:value2,...')
-    parser.add_argument('--tagreads', action='store_true', default=False, help='add BS tag to altered reads')
-    parser.add_argument('--skipmerge', action='store_true', default=False, help='do not merge spike-in reads back into original BAM')
-    parser.add_argument('--keepsecondary', action='store_true', default=False, help='keep secondary reads in final BAM')
-    parser.add_argument('--debug', action='store_true', default=False, help='output read tracking info to debug file, retain all intermediates')
-    parser.add_argument('--tmpdir', default='addsv.tmp', help='temporary directory (default=addsv.tmp)')
-    parser.add_argument('--seed', default=None, help='seed random number generation')
+    parser.add_argument('--aligner', default='backtrack',
+                        help='supported aligners: ' + ','.join(aligners.supported_aligners_fastq))
+    parser.add_argument('--alignopts', default=None,
+                        help='aligner-specific options as comma delimited list of option1:value1,option2:value2,...')
+    parser.add_argument('--tagreads', action='store_true', default=False,
+                        help='add BS tag to altered reads')
+    parser.add_argument('--skipmerge', action='store_true', default=False,
+                        help='do not merge spike-in reads back into original BAM')
+    parser.add_argument('--keepsecondary', action='store_true', default=False,
+                        help='keep secondary reads in final BAM')
+    parser.add_argument('--debug', action='store_true', default=False,
+                        help='output read tracking info to debug file, retain all intermediates')
+    parser.add_argument('--tmpdir', default='addsv.tmp',
+                        help='temporary directory (default=addsv.tmp)')
+    parser.add_argument('--seed', default=None,
+                        help='seed random number generation')
     args = parser.parse_args()
     main(args)
 
