@@ -1,3 +1,4 @@
+t
 #!/bin/sh
 
 # adds up to 100 SNPs to a ~770 kb region around the LARGE gene
@@ -30,7 +31,7 @@ then
   exit 65
 else
   echo "sorting output bam..."
-  samtools sort ../test_data/testregion_sv_mut.bam ../test_data/testregion_sv_mut.sorted
+  samtools sort ../test_data/testregion_sv_mut.bam -o ../test_data/testregion_sv_mut.sorted.bam
   mv ../test_data/testregion_sv_mut.sorted.bam ../test_data/testregion_sv_mut.bam
 
   echo "indexing output bam..."
