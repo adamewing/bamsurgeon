@@ -1,4 +1,4 @@
-#!/bin/env python
+#!/home/tmlundbe/anaconda2/bin/python
 
 import subprocess,pysam, sys, re
 
@@ -6,7 +6,7 @@ def namesortbam(inbam,outbam):
     print "sorting by name:",inbam,"-->",outbam
     outbam = re.sub('.bam$','',outbam)
 
-    sortargs = ['samtools','sort','-n','-m','20000000000',inbam,outbam]
+    sortargs = ['samtools','sort','-n','-m','20000000000',inbam, '-o', outbam]
     subprocess.call(sortargs)
 
 def compare(bamfile1,bamfile2):
