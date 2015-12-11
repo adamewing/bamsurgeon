@@ -94,7 +94,7 @@ def remap_backtrack_bam(bamfn, threads, fastaref, mutid='null', paired=True):
         subprocess.call(bamargs)
 
         sortfn = bamfn + ".sort.bam"
-        sortargs = ['samtools','sort','-m','10000000000',bamfn,'-o',sortfn]
+        sortargs = ['samtools','sort','-m','10000000000', '-T', sortfn ,'-o',sortfn, bamfn]
         print "INFO\t" + now() + "\t" + mutid + "\tsorting, cmd: " + " ".join(sortargs)
         subprocess.call(sortargs)
         os.rename(sortfn, bamfn)
@@ -125,7 +125,7 @@ def remap_backtrack_bam(bamfn, threads, fastaref, mutid='null', paired=True):
         subprocess.call(bamargs)
 
         sortfn = bamfn + ".sort.bam"
-        sortargs = ['samtools','sort','-m','10000000000',bamfn,'-o',sortfn]
+        sortargs = ['samtools','sort','-m','10000000000', '-T', sortfn, '-o',sortfn, bamfn]
         print "INFO\t" + now() + "\t" + mutid + "\tsorting, cmd: " + " ".join(sortargs)
         subprocess.call(sortargs)
         os.rename(sortfn,bamfn)
@@ -163,7 +163,7 @@ def remap_bwamem_bam(bamfn, threads, fastaref, picardjar, mutid='null', paired=T
     assert len(sam_cmd) > 0
 
     bam_cmd  = ['samtools', 'view', '-bt', fastaref + '.fai', '-o', bamfn, sam_out]
-    sort_cmd = ['samtools', 'sort', '-@', str(threads), '-m', '10000000000', bamfn, '-o', sort_out]
+    sort_cmd = ['samtools', 'sort', '-@', str(threads), '-m', '10000000000', '-T', sort_out, '-o', sort_out, bamfn]
     idx_cmd  = ['samtools', 'index', bamfn]
 
     print "INFO\t" + now() + "\t" + mutid + "\taligning " + fastq + " with bwa mem\n"
@@ -223,7 +223,7 @@ def remap_novoalign_bam(bamfn, threads, fastaref, picardjar, novoref, mutid='nul
     assert len(sam_cmd) > 0
 
     bam_cmd  = ['samtools', 'view', '-bt', fastaref + '.fai', '-o', bamfn, sam_out]
-    sort_cmd = ['samtools', 'sort', '-@', str(threads), '-m', '10000000000', bamfn, '-o', sort_out]
+    sort_cmd = ['samtools', 'sort', '-@', str(threads), '-m', '10000000000', '-T', sort_out, '-o', sort_out, bamfn]
     idx_cmd  = ['samtools', 'index', bamfn]
 
     print "INFO\t" + now() + "\t" + mutid + "\taligning " + str(fastq) + " with novoalign\n"
@@ -294,7 +294,7 @@ def remap_gsnap_bam(bamfn, threads, fastaref, picardjar, gsnaprefdir, gsnaprefna
     assert len(sam_cmd) > 0
 
     bam_cmd  = ['samtools', 'view', '-bt', fastaref + '.fai', '-o', bamfn, sam_out]
-    sort_cmd = ['samtools', 'sort', '-@', str(threads), '-m', '10000000000', bamfn, '-o', sort_out]
+    sort_cmd = ['samtools', 'sort', '-@', str(threads), '-m', '10000000000', '-T', sort_out, '-o', sort_out, bamfn]
     idx_cmd  = ['samtools', 'index', bamfn]
 
     print "INFO\t" + now() + "\t" + mutid + "\taligning " + str(fastq) + " with gsnap\n"
@@ -360,7 +360,7 @@ def remap_bowtie2_bam(bamfn, threads, fastaref, picardjar, bowtie2ref, mutid='nu
     assert len(sam_cmd) > 0
 
     bam_cmd  = ['samtools', 'view', '-bt', fastaref + '.fai', '-o', bamfn, sam_out]
-    sort_cmd = ['samtools', 'sort', '-@', str(threads), '-m', '10000000000', bamfn, '-o', sort_out]
+    sort_cmd = ['samtools', 'sort', '-@', str(threads), '-m', '10000000000', '-T', sort_out, '-o', sort_out, bamfn]
     idx_cmd  = ['samtools', 'index', bamfn]
 
     print "INFO\t" + now() + "\t" + mutid + "\taligning " + str(fastq) + " with bowtie2\n"
@@ -427,7 +427,7 @@ def remap_tmap_bam(bamfn, threads, fastaref, picardjar, mutid='null', paired=Fal
     assert len(sam_cmd) > 0
 
     bam_cmd  = ['samtools', 'view', '-bt', fastaref + '.fai', '-o', bamfn, sam_out]
-    sort_cmd = ['samtools', 'sort', '-@', str(threads), '-m', '10000000000', bamfn, '-o',  sort_out]
+    sort_cmd = ['samtools', 'sort', '-@', str(threads), '-m', '10000000000', '-T', sort_out, '-o',  sort_out, bamfn]
     idx_cmd  = ['samtools', 'index', bamfn]
 
     print "INFO\t" + now() + "\t" + mutid + "\taligning " + str(fastq) + " with tmap\n"
@@ -504,7 +504,7 @@ def remap_bwamem_fastq(fq1, fq2, threads, fastaref, outbam, deltmp=True, mutid='
     sam_cmd  = ['bwa', 'mem', '-t', str(threads), '-M', '-Y', fastaref, fq1, fq2]
 
     bam_cmd  = ['samtools', 'view', '-bt', fastaref + '.fai', '-o', outbam, sam_out]
-    sort_cmd = ['samtools', 'sort', '-@', str(threads), '-m', '10000000000', outbam, '-o',  sort_out]
+    sort_cmd = ['samtools', 'sort', '-@', str(threads), '-m', '10000000000', '-T', sort_out, '-o',  sort_out, outbam]
     idx_cmd  = ['samtools', 'index', outbam]
 
     print "INFO\t" + now() + "\t" + mutid + "\taligning " + fq1 + ',' + fq2 + " with bwa mem"
@@ -551,7 +551,7 @@ def remap_novoalign_fastq(fq1, fq2, threads, fastaref, novoref, outbam, deltmp=T
 
     sam_cmd  = ['novoalign', '-F', 'STDFQ', '-f', fq1, fq2, '-r', 'Random', '-d', novoref, '-oSAM']
     bam_cmd  = ['samtools', 'view', '-bt', fastaref + '.fai', '-o', outbam, sam_out]
-    sort_cmd = ['samtools', 'sort', '-@', str(threads), '-m', '10000000000', outbam,'-o', sort_out]
+    sort_cmd = ['samtools', 'sort', '-@', str(threads), '-m', '10000000000', '-T', sort_out, '-o', sort_out, outbam]
     idx_cmd  = ['samtools', 'index', outbam]
 
     print "INFO\t" + now() + "\t" + mutid + "\taligning " + fq1 + ',' + fq2 + " with novoalign"
@@ -603,7 +603,7 @@ def remap_backtrack_fastq(fq1, fq2, threads, fastaref, outbam, deltmp=True, muti
     sai2args = ['bwa', 'aln', '-q', '5', '-l', '32', '-k', '2', '-t', str(threads), '-o', '1', '-f', sai2fn, fastaref, fq2]
     samargs  = ['bwa', 'sampe', '-P', '-f', samfn, fastaref, sai1fn, sai2fn, fq1, fq2]
     bamargs  = ['samtools', 'view', '-bt', refidx, '-o', tmpbam, samfn]
-    sortargs = ['samtools', 'sort', tmpbam, '-o', tmpsrt]
+    sortargs = ['samtools', 'sort', '-T', tmpsrt, '-o', tmpsrt, tmpbam]
 
     print "INFO\t" + now() + "\t" + mutid + "\tmapping 1st end, cmd: " + " ".join(sai2args)
     p = subprocess.Popen(sai2args, stderr=subprocess.STDOUT)
