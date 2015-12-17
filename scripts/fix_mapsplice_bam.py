@@ -1,4 +1,4 @@
-#!/home/tmlundbe/anaconda2/bin/python
+#!/usr/bin/env python
 
 ''' Script for correcting broken mapsplice BAMs using pysam
     Adam Ewing (ewingad@soe.ucsc.edu)

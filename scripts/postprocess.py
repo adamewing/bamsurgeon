@@ -1,4 +1,4 @@
-#!/home/tmlundbe/anaconda2/bin/python
+#!/usr/bin/env python
 
 import argparse
 import pysam
