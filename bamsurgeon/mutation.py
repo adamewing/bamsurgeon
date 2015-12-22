@@ -115,6 +115,18 @@ def makedel(read, chrom, start, end, ref, debug=False):
         print "DEBUG: DEL:  newseq:     ", left + right
     return left + right
 
+
+def find_mate(read, bam):
+    ''' AlignmentFile.mate() can return a non-primary alignment, so use this function instead '''
+    chrom = bam.getrname(read.tid)
+    for rec in bam.fetch(chrom, read.pnext, read.pnext+1):
+        if rec.qname == read.qname and rec.pos == read.pnext:
+            if not rec.is_secondary and bin(rec.flag & 2048) != bin(2048):
+                if rec.is_read1 != read.is_read1:
+                    return rec
+    return None
+
+
 def mutate(args, log, bamfile, bammate, chrom, mutstart, mutend, mutpos_list, avoid=None, mutid_list=None, is_snv=False, mutbase_list=None, is_insertion=False, is_deletion=False, ins_seq=None, reffile=None, indel_start=None, indel_end=None):
     assert mutend > mutstart, "mutation start must occur before mutation end: " + mutid
 
@@ -171,9 +183,8 @@ def mutate(args, log, bamfile, bammate, chrom, mutstart, mutend, mutpos_list, av
 
                             mate = None
                             if not args.single:
-                                try:
-                                    mate = bammate.mate(pread.alignment)
-                                except:
+                                mate = find_mate(pread.alignment, bammate)
+                                if mate is None:
                                     print "WARN\t" + now() + "\t" + mutid + "\twarning: no mate for", pread.alignment.qname
                                     if args.requirepaired:
                                         print "WARN\t" + now() + "\t" + mutid + "\tskipped mutation due to --requirepaired"
