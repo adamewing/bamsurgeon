@@ -81,13 +81,14 @@ def replace(origbamfile, mutbamfile, outbamfile, seed=None):
 
 def makemut(args, hc, avoid, alignopts):
 
-    if args.seed is not None: random.seed(int(args.seed))
 
     mutid_list = []
     for site in hc:
         mutid_list.append(site['chrom'] + '_' + str(site['start']) + '_' + str(site['end']) + '_' + str(site['vaf']) + '_' + str(site['altbase']))
 
     try:
+        if args.seed is not None: random.seed(int(args.seed) + int(hc[0]['start']))
+
         bamfile = pysam.Samfile(args.bamFileName, 'rb')
         bammate = pysam.Samfile(args.bamFileName, 'rb') # use for mates to avoid iterator problems
         reffile = pysam.Fastafile(args.refFasta)

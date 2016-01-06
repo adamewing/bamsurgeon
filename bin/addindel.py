@@ -73,7 +73,7 @@ def dictlist(fn):
 def makemut(args, chrom, start, end, vaf, ins, avoid, alignopts):
     ''' is ins is a sequence, it will is inserted at start, otherwise delete from start to end'''
 
-    if args.seed is not None: random.seed(int(args.seed))
+    if args.seed is not None: random.seed(int(args.seed) + int(start))
 
     mutid = chrom + '_' + str(start) + '_' + str(end) + '_' + str(vaf)
     if ins is None:
