@@ -16,6 +16,7 @@ from uuid import uuid4
 from re import sub
 from shutil import move
 from multiprocessing import Pool
+from collections import defaultdict as dd
 
 sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)
 sys.stderr = os.fdopen(sys.stderr.fileno(), 'w', 0)
@@ -162,7 +163,24 @@ def makemut(args, chrom, start, end, vaf, ins, avoid, alignopts):
                 os.remove(tmpoutbamname)
                 return None
 
-        readlist = readlist[0:lastread] 
+        readtrack = dd(list)
+
+        for readname in readlist:
+            orig_name, readpos, pairend = readname.split(',')
+            readtrack[orig_name].append('%s,%s' % (readpos, pairend))
+
+        usedreads = 0
+        newreadlist = []
+
+        for orig_name in readtrack:
+            for read_instance in readtrack[orig_name]:
+                newreadlist.append(orig_name + ',' + read_instance)
+                usedreads += 1
+
+            if usedreads >= lastread:
+                break
+
+        readlist = newreadlist
 
         print "INFO\t" + now() + "\t" + mutid + "\tpicked: " + str(len(readlist)) + " reads"
 
