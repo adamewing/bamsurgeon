@@ -627,7 +627,7 @@ def remap_backtrack_fastq(fq1, fq2, threads, fastaref, outbam, deltmp=True, muti
 
     print "INFO\t" + now() + "\t" + mutid + "\trename " + tmpsrt + ".bam --> " + tmpbam
     os.remove(tmpbam)
-    os.rename(tmpsrt + ".bam", tmpbam)
+    os.rename(tmpsrt, tmpbam)
 
     print "INFO\t" + now() + "\t" + mutid + "\trename " + tmpbam + " --> " + outbam
     os.rename(tmpbam, outbam)
