@@ -17,7 +17,7 @@ from uuid import uuid4
 from shutil import move
 from re import sub
 from multiprocessing import Pool
-
+from collections import defaultdict as dd
 
 sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)
 sys.stderr = os.fdopen(sys.stderr.fileno(), 'w', 0)
@@ -81,13 +81,14 @@ def replace(origbamfile, mutbamfile, outbamfile, seed=None):
 
 def makemut(args, hc, avoid, alignopts):
 
-    if args.seed is not None: random.seed(int(args.seed))
 
     mutid_list = []
     for site in hc:
         mutid_list.append(site['chrom'] + '_' + str(site['start']) + '_' + str(site['end']) + '_' + str(site['vaf']) + '_' + str(site['altbase']))
 
     try:
+        if args.seed is not None: random.seed(int(args.seed) + int(hc[0]['start']))
+
         bamfile = pysam.Samfile(args.bamFileName, 'rb')
         bammate = pysam.Samfile(args.bamFileName, 'rb') # use for mates to avoid iterator problems
         reffile = pysam.Fastafile(args.refFasta)
@@ -202,7 +203,24 @@ def makemut(args, hc, avoid, alignopts):
                 os.remove(tmpoutbamname)
                 return None
 
-        readlist = readlist[0:lastread] 
+        readtrack = dd(list)
+
+        for readname in readlist:
+            orig_name, readpos, pairend = readname.split(',')
+            readtrack[orig_name].append('%s,%s' % (readpos, pairend))
+
+        usedreads = 0
+        newreadlist = []
+
+        for orig_name in readtrack:
+            for read_instance in readtrack[orig_name]:
+                newreadlist.append(orig_name + ',' + read_instance)
+                usedreads += 1
+
+            if usedreads >= lastread:
+                break
+
+        readlist = newreadlist
 
         print "INFO\t" + now() + "\t" + hapstr + "\tpicked:",str(len(readlist))
 
@@ -220,7 +238,6 @@ def makemut(args, hc, avoid, alignopts):
             if not hasSNP or args.force:
                 wrote += 1
                 mut_out[extqname] = read
-                #outbam_muts.write(read)
 
         muts_written = {}
 

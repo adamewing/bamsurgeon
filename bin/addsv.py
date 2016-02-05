@@ -322,7 +322,7 @@ def trim_contig(mutid, chrom, start, end, contig, reffile):
 
 def makemut(args, bedline, alignopts):
 
-    if args.seed is not None: random.seed(int(args.seed))
+    if args.seed is not None: random.seed(int(args.seed) + int(bedline.strip().split()[1]))
 
     mutid = '_'.join(map(str, bedline.strip().split()))
     try:

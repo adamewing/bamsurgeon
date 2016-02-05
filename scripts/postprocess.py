@@ -1,4 +1,4 @@
-#!/home/tmlundbe/anaconda2/bin/python
+#!/usr/bin/env python
 
 import argparse
 import pysam
@@ -127,14 +127,13 @@ def makebam(sam, fai, threads, mem):
     call(cmd)
     remove(sam)
 
-    outsort = sub('.bam$', '.sorted', outbam)
-    cmd = ['samtools', 'sort', '-m', str(mem), '-@', str(threads),'-o',  outbam, outsort]
+    outsort = sub('.bam$', '.sorted.bam', outbam)
+    cmd = ['samtools', 'sort', '-m', str(mem), '-@', str(threads), '-T', outsort, '-o',  outsort, outbam]
     outsort += '.bam'
     sys.stderr.write(outbam + ' --> ' + outsort + ': ' + ' '.join(cmd) + '\n')
     call(cmd)
 
     remove(outbam)
-    rename(outsort, outbam) 
 
 
 def main(args):
