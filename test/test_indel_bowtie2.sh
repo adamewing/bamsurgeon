@@ -41,7 +41,7 @@ then
  echo "addindel.py failed."
  exit 65
 else
-    samtools sort ../test_data/testregion_bt2_mut.bam ../test_data/testregion_bt2_mut.sorted
+    samtools sort -T ../test_data/testregion_bt2_mut.sorted.bam -o ../test_data/testregion_bt2_mut.sorted.bam ../test_data/testregion_bt2_mut.bam
     mv ../test_data/testregion_bt2_mut.sorted.bam ../test_data/testregion_bt2_mut.bam
     samtools index ../test_data/testregion_bt2_mut.bam
     samtools mpileup -ugf $2 ../test_data/testregion_bt2_mut.bam | bcftools call -vm
