@@ -13,4 +13,4 @@ python:
 # # command to run tests
  script: python setup.py build
  script: python setup.py install
- script:  
+
