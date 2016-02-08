@@ -42,7 +42,7 @@ then
   exit 65
 else
   echo "sorting output bam..."
-  samtools sort ../test_data/testregion_sv_mut.bam -o ../test_data/testregion_sv_mut.sorted.bam
+  samtools sort -T ../test_data/testregion_sv_mut.sorted.bam -o ../test_data/testregion_sv_mut.sorted.bam ../test_data/testregion_sv_mut.bam
   mv ../test_data/testregion_sv_mut.sorted.bam ../test_data/testregion_sv_mut.bam
 
   echo "indexing output bam..."

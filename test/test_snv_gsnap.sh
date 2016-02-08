@@ -53,7 +53,7 @@ then
  echo "addsnv.py failed. Are all the prequisites installed?"
  exit 65
 else
-    samtools sort ../test_data/testregion_gsnap_mut.bam ../test_data/testregion_gsnap_mut.sorted
+    samtools sort -T ../test_data/testregion_gsnap_mut.sorted.bam -o ../test_data/testregion_gsnap_mut.sorted.bam ../test_data/testregion_gsnap_mut.bam
     mv ../test_data/testregion_gsnap_mut.sorted.bam ../test_data/testregion_gsnap_mut.bam
     samtools index ../test_data/testregion_gsnap_mut.bam
     samtools mpileup -ugf $3 ../test_data/testregion_gsnap_mut.bam | bcftools call -vm
