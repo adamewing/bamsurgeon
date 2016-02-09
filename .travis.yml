@@ -24,9 +24,15 @@ before_install:
     - sudo cp bwa/bwa $HOME/bin
     - wget https://github.com/broadinstitute/picard/releases/download/1.131/picard-tools-1.131.zip
     - unzip picard-tools-1.131.zip
+    - wget http://ftp.gnu.org/gnu/automake/automake-1.4.tar.gz
+    - tar -xvf automake-1.4.tar.gz
+    - cd automake-1.4
+    - sudo ./configure --prefix=$HOME && make && make install
+    - cd ..
     - git clone https://github.com/adamewing/exonerate.git
     - cd exonerate
     - sudo ./configure && make && make install
+    - cd ..
     - wget https://www.ebi.ac.uk/~zerbino/velvet/velvet_1.2.10.tgz
     - tar xvzf velvet_1.2.10.tgz
     - sudo make -C velvet_1.2.10
