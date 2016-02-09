@@ -35,8 +35,8 @@ before_install:
 #    - cd ..
     - wget http://ftp.ebi.ac.uk/pub/software/vertebrategenomics/exonerate/exonerate-2.2.0-x86_64.tar.gz
     - tar -xvf exonerate-2.2.0-x86_64.tar.gz
-    - sudo cp -rf exonerate-2.2.0-x86_64/bin/ $HOME/bin
-    - sudo cp -rf exonerate-2.2.0-x86_64/share/ $HOME/share
+    - sudo cp exonerate-2.2.0-x86_64/bin/* $HOME/bin
+    - sudo cp -rf exonerate-2.2.0-x86_64/share/* $HOME/share
     - wget https://www.ebi.ac.uk/~zerbino/velvet/velvet_1.2.10.tgz
     - tar xvzf velvet_1.2.10.tgz
     - sudo make -C velvet_1.2.10
