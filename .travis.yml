@@ -50,7 +50,6 @@ script:
     # Get out of the source directory before running tests to avoid PYTHONPATH
     # confusion.  This is necessary to ensure that the speedups module can
     # be found in the installation directory.
-    - cd MischaLundberg/bamsurgeon
     # Copy the coveragerc down so coverage.py can find it.
     - python setup.py build
     - python setup.py install
