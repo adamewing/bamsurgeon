@@ -47,7 +47,7 @@ before_install:
 
 install: true
 script:
-    - 60  mvn script
+    - 60 mvn script
     # Get out of the source directory before running tests to avoid PYTHONPATH
     # confusion.  This is necessary to ensure that the speedups module can
     # be found in the installation directory.
