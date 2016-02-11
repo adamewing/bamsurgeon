@@ -53,3 +53,7 @@ script:
     # Copy the coveragerc down so coverage.py can find it.
     - python setup.py build
     - python setup.py install
+    - wget ftp://ftp.ncbi.nlm.nih.gov/sra/reports/Assembly/GRCh37-HG19_Broad_variant/Homo_sapiens_assembly19.fasta
+    - bwa index Homo_sapiens_assembly19.fasta
+    - samtools faidx Homo_sapiens_assembly19.fasta
+    - ./test_snv.sh 10 20 Homo_sapiens/Homo_sapiens_assembly19.fasta
