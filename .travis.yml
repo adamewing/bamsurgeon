@@ -27,7 +27,7 @@ script:
     - sudo cp bwa/bwa $HOME/bin     
     - python setup.py build
     - python setup.py install
-    - bwa index test_data/Homo_sapiens_assembly19.fasta
-    - samtools faidx test_data/Homo_sapiens_assembly19.fasta
+    - bwa index test_data/Homo_sapiens_chr22_bamsurgeon_assembly19.fasta
+#    - samtools faidx test_data/Homo_sapiens_chr22_bamsurgeon_assembly19.fasta
     - cd test
-    - ./test_snv.sh 10 20 ../test_data/Homo_sapiens_assembly19.fasta
+    - ./test_snv.sh 10 20 ../test_data/Homo_sapiens_chr22_bamsurgeon_assembly19.fasta
