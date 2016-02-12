@@ -12,7 +12,19 @@ sudo: required
 before_install: 
     - bash prerequisites.sh
 install: true
-script:     
+script:
+    - git clone https://github.com/samtools/htslib.git
+    - sudo make -C htslib
+    - git clone https://github.com/samtools/samtools.git
+    - sudo make -C samtools
+    - sudo cp samtools/samtools $HOME/bin
+    - sudo cp samtools/misc/wgsim $HOME/bin
+    - git clone https://github.com/samtools/bcftools.git
+    - sudo make -C bcftools
+    - sudo cp bcftools/bcftools $HOME/bin
+    - git clone https://github.com/lh3/bwa.git
+    - sudo make -C bwa
+    - sudo cp bwa/bwa $HOME/bin     
     - python setup.py build
     - python setup.py install
     - bwa index test_data/Homo_sapiens_assembly19.fasta

@@ -1,13 +1,13 @@
-cd ..
-git clone https://github.com/samtools/htslib.git
-sudo make -C htslib
-git clone https://github.com/samtools/samtools.git
-sudo make -C samtools
-sudo cp samtools/samtools $HOME/bin
-sudo cp samtools/misc/wgsim $HOME/bin
-git clone https://github.com/samtools/bcftools.git
-sudo make -C bcftools
-sudo cp bcftools/bcftools $HOME/bin
+#cd ..
+#git clone https://github.com/samtools/htslib.git
+#sudo make -C htslib
+#git clone https://github.com/samtools/samtools.git
+#sudo make -C samtools
+#sudo cp samtools/samtools $HOME/bin
+#sudo cp samtools/misc/wgsim $HOME/bin
+#git clone https://github.com/samtools/bcftools.git
+#sudo make -C bcftools
+#sudo cp bcftools/bcftools $HOME/bin
 #git clone https://github.com/lh3/bwa.git
 #sudo make -C bwa
 #sudo cp bwa/bwa $HOME/bin
@@ -27,7 +27,7 @@ sudo pip install pysam
 git clone https://github.com/lh3/bwa.git
 sudo make -C bwa
 sudo cp bwa/bwa $HOME/bin
-cd bamsurgeon
+#cd bamsurgeon
 export PATH=$HOME/bin:$PATH
 
 #bundle install --path .bundle --quiet --without=development
