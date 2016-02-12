@@ -1,3 +1,4 @@
+cd ..
 git clone https://github.com/samtools/htslib.git
 sudo make -C htslib
 git clone https://github.com/samtools/samtools.git
@@ -26,7 +27,8 @@ sudo pip install pysam
 git clone https://github.com/lh3/bwa.git
 sudo make -C bwa
 sudo cp bwa/bwa $HOME/bin
-
+cd bamsurgeon
+export PATH=$HOME/bin:$PATH
 
 #bundle install --path .bundle --quiet --without=development
 
