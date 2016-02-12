@@ -15,5 +15,7 @@ install: true
 script: travis_wait mvn script    
     - python setup.py build
     - python setup.py install
+    - bwa index Homo_sapiens_assembly19.fasta
+    - samtools faidx Homo_sapiens_assembly19.fasta
     - cd test
     - ./test_snv.sh 10 20 ../Homo_sapiens_assembly19.fasta
