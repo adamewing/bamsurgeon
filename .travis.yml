@@ -10,7 +10,7 @@ python:
     - pypy3
 sudo: required
 before_install: 
-    - sudo mkdir bin
+    - bash prerequisites.sh
     - WORKDIR=`pwd`
     - wget https://github.com/broadinstitute/picard/releases/download/1.131/picard-tools-1.131.zip
     - unzip picard-tools-1.131.zip
