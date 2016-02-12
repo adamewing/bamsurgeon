@@ -11,8 +11,7 @@ python:
 sudo: required
 before_install: 
     - bash prerequisites.sh
-install: travis_wait mvn install
-    - bash reference.sh
+install: "travis_wait mvn install bash reference.sh"
 script: travis_wait mvn script    
     - python setup.py build
     - python setup.py install
