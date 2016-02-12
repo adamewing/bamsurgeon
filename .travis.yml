@@ -8,8 +8,8 @@ python:
     - 3.5
     - nightly
     - pypy3
-sudo: required
-before_install:
+
+before_install: sudo: required
     - bash prerequisites.sh
 #    - bash reference.sh (timeout: 60)
 #    - git clone https://github.com/samtools/htslib.git
@@ -48,7 +48,8 @@ before_install:
 #    - sudo pip install pysam
 
 install: travis_wait mvn install 
-    - bash reference.sh #true
+    - bash reference.sh 
+    - true
 script: travis_wait mvn script    
     # Get out of the source directory before running tests to avoid PYTHONPATH
     # confusion.  This is necessary to ensure that the speedups module can
