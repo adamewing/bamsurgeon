@@ -41,7 +41,7 @@ then
     exit 65
 fi
 
-addsnv.py -v ../test_data/random_snvs.txt -f ../test_data/testregion.bam -r $3 -o ../test_data/testregion_mut.bam -n $1 -p $2 --ignoresnps --ignorepileup --seed 1234
+addsnv.py -v ../test_data/random_snvs.txt -f ../test_data/Homo_sapiens_chr22_bamsurgeon_assembly19.sorted.bam -r $3 -o ../test_data/testregion_mut.bam -n $1 -p $2 --ignoresnps --ignorepileup --seed 1234
 if [ $? -ne 0 ]
 then
  echo "addsnv.py failed. Are all the prequisites installed?"
