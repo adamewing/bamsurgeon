@@ -13,20 +13,19 @@ before_install:
     - bash prerequisites.sh
 install: true
 script:
-    - git clone https://github.com/samtools/htslib.git
-    - sudo make -C htslib
-    - git clone https://github.com/samtools/samtools.git
-    - sudo make -C samtools
-    - sudo cp samtools/samtools bin/
-    - sudo cp samtools/misc/wgsim bin/
-    - git clone https://github.com/samtools/bcftools.git
-    - sudo make -C bcftools
-    - sudo cp bcftools/bcftools bin/
-    - git clone https://github.com/lh3/bwa.git
-    - sudo make -C bwa
-    - sudo cp bwa/bwa bin/
-    - export PATH=/home/travis/build/MischaLundberg/bamsurgeon/bin:$PATH
-    - python setup.py build
+#    - git clone https://github.com/samtools/htslib.git
+#    - sudo make -C htslib
+#    - git clone https://github.com/samtools/samtools.git
+#    - sudo make -C samtools
+#    - sudo cp samtools/samtools bin/
+#    - sudo cp samtools/misc/wgsim bin/
+#    - git clone https://github.com/samtools/bcftools.git
+#    - sudo make -C bcftools
+#    - sudo cp bcftools/bcftools bin/
+#    - git clone https://github.com/lh3/bwa.git
+#    - sudo make -C bwa
+#    - sudo cp bwa/bwa bin/
+#    - export PATH=/home/travis/build/MischaLundberg/bamsurgeon/bin:$PATH
     - python setup.py install
     - bwa index test_data/Homo_sapiens_chr22_bamsurgeon_assembly19.fasta
 #    - samtools faidx test_data/Homo_sapiens_chr22_bamsurgeon_assembly19.fasta
