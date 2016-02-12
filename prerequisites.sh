@@ -22,8 +22,8 @@ tar xvzf velvet_1.2.10.tgz
 sudo make -C velvet_1.2.10
 sudo cp velvet_1.2.10/velvetg bin/
 sudo cp velvet_1.2.10/velveth bin/
-sudo pip install cython
-sudo pip install pysam
+sudo pip install --install-option="--prefix=/home/travis/build/MischaLundberg/bamsurgeon/bin" cython
+sudo pip install --install-option="--prefix=/home/travis/build/MischaLundberg/bamsurgeon/bin" pysam
 #wget ftp://ftp.ncbi.nlm.nih.gov/sra/reports/Assembly/GRCh37-HG19_Broad_variant/Homo_sapiens_assembly19.fasta
 #git clone https://github.com/lh3/bwa.git
 #sudo make -C bwa
