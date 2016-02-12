@@ -22,6 +22,12 @@ sudo cp velvet_1.2.10/velvetg $HOME/bin
 sudo cp velvet_1.2.10/velveth $HOME/bin
 sudo pip install cython
 sudo pip install pysam
+wget ftp://ftp.ncbi.nlm.nih.gov/sra/reports/Assembly/GRCh37-HG19_Broad_variant/Homo_sapiens_assembly19.fasta
+git clone https://github.com/lh3/bwa.git
+sudo make -C bwa
+sudo cp bwa/bwa $HOME/bin
+
+
 #bundle install --path .bundle --quiet --without=development
 
 exit 0

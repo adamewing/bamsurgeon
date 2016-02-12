@@ -10,8 +10,8 @@ python:
     - pypy3
 sudo: required
 before_install:
-    - bash prerequisites.sh (timeout: 20)
-    - bash reference.sh (timeout: 60)
+    - bash prerequisites.sh
+#    - bash reference.sh (timeout: 60)
 #    - git clone https://github.com/samtools/htslib.git
 #    - sudo make -C htslib
 #    - git clone https://github.com/samtools/samtools.git
@@ -47,9 +47,9 @@ before_install:
 #    - sudo pip install cython
 #    - sudo pip install pysam
 
-install: true
-script:
-    - 60 mvn script
+install: travis_wait mvn install 
+    - bash reference.sh #true
+script: travis_wait mvn script    
     # Get out of the source directory before running tests to avoid PYTHONPATH
     # confusion.  This is necessary to ensure that the speedups module can
     # be found in the installation directory.
