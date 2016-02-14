@@ -22,9 +22,13 @@ before_install:
     - sudo make -C velvet_1.2.10
     - sudo cp velvet_1.2.10/velvetg $WORKDIR/bin/
     - sudo cp velvet_1.2.10/velveth $WORKDIR/bin/
-    - sudo pip install --install-option="--prefix=$WORKDIR/bin" cython
+#    - sudo pip install --install-option="--prefix=$WORKDIR/bin" cython
     - git clone https://github.com/pysam-developers/pysam.git pysam
-    - cd pysam
+    - git clone https://github.com/cython/cython.git
+    - cd cython
+#    - python setup.py build
+    - python setup.py install
+    - cd ../pysam
     - python setup.py build
     - python setup.py install
     - cd ..
