@@ -23,7 +23,12 @@ before_install:
     - sudo cp velvet_1.2.10/velvetg $WORKDIR/bin/
     - sudo cp velvet_1.2.10/velveth $WORKDIR/bin/
     - sudo pip install --install-option="--prefix=$WORKDIR/bin" cython
-    - sudo pip install --install-option="--prefix=$WORKDIR/bin" pysam
+    - git clone https://github.com/pysam-developers/pysam.git pysam
+    - cd pysam
+    - python setup.py build
+    - python setup.py install
+    - cd ..
+#    - sudo pip install --install-option="--prefix=$WORKDIR/bin" pysam
     - wget ftp://ftp.ncbi.nlm.nih.gov/sra/reports/Assembly/GRCh37-HG19_Broad_variant/Homo_sapiens_assembly19.fasta
     - git clone https://github.com/lh3/bwa.git
     - sudo make -C bwa
