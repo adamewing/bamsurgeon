@@ -51,5 +51,6 @@ install: true
 script:
     - python setup.py install
     - bwa index test_data/Homo_sapiens_chr22_bamsurgeon_assembly19.fasta
+    - samtools index test_data/Homo_sapiens_chr22_bamsurgeon_assembly19.sorted.bam
     - cd test
     - ./test_snv.sh 10 20 ../test_data/Homo_sapiens_chr22_bamsurgeon_assembly19.fasta
