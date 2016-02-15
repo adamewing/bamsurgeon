@@ -2,12 +2,12 @@ language: python
 python:
     - 2.7.8
     - 2.7
-    - pypy
-    - 3.3
-    - 3.4
-    - 3.5
-    - nightly
-    - pypy3
+#    - pypy
+#    - 3.3
+#    - 3.4
+#    - 3.5
+#    - nightly
+#    - pypy3
 sudo: required
 before_install: 
     - bash prerequisites.sh
@@ -54,3 +54,4 @@ script:
     - samtools index test_data/Homo_sapiens_chr22_bamsurgeon_assembly19.sorted.bam
     - cd test
     - ./test_snv.sh 10 20 ../test_data/Homo_sapiens_chr22_bamsurgeon_assembly19.fasta
+    - ./test_indel.sh 20 ../test_data/Homo_sapiens_chr22_bamsurgeon_assembly19.fasta
