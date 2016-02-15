@@ -53,5 +53,5 @@ script:
     - bwa index test_data/Homo_sapiens_chr22_bamsurgeon_assembly19.fasta
     - samtools index test_data/Homo_sapiens_chr22_bamsurgeon_assembly19.sorted.bam
     - cd test
-    - ./test_snv.sh 10 20 ../test_data/Homo_sapiens_chr22_bamsurgeon_assembly19.fasta
-    - ./test_indel.sh 20 ../test_data/Homo_sapiens_chr22_bamsurgeon_assembly19.fasta
+    - ./test_snv.sh 10 20 ../test_data/Homo_sapiens_chr22_bamsurgeon_assembly19.fasta > testSNVlog.txt
+    - ./test_indel.sh 20 ../test_data/Homo_sapiens_chr22_bamsurgeon_assembly19.fasta > testINDELlog.txt
