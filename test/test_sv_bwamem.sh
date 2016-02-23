@@ -1,4 +1,3 @@
-t
 #!/bin/sh
 
 # adds up to 100 SNPs to a ~770 kb region around the LARGE gene

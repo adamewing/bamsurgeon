@@ -50,7 +50,9 @@ Exonerate
 ```
 git clone https://github.com/adamewing/exonerate.git
 cd exonerate
-./configure && make && make install
+git checkout v2.4.0
+autoreconf -i
+./configure && make && make check && make install
 ```
 
 Velvet
