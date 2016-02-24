@@ -14,15 +14,15 @@ before_install:
     - WORKDIR=`pwd`
     - wget https://github.com/broadinstitute/picard/releases/download/1.131/picard-tools-1.131.zip
     - unzip picard-tools-1.131.zip
-#    - wget http://ftp.ebi.ac.uk/pub/software/vertebrategenomics/exonerate/exonerate-2.2.0-x86_64.tar.gz
-#    - tar -xvf exonerate-2.2.0-x86_64.tar.gz
-#    - sudo cp -rf exonerate-2.2.0-x86_64/ $WORKDIR/bin/
-    - git clone https://github.com/adamewing/exonerate.git
-    - cd exonerate
-    - git checkout v2.4.0
-    - autoreconf -i
-    - ./configure && make && make check && make install
-    - cd ..
+    - wget http://ftp.ebi.ac.uk/pub/software/vertebrategenomics/exonerate/exonerate-2.2.0-x86_64.tar.gz
+    - tar -xvf exonerate-2.2.0-x86_64.tar.gz
+    - sudo cp -rf exonerate-2.2.0-x86_64/ $WORKDIR/bin/
+#    - git clone https://github.com/adamewing/exonerate.git
+#    - cd exonerate
+#    - git checkout v2.4.0
+#    - autoreconf -i
+#    - ./configure && make && make check && make install
+#    - cd ..
     - wget https://www.ebi.ac.uk/~zerbino/velvet/velvet_1.2.10.tgz
     - tar xvzf velvet_1.2.10.tgz
     - sudo make -C velvet_1.2.10
