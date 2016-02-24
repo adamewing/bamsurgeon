@@ -35,7 +35,7 @@ then
     exit 65
 fi
 
-addsv.py -p $1 -v ../test_data/test_trn.txt -f ../test_data/testregion.bam -r $2 -o ../test_data/testregion_trn_mut.bam -s 0.5 --seed 1234
+addsv.py -p $1 -v ../test_data/test_trn.txt -f ../test_data/testregion_realign.bam -r $2 -o ../test_data/testregion_trn_mut.bam -s 0.5 --seed 1234
 if [ $? -ne 0 ]
 then
   echo "addsv.py failed."
@@ -49,6 +49,6 @@ else
   samtools index ../test_data/testregion_trn_mut.bam
 
   echo "making pileups..."
-  samtools mpileup -f $2 ../test_data/testregion_trn_mut.bam ../test_data/testregion.bam > test_trn.pileup.txt
+  samtools mpileup -f $2 ../test_data/testregion_trn_mut.bam ../test_data/testregion_realign.bam > test_trn.pileup.txt
   echo "done. output in test_trn.pileup.txt"
 fi
