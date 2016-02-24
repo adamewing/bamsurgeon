@@ -14,9 +14,15 @@ before_install:
     - WORKDIR=`pwd`
     - wget https://github.com/broadinstitute/picard/releases/download/1.131/picard-tools-1.131.zip
     - unzip picard-tools-1.131.zip
-    - wget http://ftp.ebi.ac.uk/pub/software/vertebrategenomics/exonerate/exonerate-2.2.0-x86_64.tar.gz
-    - tar -xvf exonerate-2.2.0-x86_64.tar.gz
-    - sudo cp -rf exonerate-2.2.0-x86_64/ $WORKDIR/bin/
+#    - wget http://ftp.ebi.ac.uk/pub/software/vertebrategenomics/exonerate/exonerate-2.2.0-x86_64.tar.gz
+#    - tar -xvf exonerate-2.2.0-x86_64.tar.gz
+#    - sudo cp -rf exonerate-2.2.0-x86_64/ $WORKDIR/bin/
+    - git clone https://github.com/adamewing/exonerate.git
+    - cd exonerate
+    - git checkout v2.4.0
+    - autoreconf -i
+    - ./configure && make && make check && make install
+    - cd ..
     - wget https://www.ebi.ac.uk/~zerbino/velvet/velvet_1.2.10.tgz
     - tar xvzf velvet_1.2.10.tgz
     - sudo make -C velvet_1.2.10
@@ -33,7 +39,9 @@ before_install:
     - python setup.py install
     - cd ..
 #    - sudo pip install --install-option="--prefix=$WORKDIR/bin" pysam
+    - cd test_data
     - wget ftp://ftp.ncbi.nlm.nih.gov/sra/reports/Assembly/GRCh37-HG19_Broad_variant/Homo_sapiens_assembly19.fasta
+    - cd ..
     - git clone https://github.com/lh3/bwa.git
     - sudo make -C bwa
     - sudo cp bwa/bwa $WORKDIR/bin
@@ -50,10 +58,21 @@ before_install:
 install: true
 script:
     - python setup.py install
-    - bwa index test_data/Homo_sapiens_chr22_bamsurgeon_assembly19.fasta
-    - samtools index test_data/Homo_sapiens_chr22_bamsurgeon_assembly19.sorted.bam
+    - bwa index test_data/Homo_sapiens_assembly19.fasta > bwaOutput.txt
+#    - samtools index test_data/Homo_sapiens_chr22_bamsurgeon_assembly19.sorted.bam
     - cd test
-    - ./test_snv.sh 10 20 ../test_data/Homo_sapiens_chr22_bamsurgeon_assembly19.fasta > testSNVlog.txt
-    - ./test_indel.sh 20 ../test_data/Homo_sapiens_chr22_bamsurgeon_assembly19.fasta > testINDELlog.txt
-    - ./test_snv_alt.sh 15 20 ../test_data/Homo_sapiens_chr22_bamsurgeon_assembly19.fasta > testSBVALTlog.txt
-    - ./test_snv_avoid.sh 15 20 ../test_data/Homo_sapiens_chr22_bamsurgeon_assembly19.fasta > testSNVAVOIDlog.txt
+    - ./test_snv.sh 10 20 ../test_data/Homo_sapiens_assembly19.fasta 
+    - ./test_indel.sh 20 ../test_data/Homo_sapiens_assembly19.fasta 
+    - ./test_snv_alt.sh 15 20 ../test_data/Homo_sapiens_assembly19.fasta 
+    - ./test_snv_avoid.sh 15 20 ../test_data/Homo_sapiens_assembly19.fasta 
+    - ./test_indel_bwamem.sh 10 ../test_data/Homo_sapiens/Homo_sapiens_assembly19.fasta ../picard-tools-1.131/picard.jar 
+    - ./test_indel_maxdepth.sh 10 ../test_data/Homo_sapiens/Homo_sapiens_assembly19.fasta
+    - ./test_indel_minmutreads.sh 10 ../test_data/Homo_sapiens/Homo_sapiens_assembly19.fasta 
+    - ./test_snv_bwamem.sh 15 20 ../test_data/Homo_sapiens_assembly19.fasta ../picard-tools-1.131/picard.jar
+    - ./test_snv_maxdepth.sh 15 20 ../test_data/Homo_sapiens/Homo_sapiens_assembly19.fasta
+    - ./test_snv_minmutreads.sh 15 20 ../test_data/Homo_sapiens/Homo_sapiens_assembly19.fasta
+    - ./test_snv_skipmerge.sh 15 20 ../test_data/Homo_sapiens/Homo_sapiens_assembly19.fasta
+    - ./test_snv_tmap.sh 15 20 ../test_data/Homo_sapiens/Homo_sapiens_assembly19.fasta ../picard-tools-1.131/picard.jar
+    - ./test_sv.sh 15 ../test_data/Homo_sapiens_assembly19.fasta
+    - ./test_sv_bwamem.sh ../test_data/Homo_sapiens/Homo_sapiens_assembly19.fasta
+    - ./test_sv_inslib.sh ../test_data/Homo_sapiens/Homo_sapiens_assembly19.fasta
