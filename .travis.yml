@@ -46,7 +46,7 @@ before_install:
     - cd ..
 #    - sudo pip install --install-option="--prefix=$WORKDIR/bin" pysam
     - cd test_data
-    - wget ftp://ftp.ncbi.nlm.nih.gov/sra/reports/Assembly/GRCh37-HG19_Broad_variant/Homo_sapiens_assembly19.fasta
+#    - wget ftp://ftp.ncbi.nlm.nih.gov/sra/reports/Assembly/GRCh37-HG19_Broad_variant/Homo_sapiens_chr22_assembly19.fasta
     - cd ..
     - git clone https://github.com/lh3/bwa.git
     - sudo make -C bwa
@@ -64,21 +64,21 @@ before_install:
 install: true
 script:
     - python setup.py install
-    - bwa index test_data/Homo_sapiens_assembly19.fasta > bwaOutput.txt
+#    - bwa index test_data/Homo_sapiens_chr22_assembly19.fasta 
 #    - samtools index test_data/Homo_sapiens_chr22_bamsurgeon_assembly19.sorted.bam
     - cd test
-    - ./test_snv.sh 10 20 ../test_data/Homo_sapiens_assembly19.fasta 
-    - ./test_indel.sh 20 ../test_data/Homo_sapiens_assembly19.fasta 
-    - ./test_snv_alt.sh 15 20 ../test_data/Homo_sapiens_assembly19.fasta 
-    - ./test_snv_avoid.sh 15 20 ../test_data/Homo_sapiens_assembly19.fasta 
-    - ./test_indel_bwamem.sh 10 ../test_data/Homo_sapiens/Homo_sapiens_assembly19.fasta ../picard-tools-1.131/picard.jar 
-    - ./test_indel_maxdepth.sh 10 ../test_data/Homo_sapiens/Homo_sapiens_assembly19.fasta
-    - ./test_indel_minmutreads.sh 10 ../test_data/Homo_sapiens/Homo_sapiens_assembly19.fasta 
-    - ./test_snv_bwamem.sh 15 20 ../test_data/Homo_sapiens_assembly19.fasta ../picard-tools-1.131/picard.jar
-    - ./test_snv_maxdepth.sh 15 20 ../test_data/Homo_sapiens/Homo_sapiens_assembly19.fasta
-    - ./test_snv_minmutreads.sh 15 20 ../test_data/Homo_sapiens/Homo_sapiens_assembly19.fasta
-    - ./test_snv_skipmerge.sh 15 20 ../test_data/Homo_sapiens/Homo_sapiens_assembly19.fasta
-    - ./test_snv_tmap.sh 15 20 ../test_data/Homo_sapiens/Homo_sapiens_assembly19.fasta ../picard-tools-1.131/picard.jar
-    - ./test_sv.sh 15 ../test_data/Homo_sapiens_assembly19.fasta
-    - ./test_sv_bwamem.sh ../test_data/Homo_sapiens/Homo_sapiens_assembly19.fasta
-    - ./test_sv_inslib.sh ../test_data/Homo_sapiens/Homo_sapiens_assembly19.fasta
+    - ./test_snv.sh 10 20 ../test_data/Homo_sapiens_chr22_assembly19.fasta 
+    - ./test_indel.sh 20 ../test_data/Homo_sapiens_chr22_assembly19.fasta 
+    - ./test_snv_alt.sh 15 20 ../test_data/Homo_sapiens_chr22_assembly19.fasta 
+    - ./test_snv_avoid.sh 15 20 ../test_data/Homo_sapiens_chr22_assembly19.fasta 
+    - ./test_indel_bwamem.sh 10 ../test_data/Homo_sapiens/Homo_sapiens_chr22_assembly19.fasta ../picard-tools-1.131/picard.jar 
+    - ./test_indel_maxdepth.sh 10 ../test_data/Homo_sapiens/Homo_sapiens_chr22_assembly19.fasta
+    - ./test_indel_minmutreads.sh 10 ../test_data/Homo_sapiens/Homo_sapiens_chr22_assembly19.fasta 
+    - ./test_snv_bwamem.sh 15 20 ../test_data/Homo_sapiens_chr22_assembly19.fasta ../picard-tools-1.131/picard.jar
+    - ./test_snv_maxdepth.sh 15 20 ../test_data/Homo_sapiens/Homo_sapiens_chr22_assembly19.fasta
+    - ./test_snv_minmutreads.sh 15 20 ../test_data/Homo_sapiens/Homo_sapiens_chr22_assembly19.fasta
+    - ./test_snv_skipmerge.sh 15 20 ../test_data/Homo_sapiens/Homo_sapiens_chr22_assembly19.fasta
+    - ./test_snv_tmap.sh 15 20 ../test_data/Homo_sapiens/Homo_sapiens_chr22_assembly19.fasta ../picard-tools-1.131/picard.jar
+    - ./test_sv.sh 15 ../test_data/Homo_sapiens_chr22_assembly19.fasta
+    - ./test_sv_bwamem.sh ../test_data/Homo_sapiens/Homo_sapiens_chr22_assembly19.fasta
+    - ./test_sv_inslib.sh ../test_data/Homo_sapiens/Homo_sapiens_chr22_assembly19.fasta
