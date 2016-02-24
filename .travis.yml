@@ -71,14 +71,14 @@ script:
     - ./test_indel.sh 20 ../test_data/Homo_sapiens_chr22_assembly19.fasta 
     - ./test_snv_alt.sh 15 20 ../test_data/Homo_sapiens_chr22_assembly19.fasta 
     - ./test_snv_avoid.sh 15 20 ../test_data/Homo_sapiens_chr22_assembly19.fasta 
-    - ./test_indel_bwamem.sh 10 ../test_data/Homo_sapiens/Homo_sapiens_chr22_assembly19.fasta ../picard-tools-1.131/picard.jar 
-    - ./test_indel_maxdepth.sh 10 ../test_data/Homo_sapiens/Homo_sapiens_chr22_assembly19.fasta
-    - ./test_indel_minmutreads.sh 10 ../test_data/Homo_sapiens/Homo_sapiens_chr22_assembly19.fasta 
+    - ./test_indel_bwamem.sh 10 ../test_data/Homo_sapiens_chr22_assembly19.fasta ../picard-tools-1.131/picard.jar 
+    - ./test_indel_maxdepth.sh 10 ../test_data/Homo_sapiens_chr22_assembly19.fasta
+    - ./test_indel_minmutreads.sh 10 ../test_data/Homo_sapiens_chr22_assembly19.fasta 
     - ./test_snv_bwamem.sh 15 20 ../test_data/Homo_sapiens_chr22_assembly19.fasta ../picard-tools-1.131/picard.jar
-    - ./test_snv_maxdepth.sh 15 20 ../test_data/Homo_sapiens/Homo_sapiens_chr22_assembly19.fasta
-    - ./test_snv_minmutreads.sh 15 20 ../test_data/Homo_sapiens/Homo_sapiens_chr22_assembly19.fasta
-    - ./test_snv_skipmerge.sh 15 20 ../test_data/Homo_sapiens/Homo_sapiens_chr22_assembly19.fasta
-    - ./test_snv_tmap.sh 15 20 ../test_data/Homo_sapiens/Homo_sapiens_chr22_assembly19.fasta ../picard-tools-1.131/picard.jar
+    - ./test_snv_maxdepth.sh 15 20 ../test_data/Homo_sapiens_chr22_assembly19.fasta
+    - ./test_snv_minmutreads.sh 15 20 ../test_data/Homo_sapiens_chr22_assembly19.fasta
+    - ./test_snv_skipmerge.sh 15 20 ../test_data/Homo_sapiens_chr22_assembly19.fasta
+    - ./test_snv_tmap.sh 15 20 ../test_data/Homo_sapiens_chr22_assembly19.fasta ../picard-tools-1.131/picard.jar
     - ./test_sv.sh 15 ../test_data/Homo_sapiens_chr22_assembly19.fasta
-    - ./test_sv_bwamem.sh ../test_data/Homo_sapiens/Homo_sapiens_chr22_assembly19.fasta
-    - ./test_sv_inslib.sh ../test_data/Homo_sapiens/Homo_sapiens_chr22_assembly19.fasta
+    - ./test_sv_bwamem.sh ../test_data/Homo_sapiens_chr22_assembly19.fasta
+    - ./test_sv_inslib.sh ../test_data/Homo_sapiens_chr22_assembly19.fasta
