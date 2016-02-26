@@ -2,21 +2,12 @@ language: python
 python:
     - 2.7.8
     - 2.7
-#    - pypy
-#    - 3.3
-#    - 3.4
-#    - 3.5
-#    - nightly
-#    - pypy3
 sudo: required
 before_install: 
     - bash prerequisites.sh
     - WORKDIR=`pwd`
     - wget https://github.com/broadinstitute/picard/releases/download/1.131/picard-tools-1.131.zip
     - unzip picard-tools-1.131.zip
-#    - wget http://ftp.ebi.ac.uk/pub/software/vertebrategenomics/exonerate/exonerate-2.2.0-x86_64.tar.gz
-#    - tar -xvf exonerate-2.2.0-x86_64.tar.gz
-#    - sudo cp -rf exonerate-2.2.0-x86_64/ $WORKDIR/bin/
     - git clone https://github.com/adamewing/exonerate.git
     - cd exonerate
     - git checkout v2.4.0
@@ -28,9 +19,6 @@ before_install:
     - sudo make -C velvet_1.2.10
     - sudo cp velvet_1.2.10/velvetg $WORKDIR/bin/
     - sudo cp velvet_1.2.10/velveth $WORKDIR/bin/
-#    - sudo pip install --install-option="--prefix=$WORKDIR/bin" cython
-#    - git clone https://github.com/pysam-developers/pysam.git pysam
-#    - git clone https://github.com/cython/cython.git
     - wget https://github.com/pysam-developers/pysam/archive/9c4c00a22fbf0f836347283cb008dbc9183e5e56.zip
     - unzip 9c4c00a22fbf0f836347283cb008dbc9183e5e56.zip
     - mv pysam-9c4c00a22fbf0f836347283cb008dbc9183e5e56 pysam 
@@ -38,15 +26,12 @@ before_install:
     - unzip 137c064f3b28d4bb59d05a9751f60623f2fc9387.zip
     - mv cython-137c064f3b28d4bb59d05a9751f60623f2fc9387 cython
     - cd cython
-#    - python setup.py build
     - python setup.py install
     - cd ../pysam
     - python setup.py build
     - python setup.py install
     - cd ..
-#    - sudo pip install --install-option="--prefix=$WORKDIR/bin" pysam
     - cd test_data
-#    - wget ftp://ftp.ncbi.nlm.nih.gov/sra/reports/Assembly/GRCh37-HG19_Broad_variant/Homo_sapiens_chr22_assembly19.fasta
     - cd ..
     - git clone https://github.com/lh3/bwa.git
     - sudo make -C bwa
@@ -64,8 +49,6 @@ before_install:
 install: true
 script:
     - python setup.py install
-#    - bwa index test_data/Homo_sapiens_chr22_assembly19.fasta 
-#    - samtools index test_data/Homo_sapiens_chr22_bamsurgeon_assembly19.sorted.bam
     - cd test
     - ./test_snv.sh 10 20 ../test_data/Homo_sapiens_chr22_assembly19.fasta 
     - ./test_indel.sh 20 ../test_data/Homo_sapiens_chr22_assembly19.fasta 
