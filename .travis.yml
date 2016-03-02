@@ -19,14 +19,14 @@ before_install:
     - sudo make -C velvet_1.2.10
     - sudo cp velvet_1.2.10/velvetg $WORKDIR/bin/
     - sudo cp velvet_1.2.10/velveth $WORKDIR/bin/
-    - git clone https://github.com/pysam-developers/pysam.git
-    - git clone https://github.com/cython/cython.git
-#    - wget https://github.com/pysam-developers/pysam/archive/9c4c00a22fbf0f836347283cb008dbc9183e5e56.zip
-#    - unzip 9c4c00a22fbf0f836347283cb008dbc9183e5e56.zip
-#    - mv pysam-9c4c00a22fbf0f836347283cb008dbc9183e5e56 pysam
-#    - wget https://github.com/cython/cython/archive/137c064f3b28d4bb59d05a9751f60623f2fc9387.zip
-#    - unzip 137c064f3b28d4bb59d05a9751f60623f2fc9387.zip
-#    - mv cython-137c064f3b28d4bb59d05a9751f60623f2fc9387 cython
+#    - git clone https://github.com/pysam-developers/pysam.git
+#    - git clone https://github.com/cython/cython.git
+    - wget https://github.com/pysam-developers/pysam/archive/9c4c00a22fbf0f836347283cb008dbc9183e5e56.zip
+    - unzip 9c4c00a22fbf0f836347283cb008dbc9183e5e56.zip
+    - mv pysam-9c4c00a22fbf0f836347283cb008dbc9183e5e56 pysam
+    - wget https://github.com/cython/cython/archive/137c064f3b28d4bb59d05a9751f60623f2fc9387.zip
+    - unzip 137c064f3b28d4bb59d05a9751f60623f2fc9387.zip
+    - mv cython-137c064f3b28d4bb59d05a9751f60623f2fc9387 cython
     - cd cython
 #    - python setup.py build
     - python setup.py install
