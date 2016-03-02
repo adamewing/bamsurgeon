@@ -41,7 +41,7 @@ then
     exit 65
 fi
 
-addsnv.py -v ../test_data/random_snvs_haplopairs.txt -z 20 -f ../test_data/testregion.bam -r $3 -o ../test_data/testregion_mut.bam -n $1 -c ../test_data/test_cnvlist.txt.gz -p $2 --ignoresnps --ignorepileup
+addsnv.py -v ../test_data/random_snvs_haplopairs.txt -z 20 -f ../test_data/testregion_realign.bam -r $3 -o ../test_data/testregion_mut.bam -n $1 -c ../test_data/test_cnvlist.txt.gz -p $2 --ignoresnps --ignorepileup
 if [ $? -ne 0 ]
 then
  echo "addsnv.py failed. Are all the prequisites installed?"

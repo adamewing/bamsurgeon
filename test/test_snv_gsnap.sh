@@ -47,13 +47,13 @@ then
     exit 65
 fi
 
-addsnv.py -v ../test_data/random_snvs.txt -f ../test_data/testregion_gsnap.bam -r $3 -o ../test_data/testregion_gsnap_mut.bam -n $1 -c ../test_data/test_cnvlist.txt.gz -p $2 --ignoresnps --picardjar $4 --aligner gsnap --alignopts gsnaprefdir:$5,gsnaprefname:$6
+addsnv.py -v ../test_data/random_snvs.txt -f ../test_data/testregion_gsnap_realign.bam -r $3 -o ../test_data/testregion_gsnap_mut.bam -n $1 -c ../test_data/test_cnvlist.txt.gz -p $2 --ignoresnps --picardjar $4 --aligner gsnap --alignopts gsnaprefdir:$5,gsnaprefname:$6
 if [ $? -ne 0 ]
 then
  echo "addsnv.py failed. Are all the prequisites installed?"
  exit 65
 else
-    samtools sort ../test_data/testregion_gsnap_mut.bam ../test_data/testregion_gsnap_mut.sorted
+    samtools sort -T ../test_data/testregion_gsnap_mut.sorted.bam -o ../test_data/testregion_gsnap_mut.sorted.bam ../test_data/testregion_gsnap_mut.bam
     mv ../test_data/testregion_gsnap_mut.sorted.bam ../test_data/testregion_gsnap_mut.bam
     samtools index ../test_data/testregion_gsnap_mut.bam
     samtools mpileup -ugf $3 ../test_data/testregion_gsnap_mut.bam | bcftools call -vm

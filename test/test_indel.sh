@@ -23,13 +23,13 @@ then
 fi
 
 
-addindel.py -v ../test_data/test_indels.txt -f ../test_data/testregion.bam -r $2 -o ../test_data/testregion_mut.bam -c ../test_data/test_cnvlist.txt.gz -p $1 --seed 1234
+addindel.py -v ../test_data/test_indels.txt -f ../test_data/testregion_realign.bam  -r $2 -o ../test_data/testregion_mut.bam -c ../test_data/test_cnvlist.txt.gz -p $1 --seed 1234
 if [ $? -ne 0 ]
 then
  echo "addindel.py failed."
  exit 65
 else
-    samtools sort ../test_data/testregion_mut.bam ../test_data/testregion_mut.sorted
+    samtools sort -T ../test_data/testregion_mut.sorted.bam -o ../test_data/testregion_mut.sorted.bam ../test_data/testregion_mut.bam
     mv ../test_data/testregion_mut.sorted.bam ../test_data/testregion_mut.bam
     samtools index ../test_data/testregion_mut.bam
     samtools mpileup -ugf $2 ../test_data/testregion_mut.bam | bcftools call -vm

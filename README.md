@@ -1,3 +1,5 @@
+<img src="https://travis-ci.org/MischaLundberg/bamsurgeon.svg?branch=master" alt="Build Status" />
+
 ## Bamsurgeon:
 *tools for adding mutations to .bam files, used for testing mutation callers*
 

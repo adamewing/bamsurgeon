@@ -41,7 +41,7 @@ then
     exit 65
 fi
 
-addsnv.py -v ../test_data/random_snvs.txt -f ../test_data/testregion.bam -r $3 -o ../test_data/testregion_mut.bam -n $1 -c ../test_data/test_cnvlist.txt.gz -p $2 --avoid ../test_data/test_avoid_snv1.txt
+addsnv.py -v ../test_data/random_snvs.txt -f ../test_data/testregion_mut.bam -r $3 -o ../test_data/testregion_mut.bam -n $1 -c ../test_data/test_cnvlist.txt.gz -p $2 --avoid ../test_data/test_avoid_snv1.txt
 if [ $? -ne 0 ]
 then
  echo "addsnv.py failed. Are all the prequisites installed?"

@@ -35,20 +35,20 @@ then
     exit 65
 fi
 
-addsv.py -p $1 -v ../test_data/test_sv.txt -f ../test_data/testregion.bam -r $2 -o ../test_data/testregion_sv_mut.bam -c ../test_data/test_cnvlist.txt.gz --seed 1234
+addsv.py -p $1 -v ../test_data/test_sv.txt -f ../test_data/testregion_realign.bam -r $2 -o ../test_data/testregion_sv_mut.bam -c ../test_data/test_cnvlist.txt.gz --seed 1234
 if [ $? -ne 0 ]
 then
   echo "addsv.py failed."
   exit 65
 else
   echo "sorting output bam..."
-  samtools sort ../test_data/testregion_sv_mut.bam -o ../test_data/testregion_sv_mut.sorted.bam
+  samtools sort -T ../test_data/testregion_sv_mut.sorted.bam -o ../test_data/testregion_sv_mut.sorted.bam ../test_data/testregion_sv_mut.bam
   mv ../test_data/testregion_sv_mut.sorted.bam ../test_data/testregion_sv_mut.bam
 
   echo "indexing output bam..."
   samtools index ../test_data/testregion_sv_mut.bam
 
   echo "making pileups..."
-  samtools mpileup -f $2 ../test_data/testregion_sv_mut.bam ../test_data/testregion.bam > test_sv.pileup.txt
+  samtools mpileup -f $2 ../test_data/testregion_sv_mut.bam ../test_data/testregion_realign.bam > test_sv.pileup.txt
   echo "done. output in test_sv.pileup.txt"
 fi
