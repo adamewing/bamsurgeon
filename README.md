@@ -1,4 +1,6 @@
 
+[![Build Status](https://travis-ci.org/adamewing/bamsurgeon.svg?branch=master)](https://travis-ci.org/adamewing/bamsurgeon)
+
 ## Bamsurgeon:
 *tools for adding mutations to .bam files, used for testing mutation callers*
 
