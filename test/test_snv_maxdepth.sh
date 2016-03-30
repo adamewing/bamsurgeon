@@ -3,13 +3,19 @@
 # adds up to 100 SNPs to a ~770 kb region around the LARGE gene
 # requires samtools/bcftools
 
-if [ $# -ne 3 ]
+if [ $# -ne 4 ]
 then
-    echo "usage: $0 <number of SNPs> <number of threads> <reference indexed with bwa index>"
+    echo "usage: $0 <number of SNPs> <number of threads> <reference indexed with bwa index> <path to picard.jar>"
     exit 65
 fi
 
 command -v addsnv.py >/dev/null 2>&1 || { echo "addsnv.py isn't installed" >&2; exit 65; }
+
+if [ ! -e $4 ]
+then
+    echo "cannot find SamToFastq.jar"
+    exit 65
+fi
 
 if [ ! -e $3 ]
 then
@@ -41,7 +47,8 @@ then
     exit 65
 fi
 
-addsnv.py -v ../test_data/random_snvs.txt -f ../test_data/testregion_realign.bam -r $3 -o ../test_data/testregion_mut.bam -n $1 -c ../test_data/test_cnvlist.txt.gz -p $2 --ignoresnps --maxdepth 20
+addsnv.py -v ../test_data/random_snvs.txt -f ../test_data/testregion_realign.bam -r $3 -o ../test_data/testregion_mut.bam -n $1 -c ../test_data/test_cnvlist.txt.gz -p $2 --picardjar $4 --aligner mem --maxdepth 5 --seed 1234 
+
 if [ $? -ne 0 ]
 then
  echo "addsnv.py failed. Are all the prequisites installed?"

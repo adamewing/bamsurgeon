@@ -197,7 +197,7 @@ def mutate(args, log, bamfile, bammate, chrom, mutstart, mutend, mutpos_list, av
 
                         if len(mutreads) > int(args.maxdepth):
                             sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tdepth at site is greater than cutoff, aborting mutation.\n")
-                            return True, False, {}, {}, {}
+                            return True, False, False, {}, {}, {}
 
             # make sure region doesn't have any changes that are likely SNPs
             # (trying to avoid messing with haplotypes)
