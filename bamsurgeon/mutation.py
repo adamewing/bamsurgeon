@@ -118,9 +118,9 @@ def makedel(read, chrom, start, end, ref, debug=False):
 
 def find_mate(read, bam):
     ''' AlignmentFile.mate() can return a non-primary alignment, so use this function instead '''
-    chrom = bam.getrname(read.tid)
-    for rec in bam.fetch(chrom, read.pnext, read.pnext+1):
-        if rec.qname == read.qname and rec.pos == read.pnext:
+    chrom = read.next_reference_name
+    for rec in bam.fetch(chrom, read.next_reference_start, read.next_reference_start+1):
+        if rec.query_name == read.query_name and rec.reference_start == read.next_reference_start:
             if not rec.is_secondary and bin(rec.flag & 2048) != bin(2048):
                 if rec.is_read1 != read.is_read1:
                     return rec
