@@ -491,7 +491,7 @@ def makemut(args, bedline, alignopts):
             if action == 'DEL':
                 if len(a) > 1:
                     dsize = float(a[1])
-                    if dsize >= 1.0: # if DEL size is not a fraction, interpret as bp
+                    if dsize > 1.0: # if DEL size is not a fraction, interpret as bp
                         # since DEL 1 is default, if DEL 1 is specified, interpret as 1 bp deletion
                         dlen = int(dsize)
                         dsize = 1.0
