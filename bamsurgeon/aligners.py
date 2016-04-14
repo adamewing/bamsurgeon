@@ -139,7 +139,7 @@ def remap_backtrack_bam(bamfn, threads, fastaref, mutid='null', paired=True):
         os.remove(samfn)
 
 
-def remap_bwamem_bam(bamfn, threads, fastaref, picardjar, mutid='null', paired=True):
+def remap_bwamem_bam(bamfn, threads, fastaref, picardjar, mutid='null', paired=True, deltmp=True):
     """ call bwa mem and samtools to remap .bam
     """
     assert os.path.exists(picardjar)
@@ -176,13 +176,13 @@ def remap_bwamem_bam(bamfn, threads, fastaref, picardjar, mutid='null', paired=T
     subprocess.call(bam_cmd)
 
     sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tdeleting SAM: " + sam_out + "\n")
-    os.remove(sam_out)
+    if deltmp: os.remove(sam_out)
 
     sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tsorting output: " + ' '.join(sort_cmd) + "\n")
     subprocess.call(sort_cmd)
 
     sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremove original bam:" + bamfn + "\n")
-    os.remove(bamfn)
+    if deltmp: os.remove(bamfn)
 
     sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\trename sorted bam: " + sort_out + " to original name: " + bamfn + "\n")
     move(sort_out, bamfn)
@@ -195,7 +195,7 @@ def remap_bwamem_bam(bamfn, threads, fastaref, picardjar, mutid='null', paired=T
         raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
 
     sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fastq + "\n")
-    os.remove(fastq)
+    if deltmp: os.remove(fastq)
 
 
 def remap_novoalign_bam(bamfn, threads, fastaref, picardjar, novoref, mutid='null', paired=True):

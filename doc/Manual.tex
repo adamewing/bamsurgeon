@@ -96,7 +96,6 @@ optional arguments:
   --avoidreads AVOIDREADS
                         file of read names to avoid (mutations will be skipped
                         if overlap)
-  --nomut               dry run
   --ignoresnps          make mutations even if there are non-reference alleles
                         sharing the relevant reads
   --force               force mutation to happen regardless of nearby SNP or
@@ -119,11 +118,11 @@ optional arguments:
 \end{verbatim}
 
 \subsection{Description}
-    Single nucleotide changes are introduced to an existing BAM alignment using \texttt {addsnv.py} as outlined in Figure 2. Input consists of a list of locations where SNVs will be made, a target BAM alignment, and a reference genome indexed using bwa (preferably the same genome used to align the reads in the BAM file). 
+    Single nucleotide changes are introduced to an existing BAM alignment using \texttt {addsnv.py} as outlined in Figure 1. Input consists of a list of locations where SNVs will be made, a target BAM alignment, and a reference genome indexed using bwa (preferably the same genome used to align the reads in the BAM file). 
 
 \subsection{Input}
 \paragraph{Mutation input (-v/--varfile)}
-	Input to addsnv.py (-v/--varfile) is BED-3 format plus an extra optional column for the desired variant allele fraction (VAF). The default VAF is specified via -m/--mutfrac. For example:
+	Input to addsnv.py (-v/--varfile) is a three column format plus an extra optional column for the desired variant allele fraction (VAF). Input coordinates are 1-based, meaning they will match between input to -v/--varfile, VCF, and samtools mpileup. The default VAF is specified via -m/--mutfrac. For example:
 \begin{verbatim}
 22 34166720 34166720 0.25
 22 33908770 33908770 0.15
@@ -162,7 +161,7 @@ Specific bases can also be specified using a fifth input column:
 \item -z/--haplosize : specifies size of haplotype block to consider when adding more than 1 proximal mutation. For instance, if two SNVs are spiked in 10bp apart and --haplosize is 10 or greater, the two SNVs will be on the same haplotype (i.e. share the same reads for reads covering both positions)
 \item -p/--procs : BAMSurgeon programs currently spawn a new process for each spikein, to speed things along the processes can be run concurrently with the number of simultaneous jobs set by this parameter.
 \item --picardjar : path to picard.jar provided by picard tools, this is required for the some aligner options.
-\item --mindepth : minimum depth at sites for mutations, sites with fewer reads in pileup column will be dropped. Default is 5 reads.
+\item --mindepth : minimum depth at sites for mutations, sites with fewer reads in pileup column will be dropped. Default is 10 reads.
 \item --maxdepth : sites with greater than this number of covering reads will be dropped. Default is 2000 reads. (May need to increase for targeted sequencing data)
 \item --minmutreads : minimum number of mutated reads per site. If this level of coverage cannot be obtained, mutations will be dropped.
 \item --avoidreads : addsnv and addindel can be passed a list of read names to avoid when making mutations. Any sites selected that overlap these reads will be dropped. This feature exists as a means to ensure mutations across multiple runs do not overlap.
@@ -231,7 +230,6 @@ optional arguments:
   --avoidreads AVOIDREADS
                         file of read names to avoid (mutations will be skipped
                         if overlap)
-  --nomut               dry run
   --det                 deterministic base changes: make transitions only
   --force               force mutation to happen regardless of nearby SNP or
                         low coverage
@@ -316,10 +314,6 @@ optional arguments:
   --inslib INSLIB       FASTA file containing library of possible insertions,
                         use INS RND instead of INS filename to pick one
   --delay DELAY         time delay between jobs (try to avoid thrashing disks)
-  --nomut               dry run
-  --noremap             dry run
-  --noref               do not perform reference based assembly
-  --recycle
   --aligner ALIGNER     supported aligners: backtrack,mem,novoalign
   --alignopts ALIGNOPTS
                         aligner-specific options as comma delimited list of
