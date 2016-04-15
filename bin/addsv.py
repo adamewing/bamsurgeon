@@ -471,6 +471,7 @@ def makemut(args, bedline, alignopts):
             ndups = 0   # number of tandem dups
             dsize = 0.0 # deletion size fraction
             dlen = 0
+            ins_motif = None
 
             if action == 'INS':
                 assert len(a) > 1 # insertion syntax: INS <file.fa> [optional TSDlen]
@@ -479,8 +480,12 @@ def makemut(args, bedline, alignopts):
                     assert re.search('^[ATGCatgc]*$',insseqfile) # make sure it's a sequence
                     insseq = insseqfile.upper()
                     insseqfile = None
-                if len(a) > 2:
+                if len(a) > 2: # field 5 for insertion is TSD Length
                     tsdlen = int(a[2])
+
+                if len(a) > 3: # field 5 for insertion is motif, format = 'NNNN/NNNN where / is cut site
+                    ins_motif = a[3]
+                    assert '^' in ins_motif, 'insertion motif specification requires cut site defined by ^'
 
             if action == 'DUP':
                 if len(a) > 1:
@@ -505,17 +510,24 @@ def makemut(args, bedline, alignopts):
             logfile.write(">" + chrom + ":" + str(refstart) + "-" + str(refend) + " BEFORE\n" + str(mutseq) + "\n")
 
             if action == 'INS':
+                inspoint = mutseq.length()/2
+                if ins_motif is not None:
+                    inspoint = mutseq.find_site(ins_motif, left_trim=int(args.maxlibsize), right_trim=int(args.maxlibsize))
+
                 if insseqfile: # seq in file
                     if insseqfile == 'RND':
                         assert args.inslib is not None # insertion library needs to exist
                         insseqfile = random.choice(args.inslib.keys())
                         print "INFO\t" + now() + "\t" + mutid + "\tchose sequence from insertion library: " + insseqfile
-                        mutseq.insertion(mutseq.length()/2,args.inslib[insseqfile],tsdlen)
+                        mutseq.insertion(inspoint, args.inslib[insseqfile], tsdlen)
+
                     else:
-                        mutseq.insertion(mutseq.length()/2,singleseqfa(insseqfile, mutid=mutid),tsdlen)
+                        mutseq.insertion(inspoint, singleseqfa(insseqfile, mutid=mutid), tsdlen)
+
                 else: # seq is input
-                    mutseq.insertion(mutseq.length()/2,insseq,tsdlen)
-                logfile.write("\t".join(('ins',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(mutseq.length()/2),str(insseqfile),str(tsdlen),str(svfrac))) + "\n")
+                    mutseq.insertion(inspoint, insseq, tsdlen)
+
+                logfile.write("\t".join(('ins',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(inspoint),str(insseqfile),str(tsdlen),str(svfrac))) + "\n")
 
             elif action == 'INV':
                 invstart = int(args.maxlibsize)
