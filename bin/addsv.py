@@ -299,7 +299,7 @@ def trim_contig(mutid, chrom, start, end, contig, reffile):
     if len(alignstats) < 6:
         sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\talignstats:" + str(alignstats) + "\n")
         sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tNo good alignment between mutated contig and original, aborting mutation!\n")
-        return None, None
+        return [None] * 9
     
     qrystart, qryend = map(int, alignstats[2:4])
     tgtstart, tgtend = map(int, alignstats[4:6])
@@ -437,6 +437,10 @@ def makemut(args, bedline, alignopts):
 
         # trim contig to get best ungapped aligned region to ref.
         maxcontig, refseq, alignstats, refstart, refend, qrystart, qryend, tgtstart, tgtend = trim_contig(mutid, chrom, start, end, maxcontig, reffile)
+
+        if maxcontig is None:
+            sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tbest contig did not have sufficent match to reference, aborting mutation.\n")
+            return None, None
     
         print "INFO\t" + now() + "\t" + mutid + "\tstart, end, tgtstart, tgtend, refstart, refend:", start, end, tgtstart, tgtend, refstart, refend
 
