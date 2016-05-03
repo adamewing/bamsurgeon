@@ -7,7 +7,17 @@ import sys
 from re import sub
 from collections import defaultdict as dd
 
-def split(inbamfn, keep_secondary=False):
+def split(inbamfn, keep_secondary=False, seed=None):
+
+    if seed is not None:
+        random.seed(seed)
+
+    else:
+        seed = int(random.random()*1000)
+        print "using seed: %d" % seed
+        random.seed(seed)
+
+
     assert inbamfn.endswith('.bam')
     outbam1fn = sub('.bam$', '.pick1.bam', inbamfn)
     outbam2fn = sub('.bam$', '.pick2.bam', inbamfn)
@@ -56,11 +66,12 @@ def split(inbamfn, keep_secondary=False):
     inbam.close()
 
 def main(args):
-    split(args.bam, keep_secondary=args.secondary)
+    split(args.bam, keep_secondary=args.secondary, seed=args.seed)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='split one bam into two')
     parser.add_argument('-b', '--bam', required=True, help='input BAM: must be sorted by readname (e.g. samtools sort -n)')
     parser.add_argument('--secondary', default=False, action='store_true', help='keep secondary alignments')
+    parser.add_argument('--seed', default=None, help='set PRNG seed')
     args = parser.parse_args()
     main(args)
