@@ -16,7 +16,7 @@ from uuid import uuid4
 #
 
 
-supported_aligners_bam   = ['backtrack', 'mem', 'novoalign', 'gsnap', 'bowtie2', 'tmap']
+supported_aligners_bam   = ['backtrack', 'mem', 'novoalign', 'gsnap', 'STAR', 'bowtie2', 'tmap']
 supported_aligners_fastq = ['backtrack', 'mem', 'novoalign']
 
 def checkoptions(name, options, picardjar, sv=False):
@@ -41,6 +41,10 @@ def checkoptions(name, options, picardjar, sv=False):
         if 'gsnaprefdir' not in options or 'gsnaprefname' not in options:
             raise ValueError("ERROR\t'--aligner gsnap' requires '--alignopts gsnaprefdir:GSNAP_reference_dir,gsnaprefname:GSNAP_ref_name\n")
 
+    if name == 'STAR':
+        if 'STARrefdir' not in options:
+            raise ValueError("ERROR\t'--aligner STAR' requires '--alignopts STARrefdir:/path/to/STAR_reference_dir\n")
+
     if name == 'bowtie2':
         if 'bowtie2ref' not in options:
             raise ValueError("ERROR\t'--aligner bowtie2' requires '--alignopts bowtie2ref:bowtie2_ref_basepath\n")
@@ -62,6 +66,9 @@ def remap_bam(name, bamfn, fastaref, options, mutid='null', threads=1, paired=Tr
 
     if name == 'gsnap':
         remap_gsnap_bam(bamfn, threads, fastaref, picardjar, options['gsnaprefdir'], options['gsnaprefname'], mutid=mutid, paired=paired)
+
+    if name == 'STAR':
+        remap_STAR_bam(bamfn, threads, fastaref, picardjar, options['STARrefdir'], mutid=mutid, paired=paired)
 
     if name == 'bowtie2':
         remap_bowtie2_bam(bamfn, threads, fastaref, picardjar, options['bowtie2ref'], mutid=mutid, paired=paired)
@@ -337,6 +344,81 @@ def remap_gsnap_bam(bamfn, threads, fastaref, picardjar, gsnaprefdir, gsnaprefna
         sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fastq[0] + "\n")
         os.remove(fastq[0])
 
+def remap_STAR_bam(bamfn, threads, fastaref, picardjar, STARrefdir, mutid='null', paired=True):
+    """ call gsnap and samtools to remap .bam
+    """
+    assert os.path.exists(picardjar)
+    assert os.path.exists(STARrefdir)
+    assert bamreadcount(bamfn) > 0 
+
+    sam_out  = bamfn + 'Aligned.out.sam'
+    sort_out = bamfn + '.realign.sorted.bam'
+
+    print "INFO\t" + now() + "\t" + mutid + "\tconverting " + bamfn + " to fastq\n"
+    fastq = bamtofastq(bamfn, picardjar, threads=threads, paired=paired, twofastq=True)
+
+    sam_cmd = []
+
+    #if paired:
+        #sam_cmd = ['gsnap', '-D', gsnaprefdir, '-d', gsnaprefname, '-t', str(threads), '--quality-protocol=sanger', 
+        #           '-M', '2', '-n', '10', '-B', '2', '-i', '1', '--pairmax-dna=1000', '--terminal-threshold=1000', 
+        #           '--gmap-mode=none', '--clip-overlap', '-A', 'sam', '-a', 'paired', fastq[0], fastq[1]]
+    #else:
+        #sam_cmd = ['gsnap', '-D', gsnaprefdir, '-d', gsnaprefname, '-t', str(threads), '--quality-protocol=sanger', 
+        #           '-M', '2', '-n', '10', '-B', '2', '-i', '1', '--terminal-threshold=1000', '--gmap-mode=none', 
+        #           '--clip-overlap', '-A', 'sam', fastq[0]]
+
+    sam_cmd = ['STAR', '--genomeDir', STARrefdir, '--outFileNamePrefix', bamfn, '--readFilesIn'] + fastq
+
+    assert len(sam_cmd) > 0
+
+    bam_cmd  = ['samtools', 'view', '-b', '-o', bamfn, sam_out]
+    sort_cmd = ['samtools', 'sort', '-@', str(threads), '-m', '10000000000', '-T', sort_out, '-o', sort_out, bamfn]
+    idx_cmd  = ['samtools', 'index', bamfn]
+
+    print "INFO\t" + now() + "\t" + mutid + "\taligning " + str(fastq) + " with STAR\n"
+    #with open(sam_out, 'w') as sam:
+    p = subprocess.call(sam_cmd)
+    #    for line in p.stdout:
+    #        sam.write(line)
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\twriting " + sam_out + " to BAM...\n")
+    subprocess.call(bam_cmd)
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tdeleting SAM: " + sam_out + "\n")
+    os.remove(sam_out)
+    os.remove(bamfn + "Log.final.out")
+    os.remove(bamfn + "Log.out")
+    os.remove(bamfn + "Log.progress.out")
+    os.remove(bamfn + "SJ.out.tab")
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tsorting output: " + ' '.join(sort_cmd) + "\n")
+    subprocess.call(sort_cmd)
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremove original bam:" + bamfn + "\n")
+    os.remove(bamfn)
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\trename sorted bam: " + sort_out + " to original name: " + bamfn + "\n")
+    move(sort_out, bamfn)
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tindexing: " + ' '.join(idx_cmd) + "\n")
+    subprocess.call(idx_cmd)
+
+    # check if BAM readcount looks sane
+    if paired:
+        if bamreadcount(bamfn) < fastqreadcount(fastq[0]) + fastqreadcount(fastq[1]): 
+            raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
+    else:
+        if bamreadcount(bamfn) < fastqreadcount(fastq[0]): 
+            raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
+
+    if paired:
+        for fq in fastq:
+            sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fq + "\n")
+            os.remove(fq)
+    else:
+        sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fastq[0] + "\n")
+        os.remove(fastq[0])
 
 def remap_bowtie2_bam(bamfn, threads, fastaref, picardjar, bowtie2ref, mutid='null', paired=True):
     """ call bowtie2 and samtools to remap .bam

@@ -30,6 +30,8 @@ def split(inbamfn, keep_secondary=False, seed=None):
 
     reads = dd(list) 
 
+    skip_secondary = 0
+
     for read in inbam.fetch(until_eof=True):
         if not read.is_secondary or args.secondary:
             if lastread is not None and read.qname == lastread.qname:
@@ -50,7 +52,7 @@ def split(inbamfn, keep_secondary=False, seed=None):
                 reads[read.qname].append(read)
             lastread = read
         else:
-            print "skipped secondary alignment: ", read.qname
+            skip_secondary += 1
 
     ob = None
     if random.random() > 0.5:
@@ -64,6 +66,9 @@ def split(inbamfn, keep_secondary=False, seed=None):
     outbam1.close()
     outbam2.close()
     inbam.close()
+
+    if not args.secondary:
+        print "skipped %d secondary reads" % skip_secondary
 
 def main(args):
     split(args.bam, keep_secondary=args.secondary, seed=args.seed)
