@@ -107,7 +107,7 @@ def ignore_interval(mutline, ref):
 
     assert refstart < refend
 
-    printvcf(chrom, refstart, refend, True, 'IGN', refend-refstart, ref, '.')
+    printvcf(chrom, refstart, refend, True, 'IGN', refend-refstart, ref, '.', '0.0')
     if m[0] == 'trn': printvcf(m[6], int(m[7]), int(m[8]), True, 'IGN', int(m[8])-int(m[7]), ref)
 
 
