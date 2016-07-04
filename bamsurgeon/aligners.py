@@ -16,7 +16,7 @@ from uuid import uuid4
 #
 
 
-supported_aligners_bam   = ['backtrack', 'mem', 'novoalign', 'gsnap', 'STAR', 'bowtie2', 'tmap']
+supported_aligners_bam   = ['backtrack', 'mem', 'novoalign', 'gsnap', 'STAR', 'bowtie2', 'tmap','bwakit']
 supported_aligners_fastq = ['backtrack', 'mem', 'novoalign']
 
 def checkoptions(name, options, picardjar, sv=False):
@@ -60,6 +60,9 @@ def remap_bam(name, bamfn, fastaref, options, mutid='null', threads=1, paired=Tr
 
     if name == 'mem':
         remap_bwamem_bam(bamfn, threads, fastaref, picardjar, mutid=mutid, paired=paired)
+
+    if name == 'bwakit':
+        remap_bwakit_bam(bamfn, threads, fastaref, picardjar, mutid=mutid, paired=paired)
 
     if name == 'novoalign':
         remap_novoalign_bam(bamfn, threads, fastaref, picardjar, options['novoref'], mutid=mutid, paired=paired)
@@ -203,6 +206,72 @@ def remap_bwamem_bam(bamfn, threads, fastaref, picardjar, mutid='null', paired=T
 
     sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fastq + "\n")
     if deltmp: os.remove(fastq)
+
+
+def remap_bwakit_bam(bamfn, threads, fastaref, picardjar, mutid='null', paired=True, deltmp=True):
+    """ call bwa kit and samtools to remap .bam
+    """
+    assert os.path.exists(picardjar)
+    assert bamreadcount(bamfn) > 0
+    if paired:
+        assert bamreadcount(bamfn) > 1 
+        print 'paird'
+
+    bam_out  = sub('.bam$','',bamfn) + '.aln.bam'
+    sort_out = bamfn + '.realign.sorted.bam'
+    out_prefix = sub('.bam$','',bamfn)
+
+    print "INFO\t" + now() + "\t" + mutid + "\tconverting " + bamfn + " to fastq\n"
+    kit_cmd1 = []
+    fastq = bamtofastq(bamfn, picardjar, threads=threads, paired=paired, twofastq=True)
+    if paired:
+        kit_cmd1  = ['run-bwamem', '-t', '4', '-o', out_prefix, '-H', fastaref, fastq[0], fastq[1]]
+    else:
+        kit_cmd1  = ['run-bwamem', '-t', '4', '-o', out_prefix, '-H', fastaref, fastq[0]]
+
+    print kit_cmd1
+    assert len(kit_cmd1) > 0
+    print "INFO\t" + now() + "\t" + mutid + "\taligning " + ', '.join(fastq)  + " with bwa kit\n"
+    kit_cmd2 = ['sh']
+    #robust way : open two processes and pipe them together
+    process_runkit = subprocess.Popen(kit_cmd1, stdout=subprocess.PIPE, shell=False)
+    process_sh = subprocess.Popen(kit_cmd2, stdin=process_runkit.stdout, stdout=subprocess.PIPE, shell=False)
+    process_runkit.stdout.close()
+    process_sh.communicate()[0]
+
+    sort_cmd = ['samtools', 'sort', '-@', str(threads), '-m', '10000000000', '-T', sort_out, '-o', sort_out, bamfn]
+    idx_cmd  = ['samtools', 'index', bamfn]
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\trename aligned bam: " + bam_out + " to original name: " + bamfn + "\n")
+    move(bam_out, bamfn)
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tsorting output: " + ' '.join(sort_cmd) + "\n")
+    subprocess.call(sort_cmd)
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremove original bam:" + bamfn + "\n")
+    if deltmp: os.remove(bamfn)
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\trename sorted bam: " + sort_out + " to original name: " + bamfn + "\n")
+    move(sort_out, bamfn)
+
+    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tindexing: " + ' '.join(idx_cmd) + "\n")
+    subprocess.call(idx_cmd)
+
+    # check if BAM readcount looks sane
+    if paired:
+        if bamreadcount(bamfn) < fastqreadcount(fastq[0]) + fastqreadcount(fastq[1]): 
+            raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
+    else:
+        if bamreadcount(bamfn) < fastqreadcount(fastq[0]): 
+            raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
+
+    if paired:
+        for fq in fastq:
+            sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fq + "\n")
+            os.remove(fq)
+    else:
+        sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fastq[0] + "\n")
+        os.remove(fastq[0])
 
 
 def remap_novoalign_bam(bamfn, threads, fastaref, picardjar, novoref, mutid='null', paired=True):
