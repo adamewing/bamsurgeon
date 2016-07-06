@@ -77,7 +77,7 @@ def compare_ref(targetbam, donorbam):
     return True
     
 
-def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=None, allreads=False, keepqual=False, progress=False, keepsecondary=False, seed=None):
+def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=None, allreads=False, keepqual=False, progress=False, keepsecondary=False, keepsupplementary=False, seed=None):
     ''' targetbam, donorbam, and outputbam are pysam.Samfile objects
         outputbam must be writeable and use targetbam as template
         read names in excludefile will not appear in final output
@@ -100,11 +100,12 @@ def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=No
     nr = 0
     rdict = {}
     secondary = [] # track secondary alignments, if specified
+    supplementary = [] # track supplementary alignments, if specified    
     excount = 0 # number of excluded reads
     nullcount = 0 # number of null reads
 
     for read in donorbam.fetch(until_eof=True):
-        if read.seq and not read.is_secondary: # sanity check - don't include null reads, secondary alignments, supplementary alignments.
+        if read.seq and not read.is_secondary and not read.is_supplementary: # sanity check - don't include null reads, secondary alignments, supplementary alignments.
             if read.qname not in exclude:
                 pairname = 'F' # read is first in pair
                 if read.is_read2:
@@ -117,15 +118,17 @@ def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=No
                     read.qual = qual
                 extqname = ','.join((read.qname,pairname))
                 rdict[extqname] = read
-                nr += 1
+                nr += 1 #paired reads count
             else: # excluded
                 excount += 1
         elif (read.is_secondary and keepsecondary):
             secondary.append(read)
+        elif (read.is_supplementary and keepsupplementary):
+            supplementary.append(read)
         else: # no seq!
             nullcount += 1
 
-    sys.stdout.write("loaded " + str(nr) + " reads, (" + str(excount) + " excluded, " + str(nullcount) + " null or secondary --> ignored)\n")
+    sys.stdout.write("loaded " + str(nr) + " reads, (" + str(excount) + " excluded, " + str(nullcount) + " null or secondary or supplementary--> ignored)\n")
 
     excount = 0
     recount = 0 # number of replaced reads
@@ -174,8 +177,12 @@ def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=No
     if keepsecondary:
         for secread in secondary:
             outputbam.write(secread)
+    if keepsupplementary:
+        for supread in supplementary:
+            outputbam.write(supread)
 
     sys.stdout.write("kept " + str(len(secondary)) + " secondary reads.\n")
+    sys.stdout.write("kept " + str(len(supplementary)) + " supplementary reads.\n")
 
     nadded = 0
     # dump the unused reads from the donor if requested with --all
@@ -193,7 +200,7 @@ def main(args):
     donorbam  = pysam.Samfile(args.donorbam, 'rb')
     outputbam = pysam.Samfile(args.outputbam, 'wb', template=targetbam)
 
-    replaceReads(targetbam, donorbam, outputbam, args.namechange, args.exclfile, args.all, args.keepqual, args.progress, args.keepsecondary)
+    replaceReads(targetbam, donorbam, outputbam, args.namechange, args.exclfile, args.all, args.keepqual, args.progress, args.keepsecondary,args.keepsupplementary)
 
     targetbam.close()
     donorbam.close()
@@ -211,5 +218,6 @@ if __name__=='__main__':
     parser.add_argument('--keepqual', action='store_true', default=False, help="keep original quality scores, replace read and mapping only")
     parser.add_argument('--progress', action='store_true', default=False, help="output progress every 10M reads")
     parser.add_argument('--keepsecondary', action='store_true', default=False, help='keep secondary reads in final BAM')
+    parser.add_argument('--keepsupplementary', action='store_true', default=False, help='keep supplementary reads in final BAM')    
     args = parser.parse_args()
     main(args)
