@@ -176,9 +176,11 @@ def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=No
 
     if keepsecondary:
         for secread in secondary:
+            secread = cleanup(secread,read,RG)
             outputbam.write(secread)
     if keepsupplementary:
         for supread in supplementary:
+            supread = cleanup(supread,read,RG)            
             outputbam.write(supread)
 
     sys.stdout.write("kept " + str(len(secondary)) + " secondary reads.\n")
