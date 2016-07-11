@@ -465,11 +465,13 @@ def remap_STAR_bam(bamfn, threads, fastaref, picardjar, STARrefdir, mutid='null'
     subprocess.call(idx_cmd)
 
     # check if BAM readcount looks sane
+    # STAR may not report unmapped reads in BAM
+
     if paired:
-        if bamreadcount(bamfn) < fastqreadcount(fastq[0]) + fastqreadcount(fastq[1]): 
+        if bamreadcount(bamfn) < .5*(fastqreadcount(fastq[0]) + fastqreadcount(fastq[1])): 
             raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
     else:
-        if bamreadcount(bamfn) < fastqreadcount(fastq[0]): 
+        if bamreadcount(bamfn) < .5*fastqreadcount(fastq[0]): 
             raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
 
     if paired:
