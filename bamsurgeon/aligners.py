@@ -428,16 +428,7 @@ def remap_STAR_bam(bamfn, threads, fastaref, picardjar, STARrefdir, mutid='null'
 
     sam_cmd = []
 
-    #if paired:
-        #sam_cmd = ['gsnap', '-D', gsnaprefdir, '-d', gsnaprefname, '-t', str(threads), '--quality-protocol=sanger', 
-        #           '-M', '2', '-n', '10', '-B', '2', '-i', '1', '--pairmax-dna=1000', '--terminal-threshold=1000', 
-        #           '--gmap-mode=none', '--clip-overlap', '-A', 'sam', '-a', 'paired', fastq[0], fastq[1]]
-    #else:
-        #sam_cmd = ['gsnap', '-D', gsnaprefdir, '-d', gsnaprefname, '-t', str(threads), '--quality-protocol=sanger', 
-        #           '-M', '2', '-n', '10', '-B', '2', '-i', '1', '--terminal-threshold=1000', '--gmap-mode=none', 
-        #           '--clip-overlap', '-A', 'sam', fastq[0]]
-
-    sam_cmd = ['STAR', '--genomeDir', STARrefdir, '--outFileNamePrefix', bamfn, '--readFilesIn'] + fastq
+    sam_cmd = ['STAR', '--genomeLoad', 'LoadAndKeep', '--genomeDir', STARrefdir, '--outFileNamePrefix', bamfn, '--readFilesIn'] + fastq
 
     assert len(sam_cmd) > 0
 
