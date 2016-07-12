@@ -437,10 +437,8 @@ def remap_STAR_bam(bamfn, threads, fastaref, picardjar, STARrefdir, mutid='null'
     idx_cmd  = ['samtools', 'index', bamfn]
 
     print "INFO\t" + now() + "\t" + mutid + "\taligning " + str(fastq) + " with STAR\n"
-    #with open(sam_out, 'w') as sam:
+
     p = subprocess.call(sam_cmd)
-    #    for line in p.stdout:
-    #        sam.write(line)
 
     sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\twriting " + sam_out + " to BAM...\n")
     subprocess.call(bam_cmd)
