@@ -74,7 +74,7 @@ def randomseq(len):
 
 def randomsv():
     ''' random SV information '''
-    i = random.randint(0,3)
+    i = random.randint(0,4)
     if i == 0: # DEL
         dfrac = random.uniform(0.5,1)
         return 'DEL ' + str(dfrac)
@@ -86,6 +86,8 @@ def randomsv():
     if i == 3: # DUP
         ndups = random.randint(1,4)
         return 'DUP ' + str(ndups)
+    if i == 4: # TRN
+        return 'TRN'
 
 
 def betafunc(a,b):
@@ -146,10 +148,20 @@ def run_sv(g, args):
     with open(args.cnvfile, 'w') as cnv:
         for _ in range(int(args.numpicks)):
             mutlen = int(lenscale(len()))
+
             rchrom, rstart, rend = g.pick(mutlen, avoidN=args.avoidN, usebed=usebed)
+
             info = [rchrom, rstart, rend, randomsv()]
+
+            if info[-1] == 'TRN':
+                tsd_partner = list(g.pick(mutlen, avoidN=args.avoidN, usebed=usebed))
+                info = info[:3] + ['TRN'] + tsd_partner
+                partner_cnv = tsd_partner + [1.0/(vafscale(vaf()))]
+
             cnvinfo = [rchrom, rstart, rend, 1.0/(vafscale(vaf()))]
+
             print '\t'.join(map(str, info))
+
             cnv.write('\t'.join(map(str, cnvinfo)) + '\n')
 
 def main(args):
