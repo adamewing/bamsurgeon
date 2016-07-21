@@ -4,6 +4,7 @@ import sys
 import pysam
 import argparse
 import random
+from collections import defaultdict
 from string import maketrans
 
 def rc(dna):
@@ -97,15 +98,16 @@ def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=No
 
     # load reads from donorbam into dict 
     sys.stdout.write("loading donor reads into dictionary...\n")
-    nr = 0
+
+    #rdict = defaultdict(list)
     rdict = {}
-    secondary = [] # track secondary alignments, if specified
-    supplementary = [] # track supplementary alignments, if specified    
+    secondary = defaultdict(list) # track secondary alignments, if specified
+    supplementary = defaultdict(list) # track supplementary alignments, if specified    
     excount = 0 # number of excluded reads
     nullcount = 0 # number of null reads
-
+    nr = 0
     for read in donorbam.fetch(until_eof=True):
-        if read.seq and not read.is_secondary and not read.is_supplementary: # sanity check - don't include null reads, secondary alignments, supplementary alignments.
+        if read.seq is not None:
             if read.qname not in exclude:
                 pairname = 'F' # read is first in pair
                 if read.is_read2:
@@ -117,30 +119,32 @@ def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=No
                     read.qname = nameprefix + read.qname # must set name _before_ setting quality (see pysam docs)
                     read.qual = qual
                 extqname = ','.join((read.qname,pairname))
-                rdict[extqname] = read
-                nr += 1 #paired reads count
-            else: # excluded
+                if not read.is_secondary and not read.is_supplementary:
+                    rdict[extqname] = read
+                    nr += 1
+                elif read.is_secondary and keepsecondary:
+                    secondary[extqname].append(read)
+                elif read.is_supplementary and keepsupplementary:
+                    supplementary[extqname].append(read)
+            else: # no seq!
                 excount += 1
-        elif (read.is_secondary and keepsecondary):
-            secondary.append(read)
-        elif (read.is_supplementary and keepsupplementary):
-            supplementary.append(read)
-        else: # no seq!
+        else:
             nullcount += 1
-
+    print 'secondary reads count:'+ str(sum([len(v) for k,v in secondary.iteritems()]))
+    print 'supplementary reads count:'+ str(sum([len(v) for k,v in supplementary.iteritems()]))
     sys.stdout.write("loaded " + str(nr) + " reads, (" + str(excount) + " excluded, " + str(nullcount) + " null or secondary or supplementary--> ignored)\n")
-
     excount = 0
     recount = 0 # number of replaced reads
     used = {}
     prog = 0
+
     for read in targetbam.fetch(until_eof=True):
 
         prog += 1
         if progress and prog % 10000000 == 0:
             sys.stdout.write("processed " + str(prog) + " reads.\n")
 
-        if not read.is_secondary and read.qname not in exclude and bin(read.flag & 2048) != bin(2048):
+        if read.qname not in exclude:
             pairname = 'F' # read is first in pair
             if read.is_read2:
                 pairname = 'S' # read is second in pair
@@ -152,7 +156,8 @@ def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=No
                 read.qual = qual
 
             extqname = ','.join((read.qname,pairname))
-            if extqname in rdict: # replace read
+            newReads = None
+            if extqname in rdict:
                 if keepqual:
                     try:
                         rdict[extqname].qual = read.qual
@@ -161,30 +166,28 @@ def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=No
                         sys.stdout.write("donor:  " + str(rdict[extqname]) + "\n")
                         sys.stdout.write("target: " + str(read) + "\n")
                         sys.exit(1)
-
-                rdict[extqname] = cleanup(rdict[extqname],read,RG)
-                outputbam.write(rdict[extqname])  # write read from donor .bam
+                newReads = [rdict[extqname]]
                 used[extqname] = True
                 recount += 1
-            else:
-                read = cleanup(read,None,RG)
-                outputbam.write(read) # write read from target .bam
+            if extqname in secondary and keepsecondary:
+                    newReads.extend(secondary[extqname])
+                    used[extqname] = True
+                    recount += len(secondary[extqname])
+            if extqname in supplementary and keepsupplementary:
+                    newReads.extend(supplementary[extqname])
+                    used[extqname] = True
+                    recount += len(supplementary[extqname])
+            elif newReads is None:
+                newReads = [read]
+            assert(newReads != None)
+            for newRead in newReads:
+                newRead = cleanup(newRead,read,RG)
+                outputbam.write(newRead)
         else:
             excount += 1
-
     sys.stdout.write("replaced " + str(recount) + " reads (" + str(excount) + " excluded )\n")
-
-    if keepsecondary:
-        for secread in secondary:
-            secread = cleanup(secread,read,RG)
-            outputbam.write(secread)
-    if keepsupplementary:
-        for supread in supplementary:
-            supread = cleanup(supread,read,RG)            
-            outputbam.write(supread)
-
-    sys.stdout.write("kept " + str(len(secondary)) + " secondary reads.\n")
-    sys.stdout.write("kept " + str(len(supplementary)) + " supplementary reads.\n")
+    sys.stdout.write("kept " + str(sum([len(v) for k,v in secondary.iteritems()])) + " secondary reads.\n")
+    sys.stdout.write("kept " + str(sum([len(v) for k,v in supplementary.iteritems()])) + " supplementary reads.\n") 
 
     nadded = 0
     # dump the unused reads from the donor if requested with --all
@@ -208,7 +211,6 @@ def main(args):
     donorbam.close()
     outputbam.close()
 
-
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description='replaces aligned reads in bamfile1 with aligned reads from bamfile2')
     parser.add_argument('-b', '--bam', dest='targetbam', required=True, help='original .bam')
@@ -217,7 +219,7 @@ if __name__=='__main__':
     parser.add_argument('-n', '--namechange', dest='namechange', default=None, help="change all read names by prepending string (passed as -n [string])")
     parser.add_argument('-x', '--exclude', dest='exclfile', default=None, help="file containing a list of read names to ignore (exclude from output)")
     parser.add_argument('--all', action='store_true', default=False, help="append reads that don't match target .bam")
-    parser.add_argument('--keepqual', action='store_true', default=False, help="keep original quality scores, replace read and mapping only")
+    parser.add_argument('--keepqual', action='store_true', default=False, help="keep original quality scores, replace read and mapping only for primary reads")
     parser.add_argument('--progress', action='store_true', default=False, help="output progress every 10M reads")
     parser.add_argument('--keepsecondary', action='store_true', default=False, help='keep secondary reads in final BAM')
     parser.add_argument('--keepsupplementary', action='store_true', default=False, help='keep supplementary reads in final BAM')    
