@@ -130,6 +130,7 @@ def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=No
                 excount += 1
         else:
             nullcount += 1
+
     print 'secondary reads count:'+ str(sum([len(v) for k,v in secondary.iteritems()]))
     print 'supplementary reads count:'+ str(sum([len(v) for k,v in supplementary.iteritems()]))
     sys.stdout.write("loaded " + str(nr) + " reads, (" + str(excount) + " excluded, " + str(nullcount) + " null or secondary or supplementary--> ignored)\n")
@@ -155,8 +156,10 @@ def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=No
                 read.qname = nameprefix + read.qname
                 read.qual = qual
 
-            extqname = ','.join((read.qname,pairname))
-            newReads = None
+            extqname = ','.join((read.qname,pairname))            
+            #check if this read has been processed already. If so, skip to the next read
+            if used.get(extqname): continue
+            newReads = []
             if extqname in rdict:
                 if keepqual:
                     try:
@@ -177,9 +180,10 @@ def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=No
                     newReads.extend(supplementary[extqname])
                     used[extqname] = True
                     recount += len(supplementary[extqname])
-            elif newReads is None:
+            #non of the above, then write the original read back
+            elif len(newReads) == 0:
                 newReads = [read]
-            assert(newReads != None)
+            assert(len(newReads) != 0)
             for newRead in newReads:
                 newRead = cleanup(newRead,read,RG)
                 outputbam.write(newRead)
@@ -198,7 +202,6 @@ def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=No
                 outputbam.write(rdict[extqname])
                 nadded += 1
         sys.stdout.write("added " + str(nadded) + " reads due to --all\n")
-
 
 def main(args):
     targetbam = pysam.Samfile(args.targetbam, 'rb')
