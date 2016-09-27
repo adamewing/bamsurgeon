@@ -116,18 +116,22 @@ def main(args):
 
     ref = pysam.Fastafile(args.ref)
 
-    with open(args.log, 'r') as log:
-        for line in log:
-            for mutype in ('ins', 'del', 'inv', 'dup', 'trn'):
-                if line.startswith(mutype):
-                    precise_interval(line.strip(), ref)
-                    if args.mask:
-                        ignore_interval(line.strip(), ref)
+    logdir_files = os.listdir(args.logdir)
+
+    for filename in logdir_files:
+        if filename.endswith('.log'):
+            with open(args.logdir + '/' + filename, 'r') as log:
+                for line in log:
+                    for mutype in ('ins', 'del', 'inv', 'dup', 'trn'):
+                        if line.startswith(mutype):
+                            precise_interval(line.strip(), ref)
+                            if args.mask:
+                                ignore_interval(line.strip(), ref)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="make VCF 'truth' file given log file (hint: concatenate them) from addsv.py")
     parser.add_argument('-r', '--ref', dest='ref', required=True, help="reference indexed with samtools faidx")
-    parser.add_argument('-l', '--log', dest='log', required=True, help="log file from addsv.py")
+    parser.add_argument('-l', '--logdir', dest='logdir', required=True, help="log directory from addsv.py")
     parser.add_argument('--mask', action="store_true", default=False, help="output contig intervals, used to mask accidental SNVs if combining mutation types in one BAM")
     args = parser.parse_args()
     main(args)
