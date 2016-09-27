@@ -94,8 +94,6 @@ def precise_interval(mutline, ref):
         bnd1 = refstart + contigstart
         bnd2 = refstart + contigend
 
-    assert bnd1 <= bnd2
-
     if m[0] != 'trn': printvcf(chrom, bnd1, bnd2, precise, m[0], bnd2-bnd1, ref, id, svfrac)
 
 
