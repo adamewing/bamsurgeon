@@ -32,8 +32,8 @@ def print_header():
     #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tSPIKEIN""")
 
 def printvcf(chrom, bnd1, bnd2, precise, type, svlen, ref, id, svfrac):
-    base1 = ref.fetch(chrom, bnd1, bnd1+1) 
-    base2 = ref.fetch(chrom, bnd2, bnd2+1)
+    base1 = ref.fetch(chrom, bnd1-1, bnd1) 
+    base2 = ref.fetch(chrom, bnd2-1, bnd2)
 
     alt = '<' + type.upper() + '>'
 
