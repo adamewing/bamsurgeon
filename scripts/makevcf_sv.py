@@ -81,9 +81,6 @@ def precise_interval(mutline, ref):
         base1 = ref.fetch(chr1, bnd1-1, bnd1) 
         base2 = ref.fetch(chr2, bnd2-1, bnd2)
 
-        assert base1
-        assert base2, "%s:%d-%d" % (chr2, bnd2-1, bnd2)
-
         alt1 = '%s[%s:%d[' % (base1, chr2, bnd2) 
         alt2 = ']%s:%d]%s' % (chr1, bnd1, base2) 
 
