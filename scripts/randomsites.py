@@ -110,7 +110,7 @@ def run_snv(g, args):
 
     for _ in range(int(args.numpicks)):
         rchrom, rstart, rend = g.pick(0, avoidN=args.avoidN, usebed=usebed)
-        info = [rchrom, rstart, rend, vafscale(vaf())]
+        info = [rchrom, rstart, rend, vafscale(vaf()), randomseq(1)]
         print '\t'.join(map(str, info))
 
 
