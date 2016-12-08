@@ -406,6 +406,7 @@ def makemut(args, bedline, alignopts):
 
         if len(contigs) == 0:
             sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tgenerated no contigs, skipping site.\n")
+            return None, None
 
         trn_contigs = None
         if is_transloc:
