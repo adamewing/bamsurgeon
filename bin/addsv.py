@@ -404,6 +404,9 @@ def makemut(args, bedline, alignopts):
 
         contigs = ar.asm(chrom, start, end, args.bamFileName, reffile, int(args.kmersize), args.tmpdir, mutid=mutid, debug=args.debug)
 
+        if len(contigs) == 0:
+            sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tgenerated no contigs, skipping site.\n")
+
         trn_contigs = None
         if is_transloc:
             trn_contigs = ar.asm(trn_chrom, trn_start, trn_end, args.bamFileName, reffile, int(args.kmersize), args.tmpdir, mutid=mutid, debug=args.debug)
