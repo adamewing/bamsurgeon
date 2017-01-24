@@ -345,7 +345,7 @@ def makemut(args, bedline, alignopts):
         chrom  = c[0]
         start  = int(c[1])
         end    = int(c[2])
-        araw   = c[3:len(c)] # INV, DEL, INS seqfile.fa TSDlength, DUP
+        araw   = c[3:] # INV, DEL, INS,  DUP, TRN
  
         # translocation specific
         trn_chrom = None
@@ -355,6 +355,10 @@ def makemut(args, bedline, alignopts):
         is_transloc = c[3] == 'TRN'
 
         if is_transloc:
+            araw = [c[3]]
+            if len(c) > 7:
+                araw += c[7:]
+
             start -= 3000
             end   += 3000
             if start < 0: start = 0
@@ -366,16 +370,18 @@ def makemut(args, bedline, alignopts):
 
         actions = map(lambda x: x.strip(),' '.join(araw).split(','))
 
-        svfrac = float(args.svfrac) # default, can be overridden by cnv file
+        svfrac = float(args.svfrac) # default, can be overridden by cnv file or per-variant
+
+        cn = 1.0
 
         if cnv: # CNV file is present
             if chrom in cnv.contigs:
                 for cnregion in cnv.fetch(chrom,start,end):
                     cn = float(cnregion.strip().split()[3]) # expect chrom,start,end,CN
                     sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\t" + ' '.join(("copy number in sv region:",chrom,str(start),str(end),"=",str(cn))) + "\n")
-                    svfrac = 1.0/float(cn)
-                    assert svfrac <= 1.0
-                    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tadjusted MAF: " + str(svfrac) + "\n")
+                    svfrac = svfrac/float(cn)
+                    assert svfrac <= 1.0, 'copy number from %s must be at least 1: %s' % (args.cnvfile, snregion.stri[()])
+                    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tadjusted default MAF: " + str(svfrac) + "\n")
 
         print "INFO\t" + now() + "\t" + mutid + "\tinterval:", c
         print "INFO\t" + now() + "\t" + mutid + "\tlength:", end-start
@@ -403,6 +409,10 @@ def makemut(args, bedline, alignopts):
             return None, None
 
         contigs = ar.asm(chrom, start, end, args.bamFileName, reffile, int(args.kmersize), args.tmpdir, mutid=mutid, debug=args.debug)
+
+        if len(contigs) == 0:
+            sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tgenerated no contigs, skipping site.\n")
+            return None, None
 
         trn_contigs = None
         if is_transloc:
@@ -481,21 +491,27 @@ def makemut(args, bedline, alignopts):
                 assert len(a) > 1 # insertion syntax: INS <file.fa> [optional TSDlen]
                 insseqfile = a[1]
                 if not (os.path.exists(insseqfile) or insseqfile == 'RND'): # not a file... is it a sequence? (support indel ins.)
-                    assert re.search('^[ATGCatgc]*$',insseqfile) # make sure it's a sequence
+                    assert re.search('^[ATGCatgc]*$',insseqfile), "cannot determine SV type: %s" % insseqfile # make sure it's a sequence
                     insseq = insseqfile.upper()
                     insseqfile = None
                 if len(a) > 2: # field 5 for insertion is TSD Length
                     tsdlen = int(a[2])
 
-                if len(a) > 3: # field 5 for insertion is motif, format = 'NNNN/NNNN where / is cut site
+                if len(a) > 3: # field 6 for insertion is motif, format = 'NNNN^NNNN where ^ is cut site
                     ins_motif = a[3]
                     assert '^' in ins_motif, 'insertion motif specification requires cut site defined by ^'
+
+                if len(a) > 4: # field 7 is VAF
+                    svfrac = float(a[4])/cn
 
             if action == 'DUP':
                 if len(a) > 1:
                     ndups = int(a[1])
                 else:
                     ndups = 1
+
+                if len(a) > 2: # VAF
+                    svfrac = float(a[2])/cn
 
             if action == 'DEL':
                 if len(a) > 1:
@@ -507,9 +523,19 @@ def makemut(args, bedline, alignopts):
                 else:
                     dsize = 1.0
 
-            if action == 'TRN':
-                pass
+                if len(a) > 2: # VAF
+                    svfrac = float(a[2])/cn
 
+            if action == 'TRN':
+                if len(a) > 1:
+                    svfrac = float(a[1])/cn
+
+            if action == 'INV':
+                if len(a) > 1:
+                    svfrac = float(a[1])/cn
+
+
+            print "INFO\t" + now() + "\t" + mutid + "\tfinal VAF accounting for copy number %f: %f" % (cn, svfrac)
 
             logfile.write(">" + chrom + ":" + str(refstart) + "-" + str(refend) + " BEFORE\n" + str(mutseq) + "\n")
 
@@ -574,6 +600,9 @@ def makemut(args, bedline, alignopts):
         pemean, pesd = float(args.ismean), float(args.issd) 
         print "INFO\t" + now() + "\t" + mutid + "\tset paired end mean distance: " + str(args.ismean)
         print "INFO\t" + now() + "\t" + mutid + "\tset paired end distance stddev: " + str(args.issd)
+
+
+
 
         # simulate reads
         (fq1, fq2) = runwgsim(maxcontig, mutseq.seq, svfrac, actions, exclude, pemean, pesd, args.tmpdir, mutid=mutid, seed=args.seed, trn_contig=trn_maxcontig)
@@ -744,7 +773,7 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='adds SVs to reads, outputs modified reads as .bam along with mates')
     parser.add_argument('-v', '--varfile', dest='varFileName', required=True,
-                        help='whitespace-delimited target regions to try and add a SV: chrom,start,stop,action,seqfile (if insertion),TSDlength (if insertion)')
+                        help='whitespace-delimited target regions for SV spike-in, see manual for syntax')
     parser.add_argument('-f', '--bamfile', dest='bamFileName', required=True,
                         help='sam/bam file from which to obtain reads')
     parser.add_argument('-r', '--reference', dest='refFasta', required=True,

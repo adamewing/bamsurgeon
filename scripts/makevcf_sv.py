@@ -78,8 +78,8 @@ def precise_interval(mutline, ref):
         id1 = str(uuid4()).split('-')[0]
         id2 = str(uuid4()).split('-')[0]
 
-        base1 = ref.fetch(chrom, bnd1-1, bnd1) 
-        base2 = ref.fetch(chrom, bnd2-1, bnd2)
+        base1 = ref.fetch(chr1, bnd1-1, bnd1) 
+        base2 = ref.fetch(chr2, bnd2-1, bnd2)
 
         alt1 = '%s[%s:%d[' % (base1, chr2, bnd2) 
         alt2 = ']%s:%d]%s' % (chr1, bnd1, base2) 
