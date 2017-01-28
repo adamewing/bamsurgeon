@@ -183,7 +183,11 @@ def mutate(args, log, bamfile, bammate, chrom, mutstart, mutend, mutpos_list, av
 
                             mate = None
                             if not args.single:
-                                mate = find_mate(pread.alignment, bammate)
+                                try:
+                                    mate = find_mate(pread.alignment, bammate)
+                                except ValueError, e:
+                                    raise ValueError('cannot find mate reference chrom for read %s, is this a single-ended BAM?' % pread.alignment.qname)
+
                                 if mate is None:
                                     print "WARN\t" + now() + "\t" + mutid + "\twarning: no mate for", pread.alignment.qname
                                     if args.requirepaired:
