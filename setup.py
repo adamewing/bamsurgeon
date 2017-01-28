@@ -4,6 +4,14 @@ import sys
 import subprocess
 
 
+def check_java():
+    p = subprocess.Popen(['java', '-version'], stderr=subprocess.PIPE)
+    for line in p.stderr:
+        if line.startswith('java version'):
+            return True
+
+    return False
+
 def check_bwa():
     p = subprocess.Popen(['bwa'], stderr=subprocess.PIPE)
     for line in p.stderr:

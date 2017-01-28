@@ -55,6 +55,11 @@ def remap_bam(name, bamfn, fastaref, options, mutid='null', threads=1, paired=Tr
 
     checkoptions(name, options, picardjar)
 
+    assert os.path.exists(bamfn), 'cannot locate bam: %s' % bamfn
+
+    if picardjar is not None:
+        assert os.path.exists(picardjar), 'cannot locate picard.jar: %s' % picardjar
+
     if name == 'backtrack':
         remap_backtrack_bam(bamfn, threads, fastaref, mutid=mutid, paired=paired)
 
