@@ -93,7 +93,7 @@ def bamtofastq(bam, picardjar, threads=1, paired=True, twofastq=False):
     outfq = None
     outfq_pair = None
 
-    cmd = ['java', '-XX:ParallelGCThreads=' + str(threads), '-Xmx4g', '-jar', picardjar, 'SamToFastq', 'VALIDATION_STRINGENCY=SILENT', 'INPUT=' + bam]
+    cmd = ['java', '-XX:ParallelGCThreads=' + str(threads), '-jar', picardjar, 'SamToFastq', 'VALIDATION_STRINGENCY=SILENT', 'INPUT=' + bam]
     cmd.append('INCLUDE_NON_PRIMARY_ALIGNMENTS=false') # in case the default ever changes
     
     if paired:
