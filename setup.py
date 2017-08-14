@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 import sys
 import subprocess
-
+import re
 
 def check_java():
     p = subprocess.Popen(['java', '-version'], stderr=subprocess.PIPE)
@@ -18,6 +18,8 @@ def check_bwa():
         if line.startswith('Version:'):
             major, minor, sub = line.strip().split()[1].split('.')
             sub = sub.split('-')[0]
+            digit_pattern = re.compile(r'\D')
+            sub = filter(None, digit_pattern.split(sub))[0]
             if int(major) >= 0 and int(minor) >= 7 and int(sub) >= 12:
                 return True
     return False
