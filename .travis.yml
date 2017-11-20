@@ -1,4 +1,5 @@
 language: python
+dist: precise
 python:
     - 2.7.8
     - 2.7
@@ -19,8 +20,6 @@ before_install:
     - sudo make -C velvet_1.2.10
     - sudo cp velvet_1.2.10/velvetg $WORKDIR/bin/
     - sudo cp velvet_1.2.10/velveth $WORKDIR/bin/
-#    - git clone https://github.com/pysam-developers/pysam.git
-#    - git clone https://github.com/cython/cython.git
     - wget https://github.com/pysam-developers/pysam/archive/9c4c00a22fbf0f836347283cb008dbc9183e5e56.zip
     - unzip 9c4c00a22fbf0f836347283cb008dbc9183e5e56.zip
     - mv pysam-9c4c00a22fbf0f836347283cb008dbc9183e5e56 pysam
@@ -28,7 +27,6 @@ before_install:
     - unzip 137c064f3b28d4bb59d05a9751f60623f2fc9387.zip
     - mv cython-137c064f3b28d4bb59d05a9751f60623f2fc9387 cython
     - cd cython
-#    - python setup.py build
     - python setup.py install
     - cd ../pysam
     - python setup.py build
@@ -37,15 +35,27 @@ before_install:
     - cd test_data
     - cd ..
     - git clone https://github.com/lh3/bwa.git
+    - cd bwa 
+    - git checkout v0.7.16
+    - cd ..
     - sudo make -C bwa
     - sudo cp bwa/bwa $WORKDIR/bin
     - git clone https://github.com/samtools/htslib.git
+    - cd htslib
+    - git checkout 1.5
+    - cd ..
     - sudo make -C htslib
     - git clone https://github.com/samtools/samtools.git
+    - cd samtools
+    - git checkout 1.5
+    - cd ..
     - sudo make -C samtools
     - sudo cp samtools/samtools $WORKDIR/bin/
     - sudo cp samtools/misc/wgsim $WORKDIR/bin/
     - git clone https://github.com/samtools/bcftools.git
+    - cd bcftools
+    - git checkout 1.5
+    - cd ..
     - sudo make -C bcftools
     - sudo cp bcftools/bcftools $WORKDIR/bin/
     - export PATH=$WORKDIR/bin/:$PATH
