@@ -329,7 +329,7 @@ def makemut(args, bedline, alignopts):
     try:
         bamfile = pysam.Samfile(args.bamFileName, 'rb')
         reffile = pysam.Fastafile(args.refFasta)
-        logfn = '_'.join(map(os.path.basename, bedline.strip().split())) + ".log"
+        logfn = '_'.join(map(os.path.basename, bedline.strip().split()[:4])) + ".log"
         logfile = open('addsv_logs_' + os.path.basename(args.outBamFile) + '/' + os.path.basename(args.outBamFile) + '_' + logfn, 'w')
         exclfile = args.tmpdir + '/' + '.'.join((mutid, 'exclude', str(uuid4()), 'txt'))
         exclude = open(exclfile, 'w')
@@ -369,7 +369,7 @@ def makemut(args, bedline, alignopts):
             trn_end   = int(c[5]) + 3000
             if trn_start < 0: trn_start = 0
 
-        actions = map(lambda x: x.strip(),' '.join(araw).split(','))
+        actions = map(lambda x: x.strip(),' '.join(araw).split(';'))
 
         svfrac = float(args.svfrac) # default, can be overridden by cnv file or per-variant
 
