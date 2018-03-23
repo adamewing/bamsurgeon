@@ -545,6 +545,10 @@ def makemut(args, bedline, alignopts):
                 if ins_motif is not None:
                     inspoint = mutseq.find_site(ins_motif, left_trim=int(args.maxlibsize), right_trim=int(args.maxlibsize))
 
+                    if inspoint < int(args.maxlibsize) or inspoint > mutseq.length() - int(args.maxlibsize):
+                        print "INFO\t" + now() + "\t" + mutid + "\tpicked midpoint, no cutsite found" + insseqfile
+                        inspoint = mutseq.length()/2
+
                 if insseqfile: # seq in file
                     if insseqfile == 'RND':
                         assert args.inslib is not None # insertion library needs to exist
