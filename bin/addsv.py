@@ -490,7 +490,7 @@ def makemut(args, bedline, alignopts):
             if action == 'INS':
                 assert len(a) > 1 # insertion syntax: INS <file.fa> [optional TSDlen]
                 insseqfile = a[1]
-                if not (os.path.exists(insseqfile) or insseqfile == 'RND'): # not a file... is it a sequence? (support indel ins.)
+                if not (os.path.exists(insseqfile) or insseqfile == 'RND' or insseqfile.startswith('INSLIB:')): # not a file... is it a sequence? (support indel ins.)
                     assert re.search('^[ATGCatgc]*$',insseqfile), "cannot determine SV type: %s" % insseqfile # make sure it's a sequence
                     insseq = insseqfile.upper()
                     insseqfile = None
@@ -549,6 +549,13 @@ def makemut(args, bedline, alignopts):
                         assert args.inslib is not None # insertion library needs to exist
                         insseqfile = random.choice(args.inslib.keys())
                         print "INFO\t" + now() + "\t" + mutid + "\tchose sequence from insertion library: " + insseqfile
+                        mutseq.insertion(inspoint, args.inslib[insseqfile], tsdlen)
+
+                    elif insseqfile.startswith('INSLIB:'):
+                        assert args.inslib is not None # insertion library needs to exist
+                        insseqfile = insseqfile.split(':')[1]
+                        print "INFO\t" + now() + "\t" + mutid + "\tspecify sequence from insertion library: " + insseqfile
+                        assert insseqfile in args.inslib, '%s not found in insertion library' % insseqfile
                         mutseq.insertion(inspoint, args.inslib[insseqfile], tsdlen)
 
                     else:
