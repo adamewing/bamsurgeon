@@ -1,6 +1,8 @@
 FROM ubuntu:14.04
 MAINTAINER Adam Ewing <adam.ewing@gmail.com>
 
+ENV PATH=$PATH:$HOME/bin
+
 WORKDIR ~/
 RUN apt-get update && apt-get install -y software-properties-common
 
@@ -15,13 +17,18 @@ RUN apt-get install -y \
     git \
     wget \
     libncurses5-dev \
+    libbz2-dev \
+    liblzma-dev \
+    pkg-config \
+    automake \
+    autoconf \
+    glib-2.0-dev \
     unzip
 
 RUN pip install cython
 RUN pip install pysam
 
 RUN mkdir $HOME/bin
-RUN export PATH=$PATH:$HOME/bin
 
 RUN wget https://www.ebi.ac.uk/~zerbino/velvet/velvet_1.2.10.tgz
 RUN tar xvzf velvet_1.2.10.tgz
@@ -49,9 +56,9 @@ RUN wget https://github.com/broadinstitute/picard/releases/download/1.131/picard
 RUN unzip picard-tools-1.131.zip
 
 RUN git clone https://github.com/adamewing/exonerate.git
-RUN cd exonerate
-RUN ./configure && make && make install
+RUN cd exonerate && autoreconf -fi && ./configure && make && make install
 
 RUN git clone https://github.com/adamewing/bamsurgeon.git
-RUN cd bamsurgeon
-RUN python setup.py install
+RUN export PATH=$PATH:$HOME/bin && cd bamsurgeon && python setup.py install
+
+CMD []
