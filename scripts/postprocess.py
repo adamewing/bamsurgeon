@@ -125,7 +125,7 @@ def makebam(sam, fai, threads, mem):
     cmd = ['samtools', 'view', '-bt', fai, '-o', outbam, sam]
     sys.stderr.write(sam + ' --> ' + outbam + ': ' + ' '.join(cmd) + '\n')
     call(cmd)
-    remove(sam)
+    #remove(sam)
 
     outsort = sub('.bam$', '.sorted.bam', outbam)
     cmd = ['samtools', 'sort', '-m', str(mem), '-@', str(threads), '-T', outsort, '-o',  outsort, outbam]
@@ -133,7 +133,7 @@ def makebam(sam, fai, threads, mem):
     sys.stderr.write(outbam + ' --> ' + outsort + ': ' + ' '.join(cmd) + '\n')
     call(cmd)
 
-    remove(outbam)
+    #remove(outbam)
 
 
 def main(args):

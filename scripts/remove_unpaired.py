@@ -15,16 +15,17 @@ if len(sys.argv) == 2:
     reads = {}
 
     for read in inbam.fetch(until_eof=True):
-        if read.qname in reads:
-            reads[read.qname].append(read)
-        else:
-            reads[read.qname] = []
-            reads[read.qname].append(read)
+        if not read.is_secondary and not read.is_supplementary:
+            if read.qname in reads:
+                reads[read.qname].append(read)
+            else:
+                reads[read.qname] = []
+                reads[read.qname].append(read)
 
-        if len(reads[read.qname]) == 2:
-            for outread in reads[read.qname]:
-                outbam.write(outread)
-            del reads[read.qname]
+            if len(reads[read.qname]) == 2:
+                for outread in reads[read.qname]:
+                    outbam.write(outread)
+                del reads[read.qname]
 
     inbam.close()
     outbam.close()

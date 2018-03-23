@@ -324,7 +324,8 @@ def makemut(args, bedline, alignopts):
 
     if args.seed is not None: random.seed(int(args.seed) + int(bedline.strip().split()[1]))
 
-    mutid = '_'.join(map(str, bedline.strip().split()))
+    mutid = '_'.join(map(str, bedline.strip().split()[:4]))
+
     try:
         bamfile = pysam.Samfile(args.bamFileName, 'rb')
         reffile = pysam.Fastafile(args.refFasta)
