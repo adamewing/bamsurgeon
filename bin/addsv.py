@@ -789,7 +789,7 @@ if __name__ == '__main__':
     parser.add_argument('-f', '--bamfile', dest='bamFileName', required=True,
                         help='sam/bam file from which to obtain reads')
     parser.add_argument('-r', '--reference', dest='refFasta', required=True,
-                        help='reference genome, fasta indexed with bwa index -a stdsw _and_ samtools faidx')
+                        help='reference genome, fasta indexed with bwa index _and_ samtools faidx')
     parser.add_argument('-o', '--outbam', dest='outBamFile', required=True,
                         help='.bam file name for output')
     parser.add_argument('-l', '--maxlibsize', dest='maxlibsize', default=600,
