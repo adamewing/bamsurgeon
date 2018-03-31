@@ -35,40 +35,50 @@ def countBaseAtPos(bamfile,chrom,pos,mutid='null'):
 
 
 def makeins(read, start, ins, debug=False):
-    assert len(read.seq) > len(ins) + 2
+    assert len(read.seq) > len(ins) + 2, "INDELs must be less than one read length - 2bp"
     
     if debug:
         print "DEBUG: INS: read.pos:", read.pos
         print "DEBUG: INS: start:   ", start
         print "DEBUG: INS: ins:     ", ins
-        print "DEBUG: DEL: cigar:     ", read.cigarstring
+        print "DEBUG: DEL: cigar:   ", read.cigarstring
+        print "DEBUG: is_reverse:   ", read.is_reverse
 
     orig_len = len(read.seq)
     pos_in_read = start - read.pos + read.qstart
 
+    newseq = read.seq
 
     if pos_in_read > 0: # insertion start in read span
         if debug:
             print "DEBUG: INS: pos_in_read:", pos_in_read
-        left  = read.seq[:pos_in_read]
-        right = read.seq[pos_in_read:]
 
-        newseq = left + ins + right
-        newseq = newseq[:orig_len]
+        if not read.is_reverse:
+            left  = read.seq[:pos_in_read]
+            right = read.seq[pos_in_read:]
 
-    else: # insertion continues to the left of read
-        right = read.seq[pos_in_read:]
-        newseq = ins + right
-        newseq = newseq[-orig_len:]
+            newseq = left + ins + right
+            newseq = newseq[:orig_len]
+
+        else:
+            pos_in_read = len(read.seq) - pos_in_read
+            rcseq = rc(read.seq)
+
+            left  = rcseq[:pos_in_read]
+            right = rcseq[pos_in_read:]
+
+            newseq = left + ins + right
+            newseq = rc(newseq[:orig_len])
 
     if debug:
         print "DEBUG: INS: orig seq:", read.seq
         print "DEBUG: INS: newseq:  ", newseq
+
     return newseq
 
 
 def makedel(read, chrom, start, end, ref, debug=False):
-    assert len(read.seq) > end-start-2
+    assert len(read.seq) > end-start-2, "INDELs must be less than one read length - 2bp"
     
     if debug:
         print "DEBUG: DEL: read.pos:", read.pos

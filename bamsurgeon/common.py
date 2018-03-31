@@ -7,6 +7,7 @@ import pysam
 import os
 import sys
 
+from string import maketrans
 from collections import Counter
 from shutil import move
 from re import sub
@@ -14,6 +15,12 @@ from re import sub
 
 def now():
     return str(datetime.datetime.now())
+
+
+def rc(dna):
+    ''' reverse complement '''
+    complements = maketrans('acgtrymkbdhvACGTRYMKBDHV', 'tgcayrkmvhdbTGCAYRKMVHDB')
+    return dna.translate(complements)[::-1]
 
 
 def majorbase(basepile):
