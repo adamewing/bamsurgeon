@@ -50,7 +50,7 @@ def checkoptions(name, options, picardjar, sv=False):
             raise ValueError("ERROR\t'--aligner bowtie2' requires '--alignopts bowtie2ref:bowtie2_ref_basepath\n")
 
 
-def remap_bam(name, bamfn, fastaref, options, mutid='null', threads=1, paired=True, picardjar=None):
+def remap_bam(name, bamfn, fastaref, options, mutid='null', threads=1, paired=True, picardjar=None, insane=False):
     ''' remap bam file with supported alignment method. "options" param is a dict of aligner-specific required options '''
 
     checkoptions(name, options, picardjar)
@@ -64,25 +64,25 @@ def remap_bam(name, bamfn, fastaref, options, mutid='null', threads=1, paired=Tr
         remap_backtrack_bam(bamfn, threads, fastaref, mutid=mutid, paired=paired)
 
     if name == 'mem':
-        remap_bwamem_bam(bamfn, threads, fastaref, picardjar, mutid=mutid, paired=paired)
+        remap_bwamem_bam(bamfn, threads, fastaref, picardjar, mutid=mutid, paired=paired, insane=insane)
 
     if name == 'bwakit':
-        remap_bwakit_bam(bamfn, threads, fastaref, picardjar, mutid=mutid, paired=paired)
+        remap_bwakit_bam(bamfn, threads, fastaref, picardjar, mutid=mutid, paired=paired, insane=insane)
 
     if name == 'novoalign':
-        remap_novoalign_bam(bamfn, threads, fastaref, picardjar, options['novoref'], mutid=mutid, paired=paired)
+        remap_novoalign_bam(bamfn, threads, fastaref, picardjar, options['novoref'], mutid=mutid, paired=paired, insane=insane)
 
     if name == 'gsnap':
-        remap_gsnap_bam(bamfn, threads, fastaref, picardjar, options['gsnaprefdir'], options['gsnaprefname'], mutid=mutid, paired=paired)
+        remap_gsnap_bam(bamfn, threads, fastaref, picardjar, options['gsnaprefdir'], options['gsnaprefname'], mutid=mutid, paired=paired, insane=insane)
 
     if name == 'STAR':
-        remap_STAR_bam(bamfn, threads, fastaref, picardjar, options['STARrefdir'], mutid=mutid, paired=paired)
+        remap_STAR_bam(bamfn, threads, fastaref, picardjar, options['STARrefdir'], mutid=mutid, paired=paired, insane=insane)
 
     if name == 'bowtie2':
-        remap_bowtie2_bam(bamfn, threads, fastaref, picardjar, options['bowtie2ref'], mutid=mutid, paired=paired)
+        remap_bowtie2_bam(bamfn, threads, fastaref, picardjar, options['bowtie2ref'], mutid=mutid, paired=paired, insane=insane)
 
     if name == 'tmap':
-        remap_tmap_bam(bamfn, threads, fastaref, picardjar, mutid=mutid, paired=paired)
+        remap_tmap_bam(bamfn, threads, fastaref, picardjar, mutid=mutid, paired=paired, insane=insane)
 
 
 def remap_backtrack_bam(bamfn, threads, fastaref, mutid='null', paired=True):
@@ -154,7 +154,7 @@ def remap_backtrack_bam(bamfn, threads, fastaref, mutid='null', paired=True):
         os.remove(samfn)
 
 
-def remap_bwamem_bam(bamfn, threads, fastaref, picardjar, mutid='null', paired=True, deltmp=True):
+def remap_bwamem_bam(bamfn, threads, fastaref, picardjar, mutid='null', paired=True, deltmp=True, insane=False):
     """ call bwa mem and samtools to remap .bam
     """
     assert os.path.exists(picardjar)
@@ -206,14 +206,15 @@ def remap_bwamem_bam(bamfn, threads, fastaref, picardjar, mutid='null', paired=T
     subprocess.call(idx_cmd)
 
     # check if BAM readcount looks sane
-    if bamreadcount(bamfn) < fastqreadcount(fastq): 
-        raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
+    if not insane:
+        if bamreadcount(bamfn) < fastqreadcount(fastq): 
+            raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
 
     sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fastq + "\n")
     if deltmp: os.remove(fastq)
 
 
-def remap_bwakit_bam(bamfn, threads, fastaref, picardjar, mutid='null', paired=True, deltmp=True):
+def remap_bwakit_bam(bamfn, threads, fastaref, picardjar, mutid='null', paired=True, deltmp=True, insane=False):
     """ call bwa kit and samtools to remap .bam
     """
     assert os.path.exists(picardjar)
@@ -263,12 +264,13 @@ def remap_bwakit_bam(bamfn, threads, fastaref, picardjar, mutid='null', paired=T
     subprocess.call(idx_cmd)
 
     # check if BAM readcount looks sane
-    if paired:
-        if bamreadcount(bamfn) < fastqreadcount(fastq[0]) + fastqreadcount(fastq[1]): 
-            raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
-    else:
-        if bamreadcount(bamfn) < fastqreadcount(fastq[0]): 
-            raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
+    if not insane:
+        if paired:
+            if bamreadcount(bamfn) < fastqreadcount(fastq[0]) + fastqreadcount(fastq[1]): 
+                raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
+        else:
+            if bamreadcount(bamfn) < fastqreadcount(fastq[0]): 
+                raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
 
     if paired:
         for fq in fastq:
@@ -279,7 +281,7 @@ def remap_bwakit_bam(bamfn, threads, fastaref, picardjar, mutid='null', paired=T
         os.remove(fastq[0])
 
 
-def remap_novoalign_bam(bamfn, threads, fastaref, picardjar, novoref, mutid='null', paired=True):
+def remap_novoalign_bam(bamfn, threads, fastaref, picardjar, novoref, mutid='null', paired=True, insane=False):
     """ call novoalign and samtools to remap .bam
     """
     assert os.path.exists(picardjar)
@@ -332,12 +334,13 @@ def remap_novoalign_bam(bamfn, threads, fastaref, picardjar, novoref, mutid='nul
     subprocess.call(idx_cmd)
 
     # check if BAM readcount looks sane
-    if paired:
-        if bamreadcount(bamfn) < fastqreadcount(fastq[0]) + fastqreadcount(fastq[1]): 
-            raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
-    else:
-        if bamreadcount(bamfn) < fastqreadcount(fastq[0]): 
-            raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
+    if not insane:
+        if paired:
+            if bamreadcount(bamfn) < fastqreadcount(fastq[0]) + fastqreadcount(fastq[1]): 
+                raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
+        else:
+            if bamreadcount(bamfn) < fastqreadcount(fastq[0]): 
+                raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
 
     if paired:
         for fq in fastq:
@@ -348,7 +351,7 @@ def remap_novoalign_bam(bamfn, threads, fastaref, picardjar, novoref, mutid='nul
         os.remove(fastq[0])
 
 
-def remap_gsnap_bam(bamfn, threads, fastaref, picardjar, gsnaprefdir, gsnaprefname, mutid='null', paired=True):
+def remap_gsnap_bam(bamfn, threads, fastaref, picardjar, gsnaprefdir, gsnaprefname, mutid='null', paired=True, insane=False):
     """ call gsnap and samtools to remap .bam
     """
     assert os.path.exists(picardjar)
@@ -403,12 +406,13 @@ def remap_gsnap_bam(bamfn, threads, fastaref, picardjar, gsnaprefdir, gsnaprefna
     subprocess.call(idx_cmd)
 
     # check if BAM readcount looks sane
-    if paired:
-        if bamreadcount(bamfn) < fastqreadcount(fastq[0]) + fastqreadcount(fastq[1]): 
-            raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
-    else:
-        if bamreadcount(bamfn) < fastqreadcount(fastq[0]): 
-            raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
+    if not insane:
+        if paired:
+            if bamreadcount(bamfn) < fastqreadcount(fastq[0]) + fastqreadcount(fastq[1]): 
+                raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
+        else:
+            if bamreadcount(bamfn) < fastqreadcount(fastq[0]): 
+                raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
 
     if paired:
         for fq in fastq:
@@ -418,7 +422,7 @@ def remap_gsnap_bam(bamfn, threads, fastaref, picardjar, gsnaprefdir, gsnaprefna
         sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fastq[0] + "\n")
         os.remove(fastq[0])
 
-def remap_STAR_bam(bamfn, threads, fastaref, picardjar, STARrefdir, mutid='null', paired=True):
+def remap_STAR_bam(bamfn, threads, fastaref, picardjar, STARrefdir, mutid='null', paired=True, insane=False):
     """ call gsnap and samtools to remap .bam
     """
     assert os.path.exists(picardjar)
@@ -470,12 +474,13 @@ def remap_STAR_bam(bamfn, threads, fastaref, picardjar, STARrefdir, mutid='null'
     # check if BAM readcount looks sane
     # STAR may not report unmapped reads in BAM
 
-    if paired:
-        if bamreadcount(bamfn) < .5*(fastqreadcount(fastq[0]) + fastqreadcount(fastq[1])): 
-            raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
-    else:
-        if bamreadcount(bamfn) < .5*fastqreadcount(fastq[0]): 
-            raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
+    if not insane:
+        if paired:
+            if bamreadcount(bamfn) < .5*(fastqreadcount(fastq[0]) + fastqreadcount(fastq[1])): 
+                raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
+        else:
+            if bamreadcount(bamfn) < .5*fastqreadcount(fastq[0]): 
+                raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
 
     if paired:
         for fq in fastq:
@@ -485,7 +490,7 @@ def remap_STAR_bam(bamfn, threads, fastaref, picardjar, STARrefdir, mutid='null'
         sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fastq[0] + "\n")
         os.remove(fastq[0])
 
-def remap_bowtie2_bam(bamfn, threads, fastaref, picardjar, bowtie2ref, mutid='null', paired=True):
+def remap_bowtie2_bam(bamfn, threads, fastaref, picardjar, bowtie2ref, mutid='null', paired=True, insane=False):
     """ call bowtie2 and samtools to remap .bam
     """
 
@@ -536,12 +541,13 @@ def remap_bowtie2_bam(bamfn, threads, fastaref, picardjar, bowtie2ref, mutid='nu
     subprocess.call(idx_cmd)
 
     # check if BAM readcount looks sane
-    if paired:
-        if bamreadcount(bamfn) < fastqreadcount(fastq[0]) + fastqreadcount(fastq[1]): 
-            raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
-    else:
-        if bamreadcount(bamfn) < fastqreadcount(fastq[0]): 
-            raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
+    if not insane:
+        if paired:
+            if bamreadcount(bamfn) < fastqreadcount(fastq[0]) + fastqreadcount(fastq[1]): 
+                raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
+        else:
+            if bamreadcount(bamfn) < fastqreadcount(fastq[0]): 
+                raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
 
     if paired:
         for fq in fastq:
@@ -552,7 +558,7 @@ def remap_bowtie2_bam(bamfn, threads, fastaref, picardjar, bowtie2ref, mutid='nu
         os.remove(fastq[0])
 
 
-def remap_tmap_bam(bamfn, threads, fastaref, picardjar, mutid='null', paired=False):
+def remap_tmap_bam(bamfn, threads, fastaref, picardjar, mutid='null', paired=False, insane=False):
     """ call bowtie2 and samtools to remap .bam
     """
 
@@ -602,12 +608,13 @@ def remap_tmap_bam(bamfn, threads, fastaref, picardjar, mutid='null', paired=Fal
     subprocess.call(idx_cmd)
 
     # check if BAM readcount looks sane
-    if paired:
-        if bamreadcount(bamfn) < fastqreadcount(fastq[0]) + fastqreadcount(fastq[1]): 
-            raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
-    else:
-        if bamreadcount(bamfn) < fastqreadcount(fastq[0]): 
-            raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
+    if not insane:
+        if paired:
+            if bamreadcount(bamfn) < fastqreadcount(fastq[0]) + fastqreadcount(fastq[1]): 
+                raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
+        else:
+            if bamreadcount(bamfn) < fastqreadcount(fastq[0]): 
+                raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
 
     if paired:
         for fq in fastq:

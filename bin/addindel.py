@@ -231,7 +231,7 @@ def makemut(args, chrom, start, end, vaf, ins, avoid, alignopts):
 
         if not hasSNP or args.force:
             outbam_muts.close()
-            aligners.remap_bam(args.aligner, tmpoutbamname, args.refFasta, alignopts, mutid=mutid, paired=(not args.single), picardjar=args.picardjar)
+            aligners.remap_bam(args.aligner, tmpoutbamname, args.refFasta, alignopts, mutid=mutid, paired=(not args.single), picardjar=args.picardjar, insane=args.insane)
 
             outbam_muts = pysam.Samfile(tmpoutbamname,'rb')
             coverwindow = 1
@@ -414,6 +414,7 @@ def run():
     parser.add_argument('--nomut', action='store_true', default=False, help="dry run")
     parser.add_argument('--det', action='store_true', default=False, help="deterministic base changes: make transitions only")
     parser.add_argument('--force', action='store_true', default=False, help="force mutation to happen regardless of nearby SNP or low coverage")
+    parser.add_argument('--insane', action='store_true', default=False, help="ignore sanity check enforcing input read count = output read count in realignment")
     parser.add_argument('--single', action='store_true', default=False, help="input BAM is simgle-ended (default is paired-end)")
     parser.add_argument('--maxopen', dest='maxopen', default=1000, help="maximum number of open files during merge (default 1000)")
     parser.add_argument('--requirepaired', action='store_true', default=False, help='skip mutations if unpaired reads are present')
