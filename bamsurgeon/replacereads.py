@@ -138,8 +138,12 @@ def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=No
     recount = 0 # number of replaced reads
     used = {}
     prog = 0
+    ignored_target = 0 # number of supplemental / secondary reads in original
 
     for read in targetbam.fetch(until_eof=True):
+        if read.is_secondary or read.is_supplementary:
+            ignored_target += 1
+            continue
 
         prog += 1
         if progress and prog % 10000000 == 0:
@@ -192,6 +196,7 @@ def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=No
     sys.stdout.write("replaced " + str(recount) + " reads (" + str(excount) + " excluded )\n")
     sys.stdout.write("kept " + str(sum([len(v) for k,v in secondary.iteritems()])) + " secondary reads.\n")
     sys.stdout.write("kept " + str(sum([len(v) for k,v in supplementary.iteritems()])) + " supplementary reads.\n") 
+    sys.stdout.write("ignored %d non-primary reads in target BAM.\n" % ignored_target) 
 
     nadded = 0
     # dump the unused reads from the donor if requested with --all
