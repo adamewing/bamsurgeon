@@ -417,12 +417,19 @@ def makemut(args, bedline, alignopts):
 
         trn_contigs = None
         if is_transloc:
+            print "INFO\t" + now() + "\t" + mutid + "\tassemble translocation end: %s:%d-%d" % (trn_chrom, trn_start, trn_end)
             trn_contigs = ar.asm(trn_chrom, trn_start, trn_end, args.bamFileName, reffile, int(args.kmersize), args.tmpdir, mutid=mutid, debug=args.debug)
 
         maxcontig = sorted(contigs)[-1]
 
         trn_maxcontig = None
-        if is_transloc: trn_maxcontig = sorted(trn_contigs)[-1]
+
+        if is_transloc:
+            if len(trn_contigs) == 0:
+                sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\ttranslocation partner generated no contigs, skipping site.\n")
+                return None, None
+
+            trn_maxcontig = sorted(trn_contigs)[-1]
 
         # be strict about contig quality
         if re.search('N', maxcontig.seq):
