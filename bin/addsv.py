@@ -431,14 +431,21 @@ def makemut(args, bedline, alignopts):
 
             trn_maxcontig = sorted(trn_contigs)[-1]
 
-        # be strict about contig quality
         if re.search('N', maxcontig.seq):
-            sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tcontig dropped due to ambiguous base (N), aborting mutation.\n")
-            return None, None
+            if args.allowN:
+                sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tcontig has ambiguous base (N), replaced with 'A'\n")
+                maxcontig.seq = re.sub('N', 'A', maxcontig.seq)
+            else:
+                sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tcontig dropped due to ambiguous base (N), aborting mutation.\n")
+                return None, None
 
         if is_transloc and re.search('N', trn_maxcontig.seq):
-            sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tcontig dropped due to ambiguous base (N), aborting mutation.\n")
-            return None, None
+            if args.allowN:
+                sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tcontig has ambiguous base (N), replaced with 'A'\n")
+                trn_maxcontig.seq = re.sub('N', 'A', trn_maxcontig.seq)
+            else:
+                sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tcontig dropped due to ambiguous base (N), aborting mutation.\n")
+                return None, None
 
         if maxcontig is None:
             sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tmaxcontig has length 0, aborting mutation!\n")
@@ -839,6 +846,8 @@ if __name__ == '__main__':
                         help='temporary directory (default=addsv.tmp)')
     parser.add_argument('--seed', default=None,
                         help='seed random number generation')
+    parser.add_argument('--allowN', action='store_true', default=False,
+                        help='allow N in contigs, replace with A and warn user (default: drop mutation)')
     args = parser.parse_args()
     main(args)
 
