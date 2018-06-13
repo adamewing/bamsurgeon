@@ -1,4 +1,6 @@
 
+[![DOI](https://zenodo.org/badge/4290471.svg)](https://zenodo.org/badge/latestdoi/4290471)
+
 [![Build Status](https://travis-ci.org/adamewing/bamsurgeon.svg?branch=master)](https://travis-ci.org/adamewing/bamsurgeon)
 
 [![GSR Certified](https://popmodels.cancercontrol.cancer.gov/gsr/static//img/gsr-certified.jpg)](https://popmodels.cancercontrol.cancer.gov/gsr/certification/)
