@@ -12,7 +12,7 @@
 \title{BAMSurgeon: Methods for spike-in mutations on BAM files}
 \author{Adam D. Ewing (adam.ewing@mater.uq.edu.au)}
 \begin{document}
- \date{February 18, 2016}
+ \date{August 17, 2018}
  \maketitle
 
 \section{Introduction}
@@ -51,10 +51,10 @@ usage: addsnv.py [-h] -v VARFILENAME -f BAMFILENAME -r REFFASTA -o OUTBAMFILE
                  [--picardjar PICARDJAR] [--mindepth MINDEPTH]
                  [--maxdepth MAXDEPTH] [--minmutreads MINMUTREADS]
                  [--avoidreads AVOIDREADS] [--nomut] [--ignoresnps]
-                 [--ignoreref] [--force] [--single] [--maxopen MAXOPEN]
-                 [--requirepaired] [--tagreads] [--skipmerge] [--ignorepileup]
-                 [--aligner ALIGNER] [--alignopts ALIGNOPTS] [--tmpdir TMPDIR]
-                 [--seed SEED]
+                 [--ignoreref] [--force] [--insane] [--single]
+                 [--maxopen MAXOPEN] [--requirepaired] [--tagreads]
+                 [--skipmerge] [--ignorepileup] [--aligner ALIGNER]
+                 [--alignopts ALIGNOPTS] [--tmpdir TMPDIR] [--seed SEED]
 
 adds SNVs to reads, outputs modified reads as .bam along with mates
 
@@ -65,8 +65,8 @@ optional arguments:
   -f BAMFILENAME, --bamfile BAMFILENAME
                         sam/bam file from which to obtain reads
   -r REFFASTA, --reference REFFASTA
-                        reference genome, fasta indexed with bwa index -a
-                        stdsw _and_ samtools faidx
+                        reference genome, fasta indexed with bwa index _and_
+                        samtools faidx
   -o OUTBAMFILE, --outbam OUTBAMFILE
                         .bam file name for output
   -s SNVFRAC, --snvfrac SNVFRAC
@@ -96,10 +96,15 @@ optional arguments:
   --avoidreads AVOIDREADS
                         file of read names to avoid (mutations will be skipped
                         if overlap)
+  --nomut               dry run
   --ignoresnps          make mutations even if there are non-reference alleles
                         sharing the relevant reads
+  --ignoreref           make mutations even if the mutation is back to the
+                        reference allele
   --force               force mutation to happen regardless of nearby SNP or
                         low coverage
+  --insane              ignore sanity check enforcing input read count =
+                        output read count in realignment
   --single              input BAM is simgle-ended (default is paired-end)
   --maxopen MAXOPEN     maximum number of open files during merge (default
                         1000)
@@ -108,7 +113,7 @@ optional arguments:
   --skipmerge           final output is tmp file to be merged
   --ignorepileup        do not check pileup depth in mutation regions
   --aligner ALIGNER     supported aligners:
-                        backtrack,mem,novoalign,gsnap,bowtie2
+                        backtrack,mem,novoalign,gsnap,STAR,bowtie2,tmap,bwakit
   --alignopts ALIGNOPTS
                         aligner-specific options as comma delimited list of
                         option1:value1,option2:value2,...
@@ -122,7 +127,7 @@ optional arguments:
 
 \subsection{Input}
 \paragraph{Mutation input (-v/--varfile)}
-	Input to addsnv.py (-v/--varfile) is a three column format plus an extra optional column for the desired variant allele fraction (VAF). Input coordinates are 1-based, meaning they will match between input to -v/--varfile, VCF, and samtools mpileup. The default VAF is specified via -m/--mutfrac. For example:
+	Input to addsnv.py (-v/--varfile) is a three column format plus an extra optional column for the desired variant allele fraction (VAF). Input coordinates are \textbf{1-based}, meaning they will match between input to -v/--varfile, VCF, and samtools mpileup. Note that \texttt{addindel.py} uses a 1-based coordinate scheme. The default VAF is specified via -m/--mutfrac. For example:
 \begin{verbatim}
 22 34166720 34166720 0.25
 22 33908770 33908770 0.15
@@ -164,13 +169,16 @@ Specific bases can also be specified using a fifth input column:
 \item --mindepth : minimum depth at sites for mutations, sites with fewer reads in pileup column will be dropped. Default is 10 reads.
 \item --maxdepth : sites with greater than this number of covering reads will be dropped. Default is 2000 reads. (May need to increase for targeted sequencing data)
 \item --minmutreads : minimum number of mutated reads per site. If this level of coverage cannot be obtained, mutations will be dropped.
+\item --ignoresnps: ignores existing non-reference bases at the mutation site, required if the goal is to change a non-reference allele back to reference
+\item --ignoreref: required if the goal is to change a non-reference allele back to reference
 \item --avoidreads : addsnv and addindel can be passed a list of read names to avoid when making mutations. Any sites selected that overlap these reads will be dropped. This feature exists as a means to ensure mutations across multiple runs do not overlap.
 \item --force : force the addition of a mutation even if it fails thresholds set by --mindepth and -c/--coverdiff. Not recommended for most use cases.
+\item --insane: ignores sanity checking number of input reads versus number of output reads. This seems to be required for some aligners or situations where unaligned reads are dropped or secondary alignments are added.
 \item --single : covered above, assume reads are single-end (i.e. fragment reads).
 \item --maxopen : set the maximum number of open files (check your system limit with \texttt{ulimit -a})
 \item --requirepaired : drop mutations where a paired end in the region cannot be located. However, it is probably better to correct the problem in the BAM file than to resort to using this option.
 \item --skipmerge : instead of replacing the mutated and realigned reads back into the original BAM, which is normally the final step, leave the addsnv.
-\item --aligner : choose one of the supported aligners, default is backtrack (for bwa backtrack). Additional aligners can be added through modification of bs/aligners.py, and I take requests. Aligner specific options are handled through --alignopts
+\item --aligner : choose one of the supported aligners, default is backtrack (for bwa backtrack). Additional aligners can be added through modification of bs/aligners.py, and I try to accomodate requests for widely-used aligners if they are not already implemented. Aligner specific options are handled through --alignopts
 \item --alignopts : aligner-specific options are specified in a comma-delimited list as option1:value1,option2:value2,etc. Required options are checked by the the function \texttt{checkoptions} in \texttt{bs/aligners.py}. For example, if --aligner novoalign is specified, --alignopts novoref:<path to novoalign reference> should also be specified.
 \item --tagreads : adds a 'BS' tag to the reads altered by bamsurgeon, useful in debugging
 \item --seed : sets a random seed for reproducability
@@ -187,7 +195,7 @@ usage: addindel.py [-h] -v VARFILENAME -f BAMFILENAME -r REFFASTA -o
                    [--picardjar PICARDJAR] [--mindepth MINDEPTH]
                    [--maxdepth MAXDEPTH] [--minmutreads MINMUTREADS]
                    [--avoidreads AVOIDREADS] [--nomut] [--det] [--force]
-                   [--single] [--maxopen MAXOPEN] [--requirepaired]
+                   [--insane] [--single] [--maxopen MAXOPEN] [--requirepaired]
                    [--aligner ALIGNER] [--alignopts ALIGNOPTS] [--tagreads]
                    [--skipmerge] [--ignorepileup] [--tmpdir TMPDIR]
                    [--seed SEED]
@@ -201,8 +209,8 @@ optional arguments:
   -f BAMFILENAME, --bamfile BAMFILENAME
                         sam/bam file from which to obtain reads
   -r REFFASTA, --reference REFFASTA
-                        reference genome, fasta indexed with bwa index -a
-                        stdsw _and_ samtools faidx
+                        reference genome, fasta indexed with bwa index _and_
+                        samtools faidx
   -o OUTBAMFILE, --outbam OUTBAMFILE
                         .bam file name for output
   -s SNVFRAC, --snvfrac SNVFRAC
@@ -230,28 +238,30 @@ optional arguments:
   --avoidreads AVOIDREADS
                         file of read names to avoid (mutations will be skipped
                         if overlap)
+  --nomut               dry run
   --det                 deterministic base changes: make transitions only
   --force               force mutation to happen regardless of nearby SNP or
                         low coverage
+  --insane              ignore sanity check enforcing input read count =
+                        output read count in realignment
   --single              input BAM is simgle-ended (default is paired-end)
   --maxopen MAXOPEN     maximum number of open files during merge (default
                         1000)
   --requirepaired       skip mutations if unpaired reads are present
-  --tagreads            add BS tag to altered reads
   --aligner ALIGNER     supported aligners:
-                        backtrack,mem,novoalign,gsnap,bowtie2
+                        backtrack,mem,novoalign,gsnap,STAR,bowtie2,tmap,bwakit
   --alignopts ALIGNOPTS
                         aligner-specific options as comma delimited list of
                         option1:value1,option2:value2,...
+  --tagreads            add BS tag to altered reads
   --skipmerge           final output is tmp file to be merged
   --ignorepileup        do not check pileup depth in mutation regions
   --tmpdir TMPDIR       temporary directory (default=addindel.tmp)
   --seed SEED           seed random number generation
-  
 \end{verbatim}
 
 \subsection{Description}
-Short insertions and deletions (commonly referred to as INDELs) can be added to BAM files using addindel.py. The options are essentially the same as for addsnv.py, but the syntax of the input file is slightly different:
+Short insertions and deletions (commonly referred to as INDELs) can be added to BAM files using addindel.py. The options are essentially the same as for addsnv.py, but the syntax of the input file is slightly different and, importantly is \textbf{0-based} (i.e. constent with BED files):
 
 \begin{verbatim}
 22 33694303 33694304 0.50 INS ATGGC
@@ -277,20 +287,20 @@ usage: addsv.py [-h] -v VARFILENAME -f BAMFILENAME -r REFFASTA -o OUTBAMFILE
                 [--delay DELAY] [--noref] [--aligner ALIGNER]
                 [--alignopts ALIGNOPTS] [--tagreads] [--skipmerge]
                 [--keepsecondary] [--debug] [--tmpdir TMPDIR] [--seed SEED]
+                [--allowN]
 
 adds SVs to reads, outputs modified reads as .bam along with mates
 
 optional arguments:
   -h, --help            show this help message and exit
   -v VARFILENAME, --varfile VARFILENAME
-                        whitespace-delimited target regions to try and add a
-                        SV: chrom,start,stop,action,seqfile (if
-                        insertion),TSDlength (if insertion)
+                        whitespace-delimited target regions for SV spike-in,
+                        see manual for syntax
   -f BAMFILENAME, --bamfile BAMFILENAME
                         sam/bam file from which to obtain reads
   -r REFFASTA, --reference REFFASTA
-                        reference genome, fasta indexed with bwa index -a
-                        stdsw _and_ samtools faidx
+                        reference genome, fasta indexed with bwa index _and_
+                        samtools faidx
   -o OUTBAMFILE, --outbam OUTBAMFILE
                         .bam file name for output
   -l MAXLIBSIZE, --maxlibsize MAXLIBSIZE
@@ -299,9 +309,9 @@ optional arguments:
                         kmer size for assembly (default = 31)
   -s SVFRAC, --svfrac SVFRAC
                         allele fraction of variant (default = 1.0)
-  --maxctglen MAXCTGLEN
-                        maximum contig length for assembly - can increase if
-                        velvet is compiled with LONGSEQUENCES
+  --minctglen MINCTGLEN
+                        pad input intervals out to a minimum length for contig
+                        generation (default=3000)
   -n MAXMUTS            maximum number of mutations to make
   -c CNVFILE, --cnvfile CNVFILE
                         tabix-indexed list of genome-wide absolute copy number
@@ -314,16 +324,20 @@ optional arguments:
   --inslib INSLIB       FASTA file containing library of possible insertions,
                         use INS RND instead of INS filename to pick one
   --delay DELAY         time delay between jobs (try to avoid thrashing disks)
+  --noref               do not perform reference based assembly
   --aligner ALIGNER     supported aligners: backtrack,mem,novoalign
   --alignopts ALIGNOPTS
                         aligner-specific options as comma delimited list of
                         option1:value1,option2:value2,...
+  --tagreads            add BS tag to altered reads
   --skipmerge           do not merge spike-in reads back into original BAM
   --keepsecondary       keep secondary reads in final BAM
   --debug               output read tracking info to debug file, retain all
                         intermediates
   --tmpdir TMPDIR       temporary directory (default=addsv.tmp)
   --seed SEED           seed random number generation
+  --allowN              allow N in contigs, replace with A and warn user
+                        (default: drop mutation)
   
 \end{verbatim}
 
@@ -334,27 +348,23 @@ optional arguments:
     The input mutation list consists of four columns: chromosome, start of region, end of region, and a controlled-vocabulary description of the mutation. A mutation will not be made if the largest contig obtained from local assembly of the specified region is less than 3 times the maximum expected library size (specified by \texttt{-l/--maxlibsize}). The mutation description starts with either \texttt{INS, DEL, DUP, TRN}, or \texttt{INV} for insertion, deletion, duplication, transduction, and inversion, respectively and is followed by mutation-specific options. An example follows.
 
 \begin{verbatim}
-22 33871043 33884754 DEL 0.9
-22 33971043 33984754 INS myseq.fa
-22 34071043 34084754 INV
-22 34171043 34184754 INS ACTATCGTGGGCTTATGGCTTAGCATTACGGTTATTTTTGCACTGATCGCGGGGGCTACATCATTCATGCTATTACTTGCGTATCGTA
-22 34271043 34284754 DUP 3
-22 34371043 34384754 INS RND
+22 34171055 34184700 INS ACTAACCTGCACAATGTGCACATGTACCCTAAAACTTAGAGTATAATAAAAAAAA 13 AA^TTTT 0.8
+22 33607508 33607508 TRN 22 34314981 34314981 0.9
+22 33871043 33884754 DEL 0.9 0.75
+22 34071043 34084754 INV 0.9
+22 34271043 34284754 DUP 3 0.9
 \end{verbatim}
 
-Transductions are also possible using the following syntax:
+   For translocations (\texttt{TRN}), the above example will join the 6kbp region centered on 22:33607508 and the 6kpb region centered on 22:34314981. The variant allele fraction (VAF) is specified in the last column (0.9 in the above example).
 
-\begin{verbatim}
-22 33607508 33607508 TRN 22 34314981 34314981
-\end{verbatim}
-
-This functionality is currently under development. This example will join the 6kbp region centered on 22:33607508 and the 6kpb region centered on 22:34314981. Future enhancements to transductions will include the ability to specify the orientation of both breakends in the junction and more granular control of the junction location.
-
-    For insertions, \texttt{INS} should be followed by either a FASTA file containing the sequence to be inserted, by the nucleotide sequence itself, or by RND if a library of potential insertion sequences is passed in FASTA format via the --inslib option. For example, \texttt{INS ATG} would insert the sequence \texttt{``ATG''} in the middle of the largest contig obtained from the specified region, while \texttt{INS LINE1.fa} would insert the sequence in the FASTA-formatted file \texttt{LINE1.fa} into the largest contig. Many insertions include target site duplications (TSDs), so to simulate this an integer value can be added in the fifth column of insertion entries specifying the TSD length. Endonuclease motifs are another common feature of insertion breakpoints, so to simulate this, a preferred cut site can be defined in the 6th column of an insertion entry with the syntax NNN\^{}NNN where 'NNN' denotes sequence of any length composed of characters (A, T, G, C) with the actual cut site in the motif specified by the caret (\^{}).
+    For insertions, \texttt{INS} should be followed by either a FASTA file containing the sequence to be inserted, by the nucleotide sequence itself, or by RND if a library of potential insertion sequences is passed in FASTA format via the --inslib option. For example, \texttt{INS ATG} would insert the sequence \texttt{``ATG''} in the middle of the largest contig obtained from the specified region, while \texttt{INS LINE1.fa} would insert the sequence in the FASTA-formatted file \texttt{LINE1.fa} into the largest contig. Many insertions include target site duplications (TSDs), so to simulate this an integer value can be added in the fifth column of insertion entries specifying the TSD length. Endonuclease motifs are another common feature of insertion breakpoints, so to simulate this, a preferred cut site can be defined in the 6th column of an insertion entry with the syntax NNN\^{}NNN where 'NNN' denotes sequence of any length composed of characters (A, T, G, C) with the actual cut site in the motif specified by the caret (\^{}). An optional seventh column can be used to specifiy the VAF, 0.8 in the example above.
     
-    For deletions, \texttt{DEL} should be followed by the fraction of the largest contig to be deleted, where 1.0 indicates a deletion of the largest assembled region minus one library length on each end. e.g. {DEL 0.5}. Inversions (\texttt{INV}) have no further options - the region inside the largest contig will be inverted. Duplications (\texttt{DUP}) have one optional parameter, an integer specifying the number of times the sequence of the largest contig should be duplicated, e.g. \texttt{DUP 2} specifies the region is duplicated twice. In general, we recommend that short insertions and deletions (those shorter than one read length) be created with addindel.py instead of addsv.py as addindel.py does not require reconstruction of the region through sequence assembly and is thus less error-prone.
+    For deletions, \texttt{DEL} should be followed by the fraction of the largest contig to be deleted, where 1.0 indicates a deletion of the largest assembled region minus one library length on each end. e.g. {DEL 0.5}. This is optionally followed by specifying the per-mutation VAF (0.75 in the example above). Inversions (\texttt{INV}) have no further options aside from an optional VAF column - the region inside the largest contig will be inverted. Duplications (\texttt{DUP}) have two optional parameters, an integer specifying the number of times the sequence of the largest contig should be duplicated, e.g. \texttt{DUP 2} specifies the region is duplicated twice, and a VAF column. In general, we recommend that short insertions and deletions (those shorter than one read length) be created with addindel.py instead of addsv.py as addindel.py does not require reconstruction of the region through sequence assembly and is thus less error-prone.
 
-    Compound variants are also possible by chaining a number of mutations together in a comma-delimited list, e.g. \texttt{DUP 1, DEL 0.5, INS AAATCC, INV} would duplicate the region inside the largest contig once, delete half the width of the region, insert the sequence \texttt{AAATCC}, and invert the region (not currently supported with transductions). Good luck!
+    Compound variants are also possible by chaining a number of mutations together in a semicolon-delimited list, e.g. \texttt{DUP 1;DEL 0.5;INS AAATCC;INV} would duplicate the region inside the largest contig once, delete half the width of the region, insert the sequence \texttt{AAATCC}, and invert the region (not currently supported with transductions). Good luck!
+
+\subsection{Controlling SV VAF}
+Variant allele fraction for \texttt{addsv.py} can be controlled either via the \texttt{-c/--cnvfile} option (see Section 2.3) or through addition of a column in the input file (float value between 0.0 and 1.0). Note that all other optional columns must be specified for the VAF column to be effective, which means the input format for \texttt{addsv.py} really needs an overhaul.
 
 \subsection{Output}
     Where mutations add sequence (e.g. duplications), new reads are created that will be added to the original BAM, and where mutations remove sequence (e.g. deletions) those reads are maked as excluded (excluded read names are recorded in the file specified by \texttt{-x/--excluded}). Excluded reads are not carried over from the original BAM to the mutated BAM, creating the copy number effect associated with deletion.
@@ -362,12 +372,13 @@ This functionality is currently under development. This example will join the 6k
      Output consists of a BAM file containing the spike-in mutations and a directory of log files describing which bases were changed in which reads (one log per mutation) and the local assemblies for each region where a mutation was made. Currently, the directory containing output logs for SV spike-ins can be transformed into VCF format using the script \texttt {makevcf\_sv.py} in the \texttt {etc/} subdirectory. The spike-in process may be done concurrently through the use of the \texttt {-p/--procs} option. Here are some extended descriptions for additional options not mentioned yet:
      
 \begin{itemize}
-\item -s/--snvfrac : equivalent to -m/--mutfrac for addindel.py and addsnv.py (will fix)
+\item -s/--svfrac : equivalent to -m/--mutfrac for addindel.py and addsnv.py
 \item -k/--kmer : kmer size to be fed to velvet, which is used for assembly
 \item -n : only attempt this many mutations
 \item --ismean/--issd : the mean and standard deviation of the library size should be estimated from the original bam and specified through these arguments. This can be accomplished a number of ways, I suggest CollectInsertSizeMetrics from the picard tools.
 \item --inslib : a FASTA file can be specified and insertions can be tagged with RND instead of a sequence or file. If this is done, a sequence will be chosen at random from the FASTA file specified by --inslib and inserted.
 \item --skipmerge : same meaning as for addsnv/addindel
+\item --allowN : useful if desired mutations are being dropped due to one or more N bases present in the assembled contig
 \end{itemize}
 
 \newpage % forces fig 1 into the right place
@@ -418,9 +429,9 @@ usage: ./test_sv.sh <number of threads> <reference indexed with bwa index>
 For each process (specified by -p/--procs) add*.py will require ~4GB RAM. So for 8 concurrent mutation processes, you should have 32GB RAM. System requirements may decrease in the future as we find ways to improve efficiency. For more recent versions of bwa, it is possible to load the reference index into shared memory with 'bwa shm' which seems to improve performance.
 
 \subsection{Alignments}
-Reads should be re-aligned using the same aligner and parameters as were used to create the original BAM file. By default, bamsurgeon assumes alignments were performed using bwa aln with parameters \texttt{-q 5 -l 32 -k 3 -o 1}. The specific parameters are not currently specifiable on the command line but may be altered through modification of the functions \texttt{remap\_paired} (for paired reads) or \texttt{remap\_single}.
+Reads should be re-aligned using the same aligner and parameters as were used to create the original BAM file. By default, bamsurgeon assumes alignments were performed using bwa aln. Specific parameters that are not currently exposed on the command line may be altered through modification of the functions \texttt{remap\_paired} (for paired reads) or \texttt{remap\_single}. Supported aligners currently include: bwa aln, bwa mem, novoalign, gsnap, STAR, bowtie2, tmap, bwakit.
 
 \section{Acknowledgements}
-We would like to thank everyone who has submitted a pull request or bug report through github, the synapse forums for the DREAM Somatic Mutation Calling challenge, or by other means.
+I would like to thank and acknowledge everyone who has submitted a pull request or bug report through github, the DREAM Somatic Mutation Calling challenge, or by other means. This software was initially written when I was in the Haussler Lab at UCSC, and continues to be maintained in my current position at the Mater Research Insitute - University of Queensland. The Boutros Lab (OICR) has been and continues to be an important source of support, testing, and interesting use cases for Bamsurgeon.
 
 \end{document}
