@@ -320,6 +320,18 @@ def trim_contig(mutid, chrom, start, end, contig, reffile):
     return contig, refseq, alignstats, refstart, refend, qrystart, qryend, tgtstart, tgtend
 
 
+def fetch_read_names(args, chrom, start, end, svfrac=1.0):
+    bamfile = pysam.Samfile(args.bamFileName, 'rb')
+
+    names = []
+
+    for read in bamfile.fetch(chrom, start, end):
+        if random.random() <= svfrac:
+            names.append(read.qname)
+
+    return names
+
+
 def makemut(args, bedline, alignopts):
 
     if args.seed is not None: random.seed(int(args.seed) + int(bedline.strip().split()[1]))
@@ -333,6 +345,7 @@ def makemut(args, bedline, alignopts):
         logfile = open('addsv_logs_' + os.path.basename(args.outBamFile) + '/' + os.path.basename(args.outBamFile) + '_' + logfn, 'w')
         exclfile = args.tmpdir + '/' + '.'.join((mutid, 'exclude', str(uuid4()), 'txt'))
         exclude = open(exclfile, 'w')
+        mutinfo = {}
 
         # optional CNV file
         cnv = None
@@ -353,7 +366,7 @@ def makemut(args, bedline, alignopts):
         trn_start = None
         trn_end   = None
 
-        is_transloc = c[3] == 'TRN'
+        is_transloc = c[3] in ('TRN', 'BIGDEL')
 
         if is_transloc:
             araw = [c[3]]
@@ -541,7 +554,7 @@ def makemut(args, bedline, alignopts):
                 if len(a) > 2: # VAF
                     svfrac = float(a[2])/cn
 
-            if action == 'TRN':
+            if action in ('TRN', 'BIGDEL'):
                 if len(a) > 1:
                     svfrac = float(a[1])/cn
 
@@ -583,13 +596,16 @@ def makemut(args, bedline, alignopts):
                 else: # seq is input
                     mutseq.insertion(inspoint, insseq, tsdlen)
 
-                logfile.write("\t".join(('ins',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(inspoint),str(insseqfile),str(tsdlen),str(svfrac))) + "\n")
+                mutinfo[mutid] = "\t".join(('ins',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(inspoint),str(insseqfile),str(tsdlen),str(svfrac)))
+                logfile.write(mutinfo[mutid] + "\n")
 
             elif action == 'INV':
                 invstart = int(args.maxlibsize)
                 invend = mutseq.length() - invstart
                 mutseq.inversion(invstart,invend)
-                logfile.write("\t".join(('inv',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(invstart),str(invend),str(svfrac))) + "\n")
+
+                mutinfo[mutid] = "\t".join(('inv',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(invstart),str(invend),str(svfrac)))
+                logfile.write(mutinfo[mutid] + "\n")
 
             elif action == 'DEL':
                 delstart = int(args.maxlibsize)
@@ -606,29 +622,38 @@ def makemut(args, bedline, alignopts):
                 delend   -= dadj/2
 
                 mutseq.deletion(delstart,delend)
-                logfile.write("\t".join(('del',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(delstart),str(delend),str(dlen),str(svfrac))) + "\n")
+
+                mutinfo[mutid] = "\t".join(('del',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(delstart),str(delend),str(dlen),str(svfrac)))
+                logfile.write(mutinfo[mutid] + "\n")
 
             elif action == 'DUP':
                 dupstart = int(args.maxlibsize)
                 dupend = mutseq.length() - dupstart
                 mutseq.duplication(dupstart,dupend,ndups)
-                logfile.write("\t".join(('dup',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(dupstart),str(dupend),str(ndups),str(svfrac))) + "\n")
+
+                mutinfo[mutid] = "\t".join(('dup',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(dupstart),str(dupend),str(ndups),str(svfrac)))
+                logfile.write(mutinfo[mutid] + "\n")
 
             elif action == 'TRN':
                 mutseq.fusion(mutseq.length()/2, trn_mutseq, trn_mutseq.length()/2)
-                logfile.write("\t".join(('trn',chrom,str(refstart),str(refend),action,str(mutseq.length()),trn_chrom,str(trn_refstart),str(trn_refend),str(trn_mutseq.length()),str(svfrac))) + "\n")
+
+                mutinfo[mutid] = "\t".join(('trn',chrom,str(refstart),str(refend),action,str(mutseq.length()),trn_chrom,str(trn_refstart),str(trn_refend),str(trn_mutseq.length()),str(svfrac)))
+                logfile.write(mutinfo[mutid] + "\n")
+
+            elif action == 'BIGDEL':
+                mutseq.fusion(mutseq.length()/2, trn_mutseq, trn_mutseq.length()/2)
+
+                mutinfo[mutid] = "\t".join(('bigdel',chrom,str(refstart),str(refend),action,str(mutseq.length()),trn_chrom,str(trn_refstart),str(trn_refend),str(trn_mutseq.length()),str(svfrac)))
+                logfile.write(mutinfo[mutid] + "\n")
 
             else:
-                raise ValueError("ERROR\t" + now() + "\t" + mutid + "\t: mutation not one of: INS,INV,DEL,DUP,TRN\n")
+                raise ValueError("ERROR\t" + now() + "\t" + mutid + "\t: mutation not one of: INS,INV,DEL,DUP,TRN,BIGDEL\n")
 
             logfile.write(">" + chrom + ":" + str(refstart) + "-" + str(refend) +" AFTER\n" + str(mutseq) + "\n")
 
         pemean, pesd = float(args.ismean), float(args.issd) 
         print "INFO\t" + now() + "\t" + mutid + "\tset paired end mean distance: " + str(args.ismean)
         print "INFO\t" + now() + "\t" + mutid + "\tset paired end distance stddev: " + str(args.issd)
-
-
-
 
         # simulate reads
         (fq1, fq2) = runwgsim(maxcontig, mutseq.seq, svfrac, actions, exclude, pemean, pesd, args.tmpdir, mutid=mutid, seed=args.seed, trn_contig=trn_maxcontig)
@@ -637,20 +662,20 @@ def makemut(args, bedline, alignopts):
 
         if outreads == 0:
             sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\toutbam " + outbam_mutsfile + " has no mapped reads!\n")
-            return None, None
+            return None, None, None
 
         print "INFO\t" + now() + "\t" + mutid + "\ttemporary bam: " + outbam_mutsfile
 
         exclude.close()
         bamfile.close()
 
-        return outbam_mutsfile, exclfile
+        return outbam_mutsfile, exclfile, mutinfo
 
     except Exception, e:
         sys.stderr.write("*"*60 + "\nencountered error in mutation spikein: " + bedline + "\n")
         traceback.print_exc(file=sys.stderr)
         sys.stderr.write("*"*60 + "\n")
-        return None, None
+        return None, None, None
 
 
 def main(args):
@@ -695,32 +720,63 @@ def main(args):
     assert os.path.exists('addsv_logs_' + os.path.basename(args.outBamFile)), "could not create output directory!"
     assert os.path.exists(args.tmpdir), "could not create temporary directory!"
 
+    bigdels = {}    
+
     with open(args.varFileName, 'r') as varfile:
         for bedline in varfile:
             if re.search('^#',bedline):
                 continue
+
             if args.maxmuts and nmuts >= int(args.maxmuts):
                 break
-            
-            # submit each mutation as its own thread                
+
+            # rewrite bigdel coords as translocation
+            if bedline.strip().split()[3] == 'BIGDEL':
+                bd_svfrac=1.0
+                if len(bedline.strip().split()) == 5:
+                    bd_svfrac = float(bedline.strip().split()[-1])
+
+                # rewrite bigdel coords as translocation
+                bd_chrom, bd_start, bd_end = bedline.strip().split()[:3]
+                bd_start = int(bd_start)
+                bd_end = int(bd_end)
+
+                bd_left_start = bd_start - 2000
+                bd_left_end = bd_start + 2000
+
+                bd_right_start = bd_end - 2000
+                bd_right_end = bd_end + 2000
+
+                bedline = '%s %d %d BIGDEL %s %d %d %f' % (bd_chrom, bd_left_start, bd_left_end, bd_chrom, bd_right_start, bd_right_end, bd_svfrac)
+                bd_mutid = '_'.join(map(str, bedline.strip().split()[:4]))
+                bigdels[bd_mutid] = (bd_chrom, bd_start, bd_end, bd_svfrac)
+
+            # submit each mutation as its own thread
             result = pool.apply_async(makemut, [args, bedline, alignopts])
-            results.append(result)                              
+            results.append(result)
 
             nmuts += 1
             if args.delay is not None:
                 sleep(int(args.delay))
 
-    ## process the results of multithreaded mutation jobs
+    ## process the results of mutation jobs
+
+    master_mutinfo = {}
+
     for result in results:
         tmpbam = None
         exclfn = None
 
-        tmpbam, exclfn = result.get()
+        tmpbam, exclfn, mutinfo = result.get()
 
         if None not in (tmpbam, exclfn) and os.path.exists(tmpbam) and os.path.exists(exclfn):
             if bamreadcount(tmpbam) > 0:
                 tmpbams.append(tmpbam)
                 exclfns.append(exclfn)
+
+                mutid = os.path.basename(tmpbam).split('.')[0]
+                master_mutinfo[mutid] = mutinfo[mutid]
+
             else:
                 os.remove(tmpbam)
                 os.remove(exclfn)
@@ -728,6 +784,22 @@ def main(args):
     if len(tmpbams) == 0:
         print "INFO\t" + now() + "\tno succesful mutations"
         sys.exit()
+
+    success_mutids = [os.path.basename(tmpbam).split('.')[0] for tmpbam in tmpbams]
+
+    # add additional excluded reads if bigdel(s) present
+    bigdel_excl = {}
+    for mutid, mutinfo in master_mutinfo.iteritems():
+        if mutinfo.startswith('bigdel'):
+            bd_chrom, bd_start, bd_end, bd_svfrac = bigdels[mutid]
+
+            bd_left_bnd = int(mutinfo.split()[3])
+            bd_right_bnd = int(mutinfo.split()[7])
+
+            #print 'bd_debug: orig:', bigdels[mutid]
+            #print 'bd_debug: mutinfo:', mutinfo
+
+            bigdel_excl[mutid] = fetch_read_names(args, bd_chrom, bd_left_bnd, bd_right_bnd, svfrac=bd_svfrac)
 
     print "INFO\t" + now() + "\ttmpbams:",tmpbams
     print "INFO\t" + now() + "\texclude:",exclfns
@@ -741,6 +813,13 @@ def main(args):
         with open(exclfn, 'r') as excl:
             for line in excl:
                 exclout.write(line)
+
+            # add reads excluded due to BIGDEL if breakpoint was successful
+            for bd_mutid in bigdel_excl:
+                if bd_mutid in success_mutids:
+                    for bd_rn in bigdel_excl[bd_mutid]:
+                        exclout.write(bd_rn+'\n')
+
     exclout.close()
 
     if len(tmpbams) == 1:
