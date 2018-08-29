@@ -27,7 +27,7 @@ sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)
 sys.stderr = os.fdopen(sys.stderr.fileno(), 'w', 0)
 
 
-def runwgsim(contig, newseq, svfrac, svtype, exclude, pemean, pesd, tmpdir, mutid='null', seed=None, trn_contig=None):
+def runwgsim(contig, newseq, svfrac, svtype, exclude, pemean, pesd, tmpdir, mutid='null', err_rate=0.0, seed=None, trn_contig=None):
     ''' wrapper function for wgsim
     '''
 
@@ -82,6 +82,7 @@ def runwgsim(contig, newseq, svfrac, svtype, exclude, pemean, pesd, tmpdir, muti
     print "INFO\t" + now() + "\t" + mutid + "\tnum. sim. reads:", nsimreads 
     print "INFO\t" + now() + "\t" + mutid + "\tPE mean outer distance:", pemean
     print "INFO\t" + now() + "\t" + mutid + "\tPE outer distance SD:", pesd
+    print "INFO\t" + now() + "\t" + mutid + "\trerror rate:", err_rate
 
     rquals = contig.rquals
     mquals = contig.mquals
@@ -96,7 +97,7 @@ def runwgsim(contig, newseq, svfrac, svtype, exclude, pemean, pesd, tmpdir, muti
         if len(qual) > maxqlen:
             maxqlen = len(qual)
 
-    args = ['wgsim','-e','0','-d',str(pemean),'-s',str(pesd),'-N',str(nsimreads),'-1',str(maxqlen),'-2', str(maxqlen),'-r','0','-R','0',fasta,fq1,fq2]
+    args = ['wgsim','-e', str(err_rate),'-d',str(pemean),'-s',str(pesd),'-N',str(nsimreads),'-1',str(maxqlen),'-2', str(maxqlen),'-r','0','-R','0',fasta,fq1,fq2]
 
     if seed is not None: args += ['-S', str(seed)]
 
@@ -420,13 +421,13 @@ def makemut(args, bedline, alignopts):
         maxdfrac = 0.1 # FIXME make a parameter
         if dfrac > .1: 
             sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tdiscordant fraction > " + str(maxdfrac) + " aborting mutation!\n")
-            return None, None
+            return None, None, None
 
         contigs = ar.asm(chrom, start, end, args.bamFileName, reffile, int(args.kmersize), args.tmpdir, mutid=mutid, debug=args.debug)
 
         if len(contigs) == 0:
             sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tgenerated no contigs, skipping site.\n")
-            return None, None
+            return None, None, None
 
         trn_contigs = None
         if is_transloc:
@@ -440,7 +441,7 @@ def makemut(args, bedline, alignopts):
         if is_transloc:
             if len(trn_contigs) == 0:
                 sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\ttranslocation partner generated no contigs, skipping site.\n")
-                return None, None
+                return None, None, None
 
             trn_maxcontig = sorted(trn_contigs)[-1]
 
@@ -450,7 +451,7 @@ def makemut(args, bedline, alignopts):
                 maxcontig.seq = re.sub('N', 'A', maxcontig.seq)
             else:
                 sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tcontig dropped due to ambiguous base (N), aborting mutation.\n")
-                return None, None
+                return None, None, None
 
         if is_transloc and re.search('N', trn_maxcontig.seq):
             if args.allowN:
@@ -458,15 +459,15 @@ def makemut(args, bedline, alignopts):
                 trn_maxcontig.seq = re.sub('N', 'A', trn_maxcontig.seq)
             else:
                 sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tcontig dropped due to ambiguous base (N), aborting mutation.\n")
-                return None, None
+                return None, None, None
 
         if maxcontig is None:
             sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tmaxcontig has length 0, aborting mutation!\n")
-            return None, None
+            return None, None, None
 
         if is_transloc and trn_maxcontig is None:
             sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\ttransloc maxcontig has length 0, aborting mutation!\n")
-            return None, None
+            return None, None, None
 
         print "INFO\t" + now() + "\t" + mutid + "\tbest contig length:", sorted(contigs)[-1].len
 
@@ -478,7 +479,7 @@ def makemut(args, bedline, alignopts):
 
         if maxcontig is None:
             sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tbest contig did not have sufficent match to reference, aborting mutation.\n")
-            return None, None
+            return None, None, None
     
         print "INFO\t" + now() + "\t" + mutid + "\tstart, end, tgtstart, tgtend, refstart, refend:", start, end, tgtstart, tgtend, refstart, refend
 
@@ -489,11 +490,11 @@ def makemut(args, bedline, alignopts):
         # is there anough room to make mutations?
         if maxcontig.len < 3*int(args.maxlibsize):
             sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tbest contig too short to make mutation!\n")
-            return None, None
+            return None, None, None
 
         if is_transloc and trn_maxcontig.len < 3*int(args.maxlibsize):
             sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tbest transloc contig too short to make mutation!\n")
-            return None, None
+            return None, None, None
 
         # make mutation in the largest contig
         mutseq = ms.MutableSeq(maxcontig.seq)
@@ -573,7 +574,7 @@ def makemut(args, bedline, alignopts):
                     inspoint = mutseq.find_site(ins_motif, left_trim=int(args.maxlibsize), right_trim=int(args.maxlibsize))
 
                     if inspoint < int(args.maxlibsize) or inspoint > mutseq.length() - int(args.maxlibsize):
-                        print "INFO\t" + now() + "\t" + mutid + "\tpicked midpoint, no cutsite found" + insseqfile
+                        print "INFO\t" + now() + "\t" + mutid + "\tpicked midpoint, no cutsite found" + str(insseqfile)
                         inspoint = mutseq.length()/2
 
                 if insseqfile: # seq in file
@@ -656,7 +657,7 @@ def makemut(args, bedline, alignopts):
         print "INFO\t" + now() + "\t" + mutid + "\tset paired end distance stddev: " + str(args.issd)
 
         # simulate reads
-        (fq1, fq2) = runwgsim(maxcontig, mutseq.seq, svfrac, actions, exclude, pemean, pesd, args.tmpdir, mutid=mutid, seed=args.seed, trn_contig=trn_maxcontig)
+        (fq1, fq2) = runwgsim(maxcontig, mutseq.seq, svfrac, actions, exclude, pemean, pesd, args.tmpdir, err_rate=float(args.simerr), mutid=mutid, seed=args.seed, trn_contig=trn_maxcontig)
 
         outreads = aligners.remap_fastq(args.aligner, fq1, fq2, args.refFasta, outbam_mutsfile, alignopts, mutid=mutid, threads=1)
 
@@ -901,6 +902,8 @@ if __name__ == '__main__':
                         help="mean insert size (default = estimate from region)")
     parser.add_argument('--issd', dest='issd', default=70, 
                         help="insert size standard deviation (default = estimate from region)")
+    parser.add_argument('--simerr', dest='simerr', default=0.0,
+                        help='error rate for wgsim-generated reads')
     parser.add_argument('-p', '--procs', dest='procs', default=1, 
                         help="split into multiple processes (default=1)")
     parser.add_argument('--inslib', default=None,

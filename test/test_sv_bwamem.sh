@@ -23,7 +23,7 @@ then
     exit 65
 fi
 
-addsv.py -p 1 -v ../test_data/test_sv.txt -f ../test_data/testregion_realign.bam -r $1 -o ../test_data/testregion_sv_mut.bam -c ../test_data/test_cnvlist.txt.gz --aligner mem --keepsecondary --seed 1234
+addsv.py -p 1 -v ../test_data/test_sv.txt -f ../test_data/testregion_realign.bam -r $1 -o ../test_data/testregion_sv_mut.bam --aligner mem --keepsecondary --seed 1234
 if [ $? -ne 0 ]
 then
   echo "addsv.py failed."
@@ -35,8 +35,4 @@ else
 
   echo "indexing output bam..."
   samtools index ../test_data/testregion_sv_mut.bam
-
-  echo "making pileups..."
-  samtools mpileup $2 ../test_data/testregion_sv_mut.bam ../test_data/testregion_realign.bam > test_sv.pileup.txt
-  echo "done. output in test_sv.pileup.txt"
 fi
