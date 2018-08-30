@@ -19,6 +19,12 @@ from re import sub
 from multiprocessing import Pool
 from collections import defaultdict as dd
 
+import logging
+FORMAT = '%(levelname)s %(asctime)s %(message)s'
+logging.basicConfig(format=FORMAT)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
 sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)
 sys.stderr = os.fdopen(sys.stderr.fileno(), 'w', 0)
 
@@ -112,7 +118,7 @@ def makemut(args, hc, avoid, alignopts):
                 vaf = site['vaf']
                 
             elif vaf != site['vaf']:
-                sys.stderr.write("WARN\t" + now() + "\tmultiple VAFs for single haplotype, using first encountered VAF: " + str(vaf) + "\n")
+                logger.warning("multiple VAFs for single haplotype, using first encountered VAF: %f" % vaf)
 
             mutpos = int(random.uniform(site['start'],site['end']+1)) # position of mutation in genome
             mutpos_list.append(mutpos) # FIXME
@@ -128,7 +134,7 @@ def makemut(args, hc, avoid, alignopts):
             refbase_list.append(refbase)
 
             if altbase == refbase.upper() and not args.ignoreref:
-                sys.stderr.write("WARN\t" + now() + "\t" + mutid_list[n] + "\tspecified ALT base matches reference, skipping mutation\n")
+                logger.warning("%s specified ALT base matches reference, skipping mutation" % mutid_list[n])
                 return None
 
             try:
@@ -136,7 +142,7 @@ def makemut(args, hc, avoid, alignopts):
                 mutbase_list.append(mutbase)
 
             except ValueError as e:
-                sys.stderr.write("WARN\t" + now() + "\t" + mutid_list[n] + "\t" + ' '.join(("skipped site:",chrom,str(hc[n]['start']),str(hc[n]['end']),"due to N base:",str(e),"\n")))
+                logger.warning(mutid_list[n] + " " + ' '.join(("skipped site:",chrom,str(hc[n]['start']),str(hc[n]['end']),"due to N base:",str(e),"\n")))
                 return None
 
             mutstr_list.append(refbase + "-->" + str(mutbase))
@@ -150,7 +156,7 @@ def makemut(args, hc, avoid, alignopts):
         log = open('addsnv_logs_' + os.path.basename(args.outBamFile) + '/' + os.path.basename(args.outBamFile) + "." + hapstr + ".log",'w')
 
         tmpoutbamname = args.tmpdir + "/" + hapstr + ".tmpbam." + str(uuid4()) + ".bam"
-        print "INFO\t" + now() + "\t" + hapstr + "\tcreating tmp bam: ",tmpoutbamname
+        logger.info("%s creating tmp bam: %s" % (hapstr, tmpoutbamname))
         outbam_muts = pysam.Samfile(tmpoutbamname, 'wb', template=bamfile)
 
         mutfail, hasSNP, maxfrac, outreads, mutreads, mutmates = mutation.mutate(args, log, bamfile, bammate, chrom, min(mutpos_list), max(mutpos_list)+1, mutpos_list, avoid=avoid, mutid_list=mutid_list, is_snv=True, mutbase_list=mutbase_list, reffile=reffile)
@@ -166,12 +172,12 @@ def makemut(args, hc, avoid, alignopts):
             if read.seq != mutreads[extqname]:
                 readlist.append(extqname)
 
-        print "INFO\t" + now() + "\t" + hapstr + "\tlen(readlist): " + str(len(readlist))
+        logger.info("%s len(readlist): %s" % (hapstr, str(len(readlist))))
         readlist.sort()
         random.shuffle(readlist)
 
         if len(readlist) < int(args.mindepth):
-            print "WARN\t" + now() + "\t" + hapstr + "\ttoo few reads in region (" + str(len(readlist)) + ") skipping..."
+            logger.warning("%s too few reads in region (%s) skipping..." % (hapstr, str(len(readlist))))
             outbam_muts.close()
             os.remove(tmpoutbamname)
             return None
@@ -182,14 +188,14 @@ def makemut(args, hc, avoid, alignopts):
             if chrom in cnv.contigs:
                 for cnregion in cnv.fetch(chrom,min(mutpos_list),max(mutpos_list)+1):
                     cn = float(cnregion.strip().split()[3]) # expect chrom,start,end,CN
-                    print "INFO\t" + now() + "\t" + hapstr + "\t" + ' '.join(("copy number in snp region:",chrom,str(min(mutpos_list)),str(max(mutpos_list)),"=",str(cn))) + "\n"
+                    logger.info(hapstr + "\t" + ' '.join(("copy number in snp region:",chrom,str(min(mutpos_list)),str(max(mutpos_list)),"=",str(cn))))
                     if float(cn) > 0.0:
                         vaf = 1.0/float(cn)
                     else:
                         vaf = 0.0
-                    print "adjusted VAF: " + str(vaf) + "\n"
+                    logger.info("%s adjusted VAF: %f" % (hapstr, vaf))
         else:
-            print "INFO\t" + now() + "\t" + hapstr + "\tselected VAF: " + str(vaf) + "\n"
+            logger.info("%s selected VAF: %f" % (hapstr, vaf))
 
         lastread = int(len(readlist)*vaf)
 
@@ -197,9 +203,9 @@ def makemut(args, hc, avoid, alignopts):
         if lastread < int(args.minmutreads):
             if len(readlist) > int(args.minmutreads):
                 lastread = int(args.minmutreads)
-                sys.stdout.write("WARN\t" + now() + "\t" + hapstr + "\tforced " + str(lastread) + " reads.\n")
+                logger.warning("%s forced %d reads." % (hapstr, lastread))
             else:
-                print "WARN\t" + now() + "\t" + hapstr + "\tdropped site with fewer reads than --minmutreads"
+                logger.warning("%s dropped site with fewer reads than --minmutreads" % hapstr)
                 os.remove(tmpoutbamname)
                 return None
 
@@ -222,7 +228,7 @@ def makemut(args, hc, avoid, alignopts):
 
         readlist = newreadlist
 
-        print "INFO\t" + now() + "\t" + hapstr + "\tpicked:",str(len(readlist))
+        logger.info("%s picked: %d" % (hapstr, len(readlist)))
 
         wrote = 0
         nmut = 0
@@ -267,7 +273,7 @@ def makemut(args, hc, avoid, alignopts):
                         # no: output original mate
                         outbam_muts.write(mate_read)
 
-        print "INFO\t" + now() + "\t" + hapstr + "\twrote: ",wrote,"mutated:",nmut
+        logger.info("%s wrote: %d, mutated: %d" % (hapstr,wrote,nmut))
 
         if not hasSNP or args.force:
             outbam_muts.close()
@@ -282,7 +288,7 @@ def makemut(args, hc, avoid, alignopts):
             avgincover  = float(sum(incover))/float(len(incover)) 
             avgoutcover = float(sum(outcover))/float(len(outcover))
 
-            print "INFO\t" + now() + "\t" + hapstr + "\tavgincover: " + str(avgincover) + " avgoutcover: " + str(avgoutcover)
+            logger.info("%s avgincover: %f, avgoutcover: %f" % (hapstr, avgincover, avgoutcover))
 
             spikein_snvfrac = 0.0
             if wrote > 0:
@@ -300,7 +306,7 @@ def makemut(args, hc, avoid, alignopts):
                 os.remove(tmpoutbamname)
                 if os.path.exists(tmpoutbamname + '.bai'):
                     os.remove(tmpoutbamname + '.bai')
-                print "WARN\t" + now() + "\t" + hapstr + "\tdropped for outcover/incover < " + str(args.coverdiff)
+                logger.warning("%s dropped for outcover/incover < %s" % (hapstr, str(args.coverdiff)))
                 return None
 
         outbam_muts.close()
@@ -321,12 +327,12 @@ def makemut(args, hc, avoid, alignopts):
         return None
 
 def main(args):
-    print "INFO\t" + now() + "\tstarting " + sys.argv[0] + " called with args: " + ' '.join(sys.argv) + "\n"
+    logger.info("starting %s called with args: %s" % (sys.argv[0], ' '.join(sys.argv)))
     bedfile = open(args.varFileName, 'r')
     reffile = pysam.Fastafile(args.refFasta)
 
     if not os.path.exists(args.bamFileName + '.bai'):
-        sys.stderr.write("ERROR\t" + now() + "\tinput bam must be indexed, not .bai file found for " + args.bamFileName + " \n")
+        logger.error("input bam must be indexed, not .bai file found for %s" % args.bamFileName)
         sys.exit(1)
 
     alignopts = {}
@@ -350,11 +356,11 @@ def main(args):
 
     if not os.path.exists(args.tmpdir):
         os.mkdir(args.tmpdir)
-        print "INFO\t" + now() + "\tcreated tmp directory: " + args.tmpdir
+        logger.info("created tmp directory: %s" % args.tmpdir)
 
     if not os.path.exists('addsnv_logs_' + os.path.basename(args.outBamFile)):
         os.mkdir('addsnv_logs_' + os.path.basename(args.outBamFile))
-        print "INFO\t" + now() + "\tcreated directory: addsnv_logs_" + os.path.basename(args.outBamFile)
+        logger.info("created directory: addsnv_logs_%s" % os.path.basename(args.outBamFile))
 
     assert os.path.exists('addsnv_logs_' + os.path.basename(args.outBamFile)), "could not create output directory!"
     assert os.path.exists(args.tmpdir), "could not create temporary directory!"
@@ -423,7 +429,7 @@ def main(args):
 
     haploclusters.append(hc)
 
-    print "Debug, haploclusters:" + str(haploclusters)
+    #print "Debug, haploclusters:" + str(haploclusters)
 
     for hc in haploclusters:
         # make mutation (submit job to thread pool)
@@ -439,7 +445,7 @@ def main(args):
                     tmpbams.append(tmpbam)
 
     if len(tmpbams) == 0:
-        print "INFO\t" + now() + "\tno succesful mutations"
+        logger.error("no succesful mutations")
         sys.exit()        
 
     # merge tmp bams
@@ -458,16 +464,16 @@ def main(args):
             os.remove(bam + '.bai')
 
     if args.skipmerge:
-        print "INFO\t" + now() + "\tskipping merge, plase merge reads from", outbam_mutsfile, "manually."
+        logger.info("skipping merge, plase merge reads from %s manually." % outbam_mutsfile)
     else:
         if args.tagreads:
             from bamsurgeon.markreads import markreads
             tmp_tag_bam = 'tag.%s.bam' % str(uuid4())
             markreads(outbam_mutsfile, tmp_tag_bam)
             move(tmp_tag_bam, outbam_mutsfile)
-            print "INFO\t" + now() + "\ttagged reads."
+            logger.info("tagged reads.")
 
-        print "INFO\t" + now() + "\tdone making mutations, merging mutations into", args.bamFileName, "-->", args.outBamFile
+        logger.info("done making mutations, merging mutations into %s --> %s" % (args.bamFileName, args.outBamFile))
         replace(args.bamFileName, outbam_mutsfile, args.outBamFile, seed=args.seed)
 
         #cleanup
