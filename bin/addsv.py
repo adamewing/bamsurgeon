@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+#from __future__ import print_function
+
 import re
 import os
 import sys
@@ -22,6 +24,11 @@ from itertools import izip
 from collections import Counter
 from multiprocessing import Pool
 
+import logging
+FORMAT = '%(levelname)s %(asctime)s %(message)s'
+logging.basicConfig(format=FORMAT)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)
 sys.stderr = os.fdopen(sys.stderr.fileno(), 'w', 0)
@@ -64,25 +71,25 @@ def runwgsim(contig, newseq, svfrac, svtype, exclude, pemean, pesd, tmpdir, muti
     ctg_len = len(contig)
     if trn_contig: ctg_len += len(trn_contig)
 
-    print "INFO\t" + now() + "\t" + mutid + "\tpaired  reads :", paired
-    print "INFO\t" + now() + "\t" + mutid + "\tsingle  reads :", single
-    print "INFO\t" + now() + "\t" + mutid + "\tdiscard reads :", discard
-    print "INFO\t" + now() + "\t" + mutid + "\ttotal   reads :", totalreads
+    logger.info("%s paired reads: %d" %  (mutid, paired))
+    logger.info("%s single reads: %d" % (mutid, single))
+    logger.info("%s discard reads: %d" % (mutid, discard))
+    logger.info("%s total reads: %d" % (mutid, totalreads))
 
     # adjustment factor for length of new contig vs. old contig
     lenfrac = float(len(newseq))/float(ctg_len)
 
-    print "INFO\t" + now() + "\t" + mutid + "\told ctg len:", ctg_len
-    print "INFO\t" + now() + "\t" + mutid + "\tnew ctg len:", len(newseq)
-    print "INFO\t" + now() + "\t" + mutid + "\tadj. factor:", lenfrac
+    logger.info("%s old ctg len: %d" % (mutid, ctg_len))
+    logger.info("%s new ctg len: %d" % (mutid, len(newseq)))
+    logger.info("%s adj. factor: %f" % (mutid, lenfrac))
 
     # number of paried reads to simulate
     nsimreads = int((paired + (single/2)) * svfrac * lenfrac)
 
-    print "INFO\t" + now() + "\t" + mutid + "\tnum. sim. reads:", nsimreads 
-    print "INFO\t" + now() + "\t" + mutid + "\tPE mean outer distance:", pemean
-    print "INFO\t" + now() + "\t" + mutid + "\tPE outer distance SD:", pesd
-    print "INFO\t" + now() + "\t" + mutid + "\trerror rate:", err_rate
+    logger.info("%s num. sim. reads: %d" % (mutid, nsimreads))
+    logger.info("%s PE mean outer distance: %f" % (mutid, pemean))
+    logger.info("%s PE outer distance SD: %f" % (mutid, pesd))
+    logger.info("%s rerror rate: %f" % (mutid, err_rate))
 
     rquals = contig.rquals
     mquals = contig.mquals
@@ -172,7 +179,7 @@ def fqReplaceList(fqfile, names, quals, svfrac, svtype, exclude, mutid='null'):
 
         fqout.write(seqs[i] + "\n+\n" + quals[i] + "\n")
         if newnames[i] in usednames:
-            print "INFO\t" + now() + "\t" + mutid + "\twarning, used read name: " + newnames[i] + " in multiple pairs"
+            logger.warning("%s warning, used read name: %s in multiple pairs" % (mutid, newnames[i]))
         usednames[newnames[i]] = True
 
     is_del = False
@@ -199,7 +206,7 @@ def singleseqfa(file,mutid='null'):
             line = line.strip()
             if line.startswith('>'):
                 if header is not None:
-                    sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tmultiple entries found in " + file + " only using the first\n")
+                    logger.warning("%s multiple entries found in %s only using the first" % (mutid, file))
                 header = line.lstrip('>')
             else:
                 seq += line
@@ -298,8 +305,8 @@ def trim_contig(mutid, chrom, start, end, contig, reffile):
     alignstats = align(contig.seq, refseq)
     
     if len(alignstats) < 6:
-        sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\talignstats:" + str(alignstats) + "\n")
-        sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tNo good alignment between mutated contig and original, aborting mutation!\n")
+        logger.warning("%s alignstats: %s" % (mutid, str(alignstats)))
+        logger.warning("%s No good alignment between mutated contig and original, aborting mutation!" % mutid)
         return [None] * 9
     
     qrystart, qryend = map(int, alignstats[2:4])
@@ -307,10 +314,10 @@ def trim_contig(mutid, chrom, start, end, contig, reffile):
 
     refseq = refseq[tgtstart:tgtend]
     
-    print "INFO\t" + now() + "\t" + mutid + "\talignment result:", alignstats
+    logger.info("%s alignment result: %s" % (mutid, str(alignstats)))
 
     contig.trimseq(qrystart, qryend)
-    print "INFO\t" + now() + "\t" + mutid + "\ttrimmed contig length:", contig.len
+    logger.info("%s trimmed contig length: %d" % (mutid, contig.len))
 
     refstart = start + tgtstart
     refend = start + tgtend
@@ -398,8 +405,8 @@ def makemut(args, bedline, alignopts):
                     assert svfrac <= 1.0, 'copy number from %s must be at least 1: %s' % (args.cnvfile, snregion.stri[()])
                     sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tadjusted default MAF: " + str(svfrac) + "\n")
 
-        print "INFO\t" + now() + "\t" + mutid + "\tinterval:", c
-        print "INFO\t" + now() + "\t" + mutid + "\tlength:", end-start
+        logger.info("%s interval: %s" % (mutid, bedline.strip()))
+        logger.info("%s length: %d" % (mutid, (end-start)))
 
        # modify start and end if interval is too short
         minctglen = int(args.minctglen)
@@ -413,25 +420,25 @@ def makemut(args, bedline, alignopts):
             start = start - adj/2
             end   = end + adj/2
 
-            print "INFO\t" + now() + "\t" + mutid + "\tnote: interval size was too short, adjusted: %s:%d-%d" % (chrom,start,end)
+            logger.info("%s note: interval size was too short, adjusted: %s:%d-%d" % (mutid, chrom,start,end))
 
         dfrac = discordant_fraction(args.bamFileName, chrom, start, end)
         print "INFO\t" + now() + "\t" + mutid + "\tdiscordant fraction:", dfrac
 
         maxdfrac = 0.1 # FIXME make a parameter
         if dfrac > .1: 
-            sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tdiscordant fraction > " + str(maxdfrac) + " aborting mutation!\n")
+            logger.warning("%s discordant fraction > %f aborting mutation!\n" % (mutid, maxdfrac))
             return None, None, None
 
         contigs = ar.asm(chrom, start, end, args.bamFileName, reffile, int(args.kmersize), args.tmpdir, mutid=mutid, debug=args.debug)
 
         if len(contigs) == 0:
-            sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tgenerated no contigs, skipping site.\n")
+            logger.warning("%s generated no contigs, skipping site." % mutid)
             return None, None, None
 
         trn_contigs = None
         if is_transloc:
-            print "INFO\t" + now() + "\t" + mutid + "\tassemble translocation end: %s:%d-%d" % (trn_chrom, trn_start, trn_end)
+            logger.info("%s assemble translocation end: %s:%d-%d" % (mutid, trn_chrom, trn_start, trn_end))
             trn_contigs = ar.asm(trn_chrom, trn_start, trn_end, args.bamFileName, reffile, int(args.kmersize), args.tmpdir, mutid=mutid, debug=args.debug)
 
         maxcontig = sorted(contigs)[-1]
@@ -440,60 +447,60 @@ def makemut(args, bedline, alignopts):
 
         if is_transloc:
             if len(trn_contigs) == 0:
-                sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\ttranslocation partner generated no contigs, skipping site.\n")
+                logger.warning("%s translocation partner generated no contigs, skipping site." % mutid)
                 return None, None, None
 
             trn_maxcontig = sorted(trn_contigs)[-1]
 
         if re.search('N', maxcontig.seq):
             if args.allowN:
-                sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tcontig has ambiguous base (N), replaced with 'A'\n")
+                logger.warning("%s contig has ambiguous base (N), replaced with 'A'" % mutid)
                 maxcontig.seq = re.sub('N', 'A', maxcontig.seq)
             else:
-                sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tcontig dropped due to ambiguous base (N), aborting mutation.\n")
+                logger.warning("%s contig dropped due to ambiguous base (N), aborting mutation." % mutid)
                 return None, None, None
 
         if is_transloc and re.search('N', trn_maxcontig.seq):
             if args.allowN:
-                sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tcontig has ambiguous base (N), replaced with 'A'\n")
+                logger.warning("%s contig has ambiguous base (N), replaced with 'A'" % mutid)
                 trn_maxcontig.seq = re.sub('N', 'A', trn_maxcontig.seq)
             else:
-                sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tcontig dropped due to ambiguous base (N), aborting mutation.\n")
+                logger.warning("%s contig dropped due to ambiguous base (N), aborting mutation." % mutid)
                 return None, None, None
 
         if maxcontig is None:
-            sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tmaxcontig has length 0, aborting mutation!\n")
+            logger.warning("%s maxcontig has length 0, aborting mutation!" % mutid)
             return None, None, None
 
         if is_transloc and trn_maxcontig is None:
-            sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\ttransloc maxcontig has length 0, aborting mutation!\n")
+            logger.warning("%s transloc maxcontig has length 0, aborting mutation!" % mutid)
             return None, None, None
 
-        print "INFO\t" + now() + "\t" + mutid + "\tbest contig length:", sorted(contigs)[-1].len
+        logger.info("%s best contig length: %d" % (mutid, sorted(contigs)[-1].len))
 
         if is_transloc:
-            print "INFO\t" + now() + "\t" + mutid + "\tbest transloc contig length:", sorted(trn_contigs)[-1].len
+            logger.info("%s best transloc contig length: %d" % (mutid, sorted(trn_contigs)[-1].len))
 
         # trim contig to get best ungapped aligned region to ref.
         maxcontig, refseq, alignstats, refstart, refend, qrystart, qryend, tgtstart, tgtend = trim_contig(mutid, chrom, start, end, maxcontig, reffile)
 
         if maxcontig is None:
-            sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tbest contig did not have sufficent match to reference, aborting mutation.\n")
+            logger.warning("%s best contig did not have sufficent match to reference, aborting mutation." % mutid)
             return None, None, None
     
-        print "INFO\t" + now() + "\t" + mutid + "\tstart, end, tgtstart, tgtend, refstart, refend:", start, end, tgtstart, tgtend, refstart, refend
+        logger.info("%s start: %d, end: %d, tgtstart: %d, tgtend: %d, refstart: %d, refend: %d" % (mutid, start, end, tgtstart, tgtend, refstart, refend))
 
         if is_transloc:
             trn_maxcontig, trn_refseq, trn_alignstats, trn_refstart, trn_refend, trn_qrystart, trn_qryend, trn_tgtstart, trn_tgtend = trim_contig(mutid, trn_chrom, trn_start, trn_end, trn_maxcontig, reffile)
-            print "INFO\t" + now() + "\t" + mutid + "\ttrn_start, trn_end, trn_tgtstart, trn_tgtend, trn_refstart, trn_refend:", trn_start, trn_end, trn_tgtstart, trn_tgtend, trn_refstart, trn_refend
+            logger.info("%s trn_start: %d, trn_end: %d, trn_tgtstart: %d, trn_tgtend:%d , trn_refstart: %d, trn_refend: %d" % (mutid, trn_start, trn_end, trn_tgtstart, trn_tgtend, trn_refstart, trn_refend))
 
         # is there anough room to make mutations?
         if maxcontig.len < 3*int(args.maxlibsize):
-            sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tbest contig too short to make mutation!\n")
+            logger.warning("%s best contig too short to make mutation!" % mutid)
             return None, None, None
 
         if is_transloc and trn_maxcontig.len < 3*int(args.maxlibsize):
-            sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tbest transloc contig too short to make mutation!\n")
+            logger.warning("%s best transloc contig too short to make mutation!" % mutid)
             return None, None, None
 
         # make mutation in the largest contig
@@ -506,7 +513,7 @@ def makemut(args, bedline, alignopts):
             a = actionstr.split()
             action = a[0]
 
-            print "INFO\t" + now() + "\t" + mutid + "\taction: ", actionstr, action
+            logger.info("%s action: %s %s" % (mutid, actionstr, action))
 
             insseqfile = None
             insseq = ''
@@ -564,7 +571,7 @@ def makemut(args, bedline, alignopts):
                     svfrac = float(a[1])/cn
 
 
-            print "INFO\t" + now() + "\t" + mutid + "\tfinal VAF accounting for copy number %f: %f" % (cn, svfrac)
+            logger.info("%s final VAF accounting for copy number %f: %f" % (mutid, cn, svfrac))
 
             logfile.write(">" + chrom + ":" + str(refstart) + "-" + str(refend) + " BEFORE\n" + str(mutseq) + "\n")
 
@@ -574,20 +581,20 @@ def makemut(args, bedline, alignopts):
                     inspoint = mutseq.find_site(ins_motif, left_trim=int(args.maxlibsize), right_trim=int(args.maxlibsize))
 
                     if inspoint < int(args.maxlibsize) or inspoint > mutseq.length() - int(args.maxlibsize):
-                        print "INFO\t" + now() + "\t" + mutid + "\tpicked midpoint, no cutsite found" + str(insseqfile)
+                        logger.info("%s picked midpoint, no cutsite found" % mutid)
                         inspoint = mutseq.length()/2
 
                 if insseqfile: # seq in file
                     if insseqfile == 'RND':
                         assert args.inslib is not None # insertion library needs to exist
                         insseqfile = random.choice(args.inslib.keys())
-                        print "INFO\t" + now() + "\t" + mutid + "\tchose sequence from insertion library: " + insseqfile
+                        logger.info("%s chose sequence from insertion library: %s" % (mutid, insseqfile))
                         mutseq.insertion(inspoint, args.inslib[insseqfile], tsdlen)
 
                     elif insseqfile.startswith('INSLIB:'):
                         assert args.inslib is not None # insertion library needs to exist
                         insseqfile = insseqfile.split(':')[1]
-                        print "INFO\t" + now() + "\t" + mutid + "\tspecify sequence from insertion library: " + insseqfile
+                        logger.info("%s specify sequence from insertion library: %s" % (mutid, insseqfile))
                         assert insseqfile in args.inslib, '%s not found in insertion library' % insseqfile
                         mutseq.insertion(inspoint, args.inslib[insseqfile], tsdlen)
 
@@ -617,7 +624,7 @@ def makemut(args, bedline, alignopts):
                 dadj = delend-delstart-dlen
                 if dadj < 0:
                     dadj = 0
-                    sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\twarning: deletion of length 0\n")
+                    logger.warning("%s warning: deletion of length 0" % mutid)
 
                 delstart += dadj/2
                 delend   -= dadj/2
@@ -653,8 +660,8 @@ def makemut(args, bedline, alignopts):
             logfile.write(">" + chrom + ":" + str(refstart) + "-" + str(refend) +" AFTER\n" + str(mutseq) + "\n")
 
         pemean, pesd = float(args.ismean), float(args.issd) 
-        print "INFO\t" + now() + "\t" + mutid + "\tset paired end mean distance: " + str(args.ismean)
-        print "INFO\t" + now() + "\t" + mutid + "\tset paired end distance stddev: " + str(args.issd)
+        logger.info("%s set paired end mean distance: %f" % (mutid, pemean))
+        logger.info("%s set paired end distance stddev: %f" % (mutid, pesd))
 
         # simulate reads
         (fq1, fq2) = runwgsim(maxcontig, mutseq.seq, svfrac, actions, exclude, pemean, pesd, args.tmpdir, err_rate=float(args.simerr), mutid=mutid, seed=args.seed, trn_contig=trn_maxcontig)
@@ -662,10 +669,10 @@ def makemut(args, bedline, alignopts):
         outreads = aligners.remap_fastq(args.aligner, fq1, fq2, args.refFasta, outbam_mutsfile, alignopts, mutid=mutid, threads=1)
 
         if outreads == 0:
-            sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\toutbam " + outbam_mutsfile + " has no mapped reads!\n")
+            logger.warning("%s outbam %s has no mapped reads!" % (mutid, outbam_mutsfile))
             return None, None, None
 
-        print "INFO\t" + now() + "\t" + mutid + "\ttemporary bam: " + outbam_mutsfile
+        logger.info("%s temporary bam: %s" % (mutid, outbam_mutsfile))
 
         exclude.close()
         bamfile.close()
@@ -680,12 +687,12 @@ def makemut(args, bedline, alignopts):
 
 
 def main(args):
-    print "INFO\t" + now() + "\tstarting " + sys.argv[0] + " called with args: " + ' '.join(sys.argv) + "\n"
+    logger.info("starting %s called with args: %s" % (sys.argv[0], ' '.join(sys.argv)))
     tmpbams = [] # temporary BAMs, each holds the realigned reads for one mutation
     exclfns = [] # 'exclude' files store reads to be removed from the original BAM due to deletions
 
     if not os.path.exists(args.bamFileName + '.bai'):
-        sys.stderr.write("ERROR\t" + now() + "\tinput bam must be indexed, not .bai file found for " + args.bamFileName + " \n")
+        logger.error("input bam must be indexed, not .bai file found for %s" % args.bamFileName)
         sys.exit(1)
 
     alignopts = {}
@@ -697,10 +704,10 @@ def main(args):
     # load insertion library if present
     try:
         if args.inslib is not None:
-            print "INFO\t" + now() + "\tloading insertion library from " + args.inslib
+            logger.info("loading insertion library from %s" % args.inslib)
             args.inslib = load_inslib(args.inslib)
     except Exception, e:
-        sys.stderr.write("ERROR\t" + now() + "\tfailed to load insertion library " + args.inslib + "\n")
+        logger.error("failed to load insertion library %s" % args.inslib)
         traceback.print_exc(file=sys.stderr)
         sys.stderr.write("\n")
         sys.exit(1)
@@ -712,11 +719,11 @@ def main(args):
 
     if not os.path.exists(args.tmpdir):
         os.mkdir(args.tmpdir)
-        print "INFO\t" + now() + "\tcreated tmp directory: " + args.tmpdir
+        logger.info("created tmp directory: %s" % args.tmpdir)
 
     if not os.path.exists('addsv_logs_' + os.path.basename(args.outBamFile)):
         os.mkdir('addsv_logs_' + os.path.basename(args.outBamFile))
-        print "INFO\t" + now() + "\tcreated log directory: addsv_logs_" + os.path.basename(args.outBamFile)
+        logger.info("created log directory: addsv_logs_%s" % os.path.basename(args.outBamFile))
 
     assert os.path.exists('addsv_logs_' + os.path.basename(args.outBamFile)), "could not create output directory!"
     assert os.path.exists(args.tmpdir), "could not create temporary directory!"
@@ -783,7 +790,7 @@ def main(args):
                 os.remove(exclfn)
 
     if len(tmpbams) == 0:
-        print "INFO\t" + now() + "\tno succesful mutations"
+        logger.error("no succesful mutations")
         sys.exit()
 
     success_mutids = [os.path.basename(tmpbam).split('.')[0] for tmpbam in tmpbams]
@@ -797,18 +804,15 @@ def main(args):
             bd_left_bnd = int(mutinfo.split()[3])
             bd_right_bnd = int(mutinfo.split()[7])
 
-            #print 'bd_debug: orig:', bigdels[mutid]
-            #print 'bd_debug: mutinfo:', mutinfo
-
             bigdel_excl[mutid] = fetch_read_names(args, bd_chrom, bd_left_bnd, bd_right_bnd, svfrac=bd_svfrac)
 
-    print "INFO\t" + now() + "\ttmpbams:",tmpbams
-    print "INFO\t" + now() + "\texclude:",exclfns
+    logger.info("tmpbams: %s" % tmpbams)
+    logger.info("exclude: %s" % exclfns)
 
     excl_merged = 'addsv.exclude.final.' + str(uuid4()) + '.txt'
     mergedtmp = 'addsv.mergetmp.final.' + str(uuid4()) + '.bam'
 
-    print "INFO\t" + now() + "\tmerging exclude files into", excl_merged, "..."
+    logger.info("merging exclude files into %s" % excl_merged)
     exclout = open(excl_merged, 'w')
     for exclfn in exclfns:
         with open(exclfn, 'r') as excl:
@@ -824,17 +828,17 @@ def main(args):
     exclout.close()
 
     if len(tmpbams) == 1:
-        print "INFO\t" + now() + "\tonly one bam:", tmpbams[0], "renaming to", mergedtmp
+        logger.info("only one bam: %s renaming to %s" % (tmpbams[0], mergedtmp))
         os.rename(tmpbams[0], mergedtmp)
 
     elif len(tmpbams) > 1:
-        print "INFO\t" + now() + "\tmerging bams into", mergedtmp, "..."
+        logger.info("merging bams into %s" % mergedtmp)
         mergebams(tmpbams, mergedtmp, debug=args.debug)
 
     if args.skipmerge:
-        print "INFO\t" + now() + "\tfinal merge skipped, please merge manually:", mergedtmp
-        print "INFO\t" + now() + "\texclude file to use:", excl_merged
-        print "INFO\t" + now() + "\tcleaning up..."
+        logger.info("final merge skipped, please merge manually: %s" % mergedtmp)
+        logger.info("exclude file to use: %s" % excl_merged)
+        logger.info("cleaning up...")
 
         if not args.debug:
             if exclfn is not None:
@@ -854,9 +858,9 @@ def main(args):
             tmp_tag_bam = 'tag.%s.bam' % str(uuid4())
             markreads(mergedtmp, tmp_tag_bam)
             move(tmp_tag_bam, mergedtmp)
-            print "INFO\t" + now() + "\ttagged reads."
+            logger.info("tagged reads.")
 
-        print "INFO\t" + now() + "\tswapping reads into original and writing to ", args.outBamFile
+        logger.info("swapping reads into original and writing to %s" % args.outBamFile)
         replace(args.bamFileName, mergedtmp, args.outBamFile, excl_merged, keepsecondary=args.keepsecondary, seed=args.seed)
 
         if not args.debug:
@@ -873,7 +877,7 @@ def main(args):
                 if os.path.isfile(tmpbam + '.bai'):
                     os.remove(tmpbam + '.bai')
 
-        print "INFO\t" + now() + "\tdone."
+        logger.info("done.")
 
     
 if __name__ == '__main__':
