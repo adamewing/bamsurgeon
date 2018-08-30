@@ -108,7 +108,7 @@ def runwgsim(contig, newseq, svfrac, svtype, exclude, pemean, pesd, tmpdir, muti
 
     if seed is not None: args += ['-S', str(seed)]
 
-    print args
+    logger.info(str(args))
     subprocess.call(args)
 
     os.remove(fasta)
@@ -423,7 +423,7 @@ def makemut(args, bedline, alignopts):
             logger.info("%s note: interval size was too short, adjusted: %s:%d-%d" % (mutid, chrom,start,end))
 
         dfrac = discordant_fraction(args.bamFileName, chrom, start, end)
-        print "INFO\t" + now() + "\t" + mutid + "\tdiscordant fraction:", dfrac
+        logger.info("%s discordant fraction: %f" % (mutid, dfrac))
 
         maxdfrac = 0.1 # FIXME make a parameter
         if dfrac > .1: 

@@ -10,6 +10,11 @@ from shutil import move
 from re import sub
 from uuid import uuid4
 
+import logging
+FORMAT = '%(levelname)s %(asctime)s %(message)s'
+logging.basicConfig(format=FORMAT)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 #
 # Remapping functions bam --> bam
@@ -24,30 +29,30 @@ def checkoptions(name, options, picardjar, sv=False):
 
     if sv:
         if name not in supported_aligners_fastq:
-            raise ValueError("ERROR\tunsupported aligner: " + name + "\n")
+            raise ValueError("ERROR unsupported aligner: " + name)
     else:
         if name not in supported_aligners_bam:
-            raise ValueError("ERROR\tunsupported aligner: " + name + "\n")
+            raise ValueError("ERROR unsupported aligner: " + name)
 
     if name != 'backtrack' and not sv:
         if picardjar is None:
-            raise ValueError("ERROR\t'--aligner " + name + "' requires '--picardjar' to be specified\n")
+            raise ValueError("ERROR '--aligner " + name + "' requires '--picardjar' to be specified\n")
 
     if name == 'novoalign':
         if 'novoref' not in options:
-            raise ValueError("ERROR\t'--aligner novoalign' requires '--alignopts novoref:path_to_novoalign_reference' to be set\n")
+            raise ValueError("ERROR '--aligner novoalign' requires '--alignopts novoref:path_to_novoalign_reference' to be set\n")
 
     if name == 'gsnap':
         if 'gsnaprefdir' not in options or 'gsnaprefname' not in options:
-            raise ValueError("ERROR\t'--aligner gsnap' requires '--alignopts gsnaprefdir:GSNAP_reference_dir,gsnaprefname:GSNAP_ref_name\n")
+            raise ValueError("ERROR '--aligner gsnap' requires '--alignopts gsnaprefdir:GSNAP_reference_dir,gsnaprefname:GSNAP_ref_name\n")
 
     if name == 'STAR':
         if 'STARrefdir' not in options:
-            raise ValueError("ERROR\t'--aligner STAR' requires '--alignopts STARrefdir:/path/to/STAR_reference_dir\n")
+            raise ValueError("ERROR '--aligner STAR' requires '--alignopts STARrefdir:/path/to/STAR_reference_dir\n")
 
     if name == 'bowtie2':
         if 'bowtie2ref' not in options:
-            raise ValueError("ERROR\t'--aligner bowtie2' requires '--alignopts bowtie2ref:bowtie2_ref_basepath\n")
+            raise ValueError("ERROR '--aligner bowtie2' requires '--alignopts bowtie2ref:bowtie2_ref_basepath\n")
 
 
 def remap_bam(name, bamfn, fastaref, options, mutid='null', threads=1, paired=True, picardjar=None, insane=False):
@@ -99,23 +104,23 @@ def remap_backtrack_bam(bamfn, threads, fastaref, mutid='null', paired=True):
         samargs  = ['bwa', 'sampe', '-P', '-f', samfn, fastaref, sai1fn, sai2fn, bamfn, bamfn]
         bamargs  = ['samtools', 'view', '-bt', refidx, '-o', bamfn, samfn] 
 
-        print "INFO\t" + now() + "\t" + mutid + "\tmapping 1st end, cmd: " + " ".join(sai1args)
+        logger.info("%s mapping 1st end, cmd: %s" % (mutid, " ".join(sai1args)))
         subprocess.call(sai1args)
-        print "INFO\t" + now() + "\t" + mutid + "\tmapping 2nd end, cmd: " + " ".join(sai2args)
+        logger.info("%s mapping 2nd end, cmd: %s" % (mutid, " ".join(sai2args)))
         subprocess.call(sai2args)
-        print "INFO\t" + now() + "\t" + mutid + "\tpairing ends, building .sam, cmd: " + " ".join(samargs)
+        logger.info("%s pairing ends, building .sam, cmd: %s" % (mutid, " ".join(samargs)))
         subprocess.call(samargs)
-        print "INFO\t" + now() + "\t" + mutid + "\tsam --> bam, cmd: " + " ".join(bamargs)
+        logger.info("%s sam --> bam, cmd: %s" % (mutid, " ".join(bamargs)))
         subprocess.call(bamargs)
 
         sortfn = bamfn + ".sort.bam"
-        sortargs = ['samtools','sort','-m','10000000000', '-T', sortfn ,'-o',sortfn, bamfn]
-        print "INFO\t" + now() + "\t" + mutid + "\tsorting, cmd: " + " ".join(sortargs)
+        sortargs = ['samtools','sort', '-T', sortfn ,'-o',sortfn, bamfn]
+        logger.info("%s sorting, cmd: %s" % (mutid, " ".join(sortargs)))
         subprocess.call(sortargs)
         os.rename(sortfn, bamfn)
 
         indexargs = ['samtools','index',bamfn]
-        print "INFO\t" + now() + "\t" + mutid + "\tindexing, cmd: " + " ".join(indexargs)
+        logger.info("%s indexing, cmd: %s" % (mutid, " ".join(indexargs)))
         subprocess.call(indexargs)
 
         # cleanup
@@ -132,21 +137,21 @@ def remap_backtrack_bam(bamfn, threads, fastaref, mutid='null', paired=True):
         samargs  = ['bwa', 'samse', '-f', samfn, fastaref, saifn, bamfn]
         bamargs  = ['samtools', 'view', '-bt', refidx, '-o', bamfn, samfn] 
 
-        print "INFO\t" + now() + "\t" + mutid + "\tmapping, cmd: " + " ".join(saiargs)
+        logger.info("%s mapping, cmd: %s" % (mutid, " ".join(saiargs)))
         subprocess.call(saiargs)
-        print "INFO\t" + now() + "\t" + mutid + "\tpairing ends, building .sam, cmd: " + " ".join(samargs)
+        logger.info("%s pairing ends, building .sam, cmd: %s" % (mutid, " ".join(samargs)))
         subprocess.call(samargs)
-        print "INFO\t" + now() + "\t" + mutid + "\tsam --> bam, cmd: " + " ".join(bamargs)
+        logger.info("%s sam --> bam, cmd: %s" % (mutid, " ".join(bamargs)))
         subprocess.call(bamargs)
 
         sortfn = bamfn + ".sort.bam"
-        sortargs = ['samtools','sort','-m','10000000000', '-T', sortfn, '-o',sortfn, bamfn]
-        print "INFO\t" + now() + "\t" + mutid + "\tsorting, cmd: " + " ".join(sortargs)
+        sortargs = ['samtools','sort', '-T', sortfn, '-o',sortfn, bamfn]
+        logger.info("%s sorting, cmd: %s" % (mutid, " ".join(sortargs)))
         subprocess.call(sortargs)
         os.rename(sortfn,bamfn)
 
         indexargs = ['samtools','index',bamfn]
-        print "INFO\t" + now() + "\t" + mutid + "\tindexing, cmd: " + " ".join(indexargs)
+        logger.info("%s indexing, cmd: %s" % (mutid, " ".join(indexargs)))
         subprocess.call(indexargs)
 
         # cleanup
@@ -165,7 +170,7 @@ def remap_bwamem_bam(bamfn, threads, fastaref, picardjar, mutid='null', paired=T
     sam_out  = bamfn + '.realign.sam'
     sort_out = bamfn + '.realign.sorted.bam'
 
-    print "INFO\t" + now() + "\t" + mutid + "\tconverting " + bamfn + " to fastq\n"
+    logger.info("%s converting %s to fastq" % (mutid, bamfn))
     fastq = bamtofastq(bamfn, picardjar, threads=threads, paired=paired)[0]
 
     sam_cmd = []
@@ -178,39 +183,39 @@ def remap_bwamem_bam(bamfn, threads, fastaref, picardjar, mutid='null', paired=T
     assert len(sam_cmd) > 0
 
     bam_cmd  = ['samtools', 'view', '-bt', fastaref + '.fai', '-o', bamfn, sam_out]
-    sort_cmd = ['samtools', 'sort', '-@', str(threads), '-m', '10000000000', '-T', sort_out, '-o', sort_out, bamfn]
+    sort_cmd = ['samtools', 'sort', '-@', str(threads), '-T', sort_out, '-o', sort_out, bamfn]
     idx_cmd  = ['samtools', 'index', bamfn]
 
-    print "INFO\t" + now() + "\t" + mutid + "\taligning " + fastq + " with bwa mem\n"
+    logger.info("%s aligning %s with bwa mem" % (mutid, fastq))
     with open(sam_out, 'w') as sam:
         p = subprocess.Popen(sam_cmd, stdout=subprocess.PIPE)
         for line in p.stdout:
             sam.write(line)
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\twriting " + sam_out + " to BAM...\n")
+    logger.info("%s writing %s to BAM..." % (mutid, sam_out))
     subprocess.call(bam_cmd)
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tdeleting SAM: " + sam_out + "\n")
+    logger.info("%s deleting SAM: %s" % (mutid, sam_out))
     if deltmp: os.remove(sam_out)
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tsorting output: " + ' '.join(sort_cmd) + "\n")
+    logger.info("%s sorting output: %s " % (mutid, ' '.join(sort_cmd)))
     subprocess.call(sort_cmd)
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremove original bam:" + bamfn + "\n")
+    logger.info("%s remove original bam: %s" % (mutid, bamfn))
     if deltmp: os.remove(bamfn)
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\trename sorted bam: " + sort_out + " to original name: " + bamfn + "\n")
+    logger.info("%s rename sorted bam: %s to original name: %s" % (mutid, sort_out, bamfn))
     move(sort_out, bamfn)
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tindexing: " + ' '.join(idx_cmd) + "\n")
+    logger.info("%s indexing: %s" % (mutid, ' '.join(idx_cmd)))
     subprocess.call(idx_cmd)
 
     # check if BAM readcount looks sane
     if not insane:
         if bamreadcount(bamfn) < fastqreadcount(fastq): 
-            raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
+            raise ValueError("ERROR " + now() + " " + mutid + " bam readcount < fastq readcount, alignment sanity check failed!\n")
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fastq + "\n")
+    logger.info(mutid + " removing " + fastq)
     if deltmp: os.remove(fastq)
 
 
@@ -221,13 +226,12 @@ def remap_bwakit_bam(bamfn, threads, fastaref, picardjar, mutid='null', paired=T
     assert bamreadcount(bamfn) > 0
     if paired:
         assert bamreadcount(bamfn) > 1 
-        print 'paird'
 
     bam_out  = sub('.bam$','',bamfn) + '.aln.bam'
     sort_out = bamfn + '.realign.sorted.bam'
     out_prefix = sub('.bam$','',bamfn)
 
-    print "INFO\t" + now() + "\t" + mutid + "\tconverting " + bamfn + " to fastq\n"
+    logger.info("%s converting %s to fastq" % (mutid, bamfn))
     kit_cmd1 = []
     fastq = bamtofastq(bamfn, picardjar, threads=threads, paired=paired, twofastq=True)
     if paired:
@@ -235,9 +239,8 @@ def remap_bwakit_bam(bamfn, threads, fastaref, picardjar, mutid='null', paired=T
     else:
         kit_cmd1  = ['run-bwamem', '-t', '4', '-o', out_prefix, '-H', fastaref, fastq[0]]
 
-    print kit_cmd1
     assert len(kit_cmd1) > 0
-    print "INFO\t" + now() + "\t" + mutid + "\taligning " + ', '.join(fastq)  + " with bwa kit\n"
+    logger.info(mutid + " aligning " + ', '.join(fastq)  + " with bwa kit")
     kit_cmd2 = ['sh']
     #robust way : open two processes and pipe them together
     process_runkit = subprocess.Popen(kit_cmd1, stdout=subprocess.PIPE, shell=False)
@@ -245,39 +248,39 @@ def remap_bwakit_bam(bamfn, threads, fastaref, picardjar, mutid='null', paired=T
     process_runkit.stdout.close()
     process_sh.communicate()[0]
 
-    sort_cmd = ['samtools', 'sort', '-@', str(threads), '-m', '10000000000', '-T', sort_out, '-o', sort_out, bamfn]
+    sort_cmd = ['samtools', 'sort', '-@', str(threads), '-T', sort_out, '-o', sort_out, bamfn]
     idx_cmd  = ['samtools', 'index', bamfn]
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\trename aligned bam: " + bam_out + " to original name: " + bamfn + "\n")
+    logger.info(mutid + " rename aligned bam: " + bam_out + " to original name: " + bamfn)
     move(bam_out, bamfn)
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tsorting output: " + ' '.join(sort_cmd) + "\n")
+    logger.info(mutid + " sorting output: " + ' '.join(sort_cmd))
     subprocess.call(sort_cmd)
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremove original bam:" + bamfn + "\n")
+    logger.info(mutid + " remove original bam:" + bamfn)
     if deltmp: os.remove(bamfn)
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\trename sorted bam: " + sort_out + " to original name: " + bamfn + "\n")
+    logger.info(mutid + " rename sorted bam: " + sort_out + " to original name: " + bamfn)
     move(sort_out, bamfn)
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tindexing: " + ' '.join(idx_cmd) + "\n")
+    logger.info(mutid + " indexing: " + ' '.join(idx_cmd))
     subprocess.call(idx_cmd)
 
     # check if BAM readcount looks sane
     if not insane:
         if paired:
             if bamreadcount(bamfn) < fastqreadcount(fastq[0]) + fastqreadcount(fastq[1]): 
-                raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
+                raise ValueError("ERROR " + now() + " " + mutid + " bam readcount < fastq readcount, alignment sanity check failed!\n")
         else:
             if bamreadcount(bamfn) < fastqreadcount(fastq[0]): 
-                raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
+                raise ValueError("ERROR " + now() + " " + mutid + " bam readcount < fastq readcount, alignment sanity check failed!\n")
 
     if paired:
         for fq in fastq:
-            sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fq + "\n")
+            logger.info(mutid + " removing " + fq)
             os.remove(fq)
     else:
-        sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fastq[0] + "\n")
+        logger.info(mutid + " removing " + fastq[0])
         os.remove(fastq[0])
 
 
@@ -291,7 +294,7 @@ def remap_novoalign_bam(bamfn, threads, fastaref, picardjar, novoref, mutid='nul
     sam_out  = bamfn + '.realign.sam'
     sort_out = bamfn + '.realign.sorted.bam'
 
-    print "INFO\t" + now() + "\t" + mutid + "\tconverting " + bamfn + " to fastq\n"
+    logger.info("%s converting %s to fastq" % (mutid, bamfn))
     fastq = bamtofastq(bamfn, picardjar, threads=threads, paired=paired, twofastq=True)
 
     sam_cmd = []
@@ -309,45 +312,45 @@ def remap_novoalign_bam(bamfn, threads, fastaref, picardjar, novoref, mutid='nul
     sort_cmd = ['samtools', 'sort', '-@', str(threads), '-m', '10000000000', '-T', sort_out, '-o', sort_out, bamfn]
     idx_cmd  = ['samtools', 'index', bamfn]
 
-    print "INFO\t" + now() + "\t" + mutid + "\taligning " + str(fastq) + " with novoalign\n"
+    logger.info(mutid + " aligning " + str(fastq) + " with novoalign")
     with open(sam_out, 'w') as sam:
         p = subprocess.Popen(sam_cmd, stdout=subprocess.PIPE)
         for line in p.stdout:
             sam.write(line)
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\twriting " + sam_out + " to BAM...\n")
+    logger.info(mutid + " writing " + sam_out + " to BAM...\n")
     subprocess.call(bam_cmd)
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tdeleting SAM: " + sam_out + "\n")
+    logger.info(mutid + " deleting SAM: " + sam_out)
     os.remove(sam_out)
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tsorting output: " + ' '.join(sort_cmd) + "\n")
+    logger.info(mutid + " sorting output: " + ' '.join(sort_cmd))
     subprocess.call(sort_cmd)
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremove original bam:" + bamfn + "\n")
+    logger.info(mutid + " remove original bam:" + bamfn)
     os.remove(bamfn)
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\trename sorted bam: " + sort_out + " to original name: " + bamfn + "\n")
+    logger.info(mutid + " rename sorted bam: " + sort_out + " to original name: " + bamfn)
     move(sort_out, bamfn)
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tindexing: " + ' '.join(idx_cmd) + "\n")
+    logger.info(mutid + " indexing: " + ' '.join(idx_cmd))
     subprocess.call(idx_cmd)
 
     # check if BAM readcount looks sane
     if not insane:
         if paired:
             if bamreadcount(bamfn) < fastqreadcount(fastq[0]) + fastqreadcount(fastq[1]): 
-                raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
+                raise ValueError("ERROR " + now() + " " + mutid + " bam readcount < fastq readcount, alignment sanity check failed!\n")
         else:
             if bamreadcount(bamfn) < fastqreadcount(fastq[0]): 
-                raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
+                raise ValueError("ERROR " + now() + " " + mutid + " bam readcount < fastq readcount, alignment sanity check failed!\n")
 
     if paired:
         for fq in fastq:
-            sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fq + "\n")
+            logger.info(mutid + " removing " + fq)
             os.remove(fq)
     else:
-        sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fastq[0] + "\n")
+        logger.info(mutid + " removing " + fastq[0])
         os.remove(fastq[0])
 
 
@@ -361,7 +364,7 @@ def remap_gsnap_bam(bamfn, threads, fastaref, picardjar, gsnaprefdir, gsnaprefna
     sam_out  = bamfn + '.realign.sam'
     sort_out = bamfn + '.realign.sorted.bam'
 
-    print "INFO\t" + now() + "\t" + mutid + "\tconverting " + bamfn + " to fastq\n"
+    logger.info("%s converting %s to fastq" % (mutid, bamfn))
     fastq = bamtofastq(bamfn, picardjar, threads=threads, paired=paired, twofastq=True)
 
     sam_cmd = []
@@ -381,45 +384,45 @@ def remap_gsnap_bam(bamfn, threads, fastaref, picardjar, gsnaprefdir, gsnaprefna
     sort_cmd = ['samtools', 'sort', '-@', str(threads), '-m', '10000000000', '-T', sort_out, '-o', sort_out, bamfn]
     idx_cmd  = ['samtools', 'index', bamfn]
 
-    print "INFO\t" + now() + "\t" + mutid + "\taligning " + str(fastq) + " with gsnap\n"
+    logger.info(mutid + " aligning " + str(fastq) + " with gsnap")
     with open(sam_out, 'w') as sam:
         p = subprocess.Popen(sam_cmd, stdout=subprocess.PIPE)
         for line in p.stdout:
             sam.write(line)
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\twriting " + sam_out + " to BAM...\n")
+    logger.info(mutid + " writing " + sam_out + " to BAM...")
     subprocess.call(bam_cmd)
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tdeleting SAM: " + sam_out + "\n")
+    logger.info(mutid + " deleting SAM: " + sam_out)
     os.remove(sam_out)
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tsorting output: " + ' '.join(sort_cmd) + "\n")
+    logger.info(mutid + " sorting output: " + ' '.join(sort_cmd))
     subprocess.call(sort_cmd)
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremove original bam:" + bamfn + "\n")
+    logger.info(mutid + " remove original bam:" + bamfn)
     os.remove(bamfn)
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\trename sorted bam: " + sort_out + " to original name: " + bamfn + "\n")
+    logger.info(mutid + " rename sorted bam: " + sort_out + " to original name: " + bamfn)
     move(sort_out, bamfn)
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tindexing: " + ' '.join(idx_cmd) + "\n")
+    logger.info(mutid + " indexing: " + ' '.join(idx_cmd))
     subprocess.call(idx_cmd)
 
     # check if BAM readcount looks sane
     if not insane:
         if paired:
             if bamreadcount(bamfn) < fastqreadcount(fastq[0]) + fastqreadcount(fastq[1]): 
-                raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
+                raise ValueError("ERROR " + now() + " " + mutid + " bam readcount < fastq readcount, alignment sanity check failed!\n")
         else:
             if bamreadcount(bamfn) < fastqreadcount(fastq[0]): 
-                raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
+                raise ValueError("ERROR " + now() + " " + mutid + " bam readcount < fastq readcount, alignment sanity check failed!\n")
 
     if paired:
         for fq in fastq:
-            sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fq + "\n")
+            logger.info(mutid + " removing " + fq)
             os.remove(fq)
     else:
-        sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fastq[0] + "\n")
+        logger.info(mutid + " removing " + fastq[0])
         os.remove(fastq[0])
 
 def remap_STAR_bam(bamfn, threads, fastaref, picardjar, STARrefdir, mutid='null', paired=True, insane=False):
@@ -432,7 +435,7 @@ def remap_STAR_bam(bamfn, threads, fastaref, picardjar, STARrefdir, mutid='null'
     sam_out  = bamfn + 'Aligned.out.sam'
     sort_out = bamfn + '.realign.sorted.bam'
 
-    print "INFO\t" + now() + "\t" + mutid + "\tconverting " + bamfn + " to fastq\n"
+    logger.info("%s converting %s to fastq" % (mutid, bamfn))
     fastq = bamtofastq(bamfn, picardjar, threads=threads, paired=paired, twofastq=True)
 
     sam_cmd = []
@@ -445,30 +448,30 @@ def remap_STAR_bam(bamfn, threads, fastaref, picardjar, STARrefdir, mutid='null'
     sort_cmd = ['samtools', 'sort', '-@', str(threads), '-m', '10000000000', '-T', sort_out, '-o', sort_out, bamfn]
     idx_cmd  = ['samtools', 'index', bamfn]
 
-    print "INFO\t" + now() + "\t" + mutid + "\taligning " + str(fastq) + " with STAR\n"
+    logger.info(mutid + " aligning " + str(fastq) + " with STAR")
 
     p = subprocess.call(sam_cmd)
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\twriting " + sam_out + " to BAM...\n")
+    logger.info(mutid + " writing " + sam_out + " to BAM...\n")
     subprocess.call(bam_cmd)
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tdeleting SAM: " + sam_out + "\n")
+    logger.info(mutid + " deleting SAM: " + sam_out)
     os.remove(sam_out)
     os.remove(bamfn + "Log.final.out")
     os.remove(bamfn + "Log.out")
     os.remove(bamfn + "Log.progress.out")
     os.remove(bamfn + "SJ.out.tab")
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tsorting output: " + ' '.join(sort_cmd) + "\n")
+    logger.info(mutid + " sorting output: " + ' '.join(sort_cmd))
     subprocess.call(sort_cmd)
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremove original bam:" + bamfn + "\n")
+    logger.info(mutid + " remove original bam:" + bamfn)
     os.remove(bamfn)
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\trename sorted bam: " + sort_out + " to original name: " + bamfn + "\n")
+    logger.info(mutid + " rename sorted bam: " + sort_out + " to original name: " + bamfn)
     move(sort_out, bamfn)
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tindexing: " + ' '.join(idx_cmd) + "\n")
+    logger.info(mutid + " indexing: " + ' '.join(idx_cmd))
     subprocess.call(idx_cmd)
 
     # check if BAM readcount looks sane
@@ -477,17 +480,17 @@ def remap_STAR_bam(bamfn, threads, fastaref, picardjar, STARrefdir, mutid='null'
     if not insane:
         if paired:
             if bamreadcount(bamfn) < .5*(fastqreadcount(fastq[0]) + fastqreadcount(fastq[1])): 
-                raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
+                raise ValueError("ERROR " + now() + " " + mutid + " bam readcount < fastq readcount, alignment sanity check failed!\n")
         else:
             if bamreadcount(bamfn) < .5*fastqreadcount(fastq[0]): 
-                raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
+                raise ValueError("ERROR " + now() + " " + mutid + " bam readcount < fastq readcount, alignment sanity check failed!\n")
 
     if paired:
         for fq in fastq:
-            sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fq + "\n")
+            logger.info(mutid + " removing " + fq)
             os.remove(fq)
     else:
-        sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fastq[0] + "\n")
+        logger.info(mutid + " removing " + fastq[0])
         os.remove(fastq[0])
 
 def remap_bowtie2_bam(bamfn, threads, fastaref, picardjar, bowtie2ref, mutid='null', paired=True, insane=False):
@@ -499,7 +502,7 @@ def remap_bowtie2_bam(bamfn, threads, fastaref, picardjar, bowtie2ref, mutid='nu
     sam_out  = bamfn + '.realign.sam'
     sort_out = bamfn + '.realign.sorted.bam'
 
-    print "INFO\t" + now() + "\t" + mutid + "\tconverting " + bamfn + " to fastq\n"
+    logger.info("%s converting %s to fastq" % (mutid, bamfn))
     fastq = bamtofastq(bamfn, picardjar, threads=threads, paired=paired, twofastq=True)
 
     sam_cmd = []
@@ -515,46 +518,46 @@ def remap_bowtie2_bam(bamfn, threads, fastaref, picardjar, bowtie2ref, mutid='nu
     sort_cmd = ['samtools', 'sort', '-@', str(threads), '-m', '10000000000', '-T', sort_out, '-o', sort_out, bamfn]
     idx_cmd  = ['samtools', 'index', bamfn]
 
-    print "INFO\t" + now() + "\t" + mutid + "\taligning " + str(fastq) + " with bowtie2\n"
+    logger.info(mutid + " aligning " + str(fastq) + " with bowtie2")
     with open(sam_out, 'w') as sam:
         p = subprocess.Popen(sam_cmd, stdout=subprocess.PIPE)
         for line in p.stdout:
             sam.write(line)
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\twriting " + sam_out + " to BAM...\n")
+    logger.info(mutid + " writing " + sam_out + " to BAM...\n")
     subprocess.call(bam_cmd)
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tdeleting SAM: " + sam_out + "\n")
+    logger.info(mutid + " deleting SAM: " + sam_out)
     os.remove(sam_out)
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tsorting output: " + ' '.join(sort_cmd) + "\n")
+    logger.info(mutid + " sorting output: " + ' '.join(sort_cmd))
     subprocess.call(sort_cmd)
 
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremove original bam:" + bamfn + "\n")
+    logger.info(mutid + " remove original bam:" + bamfn)
     os.remove(bamfn)
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\trename sorted bam: " + sort_out + " to original name: " + bamfn + "\n")
+    logger.info(mutid + " rename sorted bam: " + sort_out + " to original name: " + bamfn)
     move(sort_out, bamfn)
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tindexing: " + ' '.join(idx_cmd) + "\n")
+    logger.info(mutid + " indexing: " + ' '.join(idx_cmd))
     subprocess.call(idx_cmd)
 
     # check if BAM readcount looks sane
     if not insane:
         if paired:
             if bamreadcount(bamfn) < fastqreadcount(fastq[0]) + fastqreadcount(fastq[1]): 
-                raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
+                raise ValueError("ERROR " + now() + " " + mutid + " bam readcount < fastq readcount, alignment sanity check failed!\n")
         else:
             if bamreadcount(bamfn) < fastqreadcount(fastq[0]): 
-                raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
+                raise ValueError("ERROR " + now() + " " + mutid + " bam readcount < fastq readcount, alignment sanity check failed!\n")
 
     if paired:
         for fq in fastq:
-            sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fq + "\n")
+            logger.info(mutid + " removing " + fq)
             os.remove(fq)
     else:
-        sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fastq[0] + "\n")
+        logger.info(mutid + " removing " + fastq[0])
         os.remove(fastq[0])
 
 
@@ -567,7 +570,7 @@ def remap_tmap_bam(bamfn, threads, fastaref, picardjar, mutid='null', paired=Fal
     sam_out  = bamfn + '.realign.sam'
     sort_out = bamfn + '.realign.sorted.bam'
 
-    print "INFO\t" + now() + "\t" + mutid + "\tconverting " + bamfn + " to fastq\n"
+    logger.info("%s converting %s to fastq" % (mutid, bamfn))
     fastq = bamtofastq(bamfn, picardjar, threads=threads, paired=paired, twofastq=True)
 
     sam_cmd = []
@@ -583,45 +586,45 @@ def remap_tmap_bam(bamfn, threads, fastaref, picardjar, mutid='null', paired=Fal
     sort_cmd = ['samtools', 'sort', '-@', str(threads), '-m', '10000000000', '-T', sort_out, '-o',  sort_out, bamfn]
     idx_cmd  = ['samtools', 'index', bamfn]
 
-    print "INFO\t" + now() + "\t" + mutid + "\taligning " + str(fastq) + " with tmap\n"
+    logger.info(mutid + " aligning " + str(fastq) + " with tmap")
     with open(sam_out, 'w') as sam:
         p = subprocess.Popen(sam_cmd, stdout=subprocess.PIPE)
         for line in p.stdout:
             sam.write(line)
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\twriting " + sam_out + " to BAM...\n")
+    logger.info(mutid + " writing " + sam_out + " to BAM...\n")
     subprocess.call(bam_cmd)
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tdeleting SAM: " + sam_out + "\n")
+    logger.info(mutid + " deleting SAM: " + sam_out)
     os.remove(sam_out)
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tsorting output: " + ' '.join(sort_cmd) + "\n")
+    logger.info(mutid + " sorting output: " + ' '.join(sort_cmd))
     subprocess.call(sort_cmd)
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremove original bam:" + bamfn + "\n")
+    logger.info(mutid + " remove original bam:" + bamfn)
     os.remove(bamfn)
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\trename sorted bam: " + sort_out + " to original name: " + bamfn + "\n")
+    logger.info(mutid + " rename sorted bam: " + sort_out + " to original name: " + bamfn)
     move(sort_out, bamfn)
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tindexing: " + ' '.join(idx_cmd) + "\n")
+    logger.info(mutid + " indexing: " + ' '.join(idx_cmd))
     subprocess.call(idx_cmd)
 
     # check if BAM readcount looks sane
     if not insane:
         if paired:
             if bamreadcount(bamfn) < fastqreadcount(fastq[0]) + fastqreadcount(fastq[1]): 
-                raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
+                raise ValueError("ERROR " + now() + " " + mutid + " bam readcount < fastq readcount, alignment sanity check failed!\n")
         else:
             if bamreadcount(bamfn) < fastqreadcount(fastq[0]): 
-                raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tbam readcount < fastq readcount, alignment sanity check failed!\n")
+                raise ValueError("ERROR " + now() + " " + mutid + " bam readcount < fastq readcount, alignment sanity check failed!\n")
 
     if paired:
         for fq in fastq:
-            sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fq + "\n")
+            logger.info(mutid + " removing " + fq)
             os.remove(fq)
     else:
-        sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fastq[0] + "\n")
+        logger.info(mutid + " removing " + fastq[0])
         os.remove(fastq[0])
 
 
@@ -661,35 +664,35 @@ def remap_bwamem_fastq(fq1, fq2, threads, fastaref, outbam, deltmp=True, mutid='
     sort_cmd = ['samtools', 'sort', '-@', str(threads), '-m', '10000000000', '-T', sort_out, '-o',  sort_out, outbam]
     idx_cmd  = ['samtools', 'index', outbam]
 
-    print "INFO\t" + now() + "\t" + mutid + "\taligning " + fq1 + ',' + fq2 + " with bwa mem"
+    logger.info(mutid + " aligning " + fq1 + ',' + fq2 + " with bwa mem")
     with open(sam_out, 'w') as sam:
         p = subprocess.Popen(sam_cmd, stdout=subprocess.PIPE)
         for line in p.stdout:
             sam.write(line)
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\twriting " + sam_out + " to BAM...\n")
+    logger.info(mutid + " writing " + sam_out + " to BAM...\n")
     subprocess.call(bam_cmd)
 
     if deltmp:
-        sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tdeleting SAM: " + sam_out + "\n")
+        logger.info(mutid + " deleting SAM: " + sam_out)
         os.remove(sam_out)
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tsorting output: " + ' '.join(sort_cmd) + "\n")
+    logger.info(mutid + " sorting output: " + ' '.join(sort_cmd))
     subprocess.call(sort_cmd)
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremove original bam:" + outbam + "\n")
+    logger.info(mutid + " remove original bam:" + outbam)
     os.remove(outbam)
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\trename sorted bam: " + sort_out + " to original name: " + outbam + "\n")
+    logger.info(mutid + " rename sorted bam: " + sort_out + " to original name: " + outbam)
     move(sort_out, outbam)
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tindexing: " + ' '.join(idx_cmd) + "\n")
+    logger.info(mutid + " indexing: " + ' '.join(idx_cmd))
     subprocess.call(idx_cmd)
 
     if deltmp:
-        sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fq1 + "\n")
+        logger.info(mutid + " removing " + fq1)
         os.remove(fq1)
-        sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fq2 + "\n")
+        logger.info(mutid + " removing " + fq2)
         os.remove(fq2)
 
     return bamreadcount(outbam)
@@ -708,35 +711,35 @@ def remap_novoalign_fastq(fq1, fq2, threads, fastaref, novoref, outbam, deltmp=T
     sort_cmd = ['samtools', 'sort', '-@', str(threads), '-m', '10000000000', '-T', sort_out, '-o', sort_out, outbam]
     idx_cmd  = ['samtools', 'index', outbam]
 
-    print "INFO\t" + now() + "\t" + mutid + "\taligning " + fq1 + ',' + fq2 + " with novoalign"
+    logger.info(mutid + " aligning " + fq1 + ',' + fq2 + " with novoalign")
     with open(sam_out, 'w') as sam:
         p = subprocess.Popen(sam_cmd, stdout=subprocess.PIPE)
         for line in p.stdout:
             sam.write(line)
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\twriting " + sam_out + " to BAM...\n")
+    logger.info(mutid + " writing " + sam_out + " to BAM...")
     subprocess.call(bam_cmd)
 
     if deltmp:
-        sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tdeleting SAM: " + sam_out + "\n")
+        logger.info(mutid + " deleting SAM: " + sam_out)
         os.remove(sam_out)
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tsorting output: " + ' '.join(sort_cmd) + "\n")
+    logger.info(mutid + " sorting output: " + ' '.join(sort_cmd))
     subprocess.call(sort_cmd)
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremove original bam:" + outbam + "\n")
+    logger.info(mutid + " remove original bam:" + outbam)
     os.remove(outbam)
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\trename sorted bam: " + sort_out + " to original name: " + outbam + "\n")
+    logger.info(mutid + " rename sorted bam: " + sort_out + " to original name: " + outbam)
     move(sort_out, outbam)
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tindexing: " + ' '.join(idx_cmd) + "\n")
+    logger.info(mutid + " indexing: " + ' '.join(idx_cmd))
     subprocess.call(idx_cmd)
 
     if deltmp:
-        sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fq1 + "\n")
+        logger.info(mutid + " removing " + fq1)
         os.remove(fq1)
-        sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tremoving " + fq2 + "\n")
+        logger.info(mutid + " removing " + fq2)
         os.remove(fq2)
 
     return bamreadcount(outbam)
@@ -759,31 +762,31 @@ def remap_backtrack_fastq(fq1, fq2, threads, fastaref, outbam, deltmp=True, muti
     bamargs  = ['samtools', 'view', '-bt', refidx, '-o', tmpbam, samfn]
     sortargs = ['samtools', 'sort', '-T', tmpsrt, '-o', tmpsrt, tmpbam]
 
-    print "INFO\t" + now() + "\t" + mutid + "\tmapping 1st end, cmd: " + " ".join(sai2args)
+    logger.info("%s mapping 1st end, cmd: %s" % (mutid, " ".join(sai1args)))
     p = subprocess.Popen(sai2args, stderr=subprocess.STDOUT)
     p.wait()
 
-    print "INFO\t" + now() + "\t" + mutid + "\tmapping 2nd end, cmd: " + " ".join(sai1args)
+    logger.info("%s mapping 1st end, cmd: %s" % (mutid, " ".join(sai2args)))
     p = subprocess.Popen(sai1args, stderr=subprocess.STDOUT)
     p.wait()
 
-    print "INFO\t" + now() + "\t" + mutid + "\tpairing ends, building .sam, cmd: " + " ".join(samargs)
+    logger.info("%s pairing ends, building .sam, cmd: %s" % (mutid, " ".join(samargs)))
     p = subprocess.Popen(samargs, stderr=subprocess.STDOUT)
     p.wait()
 
-    print "INFO\t" + now() + "\t" + mutid + "\tsam --> bam, cmd: " + " ".join(bamargs)
+    logger.info("%s sam --> bam, cmd: %s" % (mutid, " ".join(bamargs)))
     p = subprocess.Popen(bamargs, stderr=subprocess.STDOUT)
     p.wait()
 
-    print "INFO\t" + now() + "\t" + mutid + "\tsorting, cmd: " + " ".join(sortargs)
+    logger.info("%s sorting, cmd: %s" % (mutid, " ".join(sortargs)))
     p = subprocess.Popen(sortargs, stderr=subprocess.STDOUT)
     p.wait()
 
-    print "INFO\t" + now() + "\t" + mutid + "\trename " + tmpsrt + ".bam --> " + tmpbam
+    logger.info(mutid + " rename " + tmpsrt + ".bam --> " + tmpbam)
     os.remove(tmpbam)
     os.rename(tmpsrt, tmpbam)
 
-    print "INFO\t" + now() + "\t" + mutid + "\trename " + tmpbam + " --> " + outbam
+    logger.info(mutid + " rename " + tmpbam + " --> " + outbam)
     os.rename(tmpbam, outbam)
 
     # cleanup
