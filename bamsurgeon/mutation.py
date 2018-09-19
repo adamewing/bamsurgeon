@@ -71,7 +71,7 @@ def makeins(read, start, ins, debug=False):
             left  = rcseq[:pos_in_read]
             right = rcseq[pos_in_read:]
 
-            newseq = left + ins + right
+            newseq = left + rc(ins) + right
             newseq = rc(newseq[:orig_len])
 
     logger.debug("DEBUG: INS: orig seq: %s" % read.seq)
