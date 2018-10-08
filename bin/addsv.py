@@ -565,17 +565,13 @@ def makemut(args, bedline, alignopts):
                 if len(a) > 2: # VAF
                     svfrac = float(a[2])/cn
 
-            if action in ('TRN'):
+            if action in ('TRN', 'BIGDEL', 'BIGINV', 'BIGDUP'):
                 if len(a) > 1: # translocation end orientation ++ / +- / -+ / --
                     trn_left_flip = a[1][0] == '-'
                     trn_right_flip = a[1][1] == '-'
 
                 if len(a) > 2:
                     svfrac = float(a[2])/cn
-
-            if action in ('BIGDEL', 'BIGINV', 'BIGDUP'):
-                if len(a) > 1:
-                    svfrac = float(a[1])/cn
 
             if action == 'INV':
                 if len(a) > 1:
@@ -772,7 +768,7 @@ def main(args):
                 bd_right_start = bd_end - 2000
                 bd_right_end = bd_end + 2000
 
-                bedline = '%s %d %d BIGDEL %s %d %d %f' % (bd_chrom, bd_left_start, bd_left_end, bd_chrom, bd_right_start, bd_right_end, bd_svfrac)
+                bedline = '%s %d %d BIGDEL %s %d %d %s %f' % (bd_chrom, bd_left_start, bd_left_end, bd_chrom, bd_right_start, bd_right_end, '++', bd_svfrac)
                 bd_mutid = '_'.join(map(str, bedline.strip().split()[:4]))
                 bigdels[bd_mutid] = (bd_chrom, bd_start, bd_end, bd_svfrac)
 
