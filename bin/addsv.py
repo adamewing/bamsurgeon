@@ -396,6 +396,9 @@ def makemut(args, bedline, alignopts):
 
         cn = 1.0
 
+        trn_left_flip  = False
+        trn_right_flip = False
+
         if cnv: # CNV file is present
             if chrom in cnv.contigs:
                 for cnregion in cnv.fetch(chrom,start,end):
@@ -562,7 +565,15 @@ def makemut(args, bedline, alignopts):
                 if len(a) > 2: # VAF
                     svfrac = float(a[2])/cn
 
-            if action in ('TRN', 'BIGDEL'):
+            if action in ('TRN'):
+                if len(a) > 1: # translocation end orientation ++ / +- / -+ / --
+                    trn_left_flip = a[1][0] == '-'
+                    trn_right_flip = a[1][1] == '-'
+
+                if len(a) > 2:
+                    svfrac = float(a[2])/cn
+
+            if action in ('BIGDEL', 'BIGINV', 'BIGDUP'):
                 if len(a) > 1:
                     svfrac = float(a[1])/cn
 
@@ -643,7 +654,7 @@ def makemut(args, bedline, alignopts):
                 logfile.write(mutinfo[mutid] + "\n")
 
             elif action == 'TRN':
-                mutseq.fusion(mutseq.length()/2, trn_mutseq, trn_mutseq.length()/2)
+                mutseq.fusion(mutseq.length()/2, trn_mutseq, trn_mutseq.length()/2, flip1=trn_left_flip, flip2=trn_right_flip)
 
                 mutinfo[mutid] = "\t".join(('trn',chrom,str(refstart),str(refend),action,str(mutseq.length()),trn_chrom,str(trn_refstart),str(trn_refend),str(trn_mutseq.length()),str(svfrac)))
                 logfile.write(mutinfo[mutid] + "\n")
@@ -653,6 +664,12 @@ def makemut(args, bedline, alignopts):
 
                 mutinfo[mutid] = "\t".join(('bigdel',chrom,str(refstart),str(refend),action,str(mutseq.length()),trn_chrom,str(trn_refstart),str(trn_refend),str(trn_mutseq.length()),str(svfrac)))
                 logfile.write(mutinfo[mutid] + "\n")
+
+            elif action == 'BIGDUP':
+                raise NotImplementedError()
+
+            elif action == 'BIGINV':
+                raise NotImplementedError()
 
             else:
                 raise ValueError("ERROR\t" + now() + "\t" + mutid + "\t: mutation not one of: INS,INV,DEL,DUP,TRN,BIGDEL\n")

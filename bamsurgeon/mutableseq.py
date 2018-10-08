@@ -9,7 +9,7 @@ import operator
 
 def rc(seq):
     seq = seq[::-1]
-    seq = seq.translate(string.maketrans("ATGC","TACG"))
+    seq = seq.translate(string.maketrans("ATGCatgc","TACGtacg"))
     return seq
 
 def dist(seq1, seq2):
@@ -79,10 +79,19 @@ class MutableSeq:
             dupseq = dupseq + self.seq[start:end]
         self.seq = self.seq[:start] + dupseq + self.seq[end:]
 
-    def fusion(self, loc1, other, loc2):
+    def fusion(self, loc1, other, loc2, flip1=False, flip2=False):
         loc1 = int(loc1)
         loc2 = int(loc2)
-        self.seq = self.seq[:loc1] + other.seq[loc2:]
+        loc1_seq = self.seq[:loc1]
+        loc2_seq = other.seq[loc2:]
+
+        if flip1:
+            loc1_seq = rc(self.seq[loc1:])
+
+        if flip2:
+            loc2_seq = rc(other.seq[:loc2])
+
+        self.seq = loc1_seq + loc2_seq 
 
         
         

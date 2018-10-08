@@ -12,6 +12,11 @@ from collections import Counter
 from shutil import move
 from re import sub
 
+import logging
+FORMAT = '%(levelname)s %(asctime)s %(message)s'
+logging.basicConfig(format=FORMAT)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 def now():
     return str(datetime.datetime.now())
