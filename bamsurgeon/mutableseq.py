@@ -7,10 +7,12 @@ Methods for making mutations in a sequence
 import string
 import operator
 
-def rc(seq):
-    seq = seq[::-1]
-    seq = seq.translate(string.maketrans("ATGCatgc","TACGtacg"))
-    return seq
+
+def rc(dna):
+    ''' reverse complement '''
+    complements = string.maketrans('acgtrymkbdhvACGTRYMKBDHV', 'tgcayrkmvhdbTGCAYRKMVHDB')
+    return dna.translate(complements)[::-1]
+
 
 def dist(seq1, seq2):
     ''' Hamming distance '''
@@ -82,6 +84,7 @@ class MutableSeq:
     def fusion(self, loc1, other, loc2, flip1=False, flip2=False):
         loc1 = int(loc1)
         loc2 = int(loc2)
+
         loc1_seq = self.seq[:loc1]
         loc2_seq = other.seq[loc2:]
 

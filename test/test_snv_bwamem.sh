@@ -13,7 +13,7 @@ command -v addsnv.py >/dev/null 2>&1 || { echo "addsnv.py isn't installed" >&2; 
 
 if [ ! -e $4 ]
 then
-    echo "cannot find SamToFastq.jar"
+    echo "cannot find picard.jar"
     exit 65
 fi
 

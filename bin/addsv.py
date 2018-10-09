@@ -22,6 +22,7 @@ from shutil import move
 from math import sqrt
 from itertools import izip
 from collections import Counter
+from collections import defaultdict as dd
 from multiprocessing import Pool
 
 import logging
@@ -335,9 +336,42 @@ def fetch_read_names(args, chrom, start, end, svfrac=1.0):
 
     for read in bamfile.fetch(chrom, start, end):
         if random.random() <= svfrac:
-            names.append(read.qname)
+            names.append(read.query_name)
 
     return names
+
+
+def merge_multi_trn(args, alignopts, pair, chrom, start, end, vaf):
+    assert len(pair) == 2
+
+    mutid = os.path.basename(pair[0]).split('.')[0]
+
+    outbamfn = '%s/%s.%s.merged.bam' % (args.tmpdir, mutid, str(uuid4()))
+    bams = [pysam.AlignmentFile(bam) for bam in pair]
+    outbam = pysam.AlignmentFile(outbamfn, 'wb', template=bams[0])
+
+    readbins = {} # randomly assorted reads into bam sources 0 and 1
+
+    for bam in bams:
+        for read in bam.fetch(until_eof=True):
+            readbins[read.query_name] = random.choice([0,1])
+
+        bam.close()
+
+    bams = [pysam.AlignmentFile(bam) for bam in pair]
+
+    for i, bam in enumerate(bams):
+        for read in bam.fetch(until_eof=True):
+            if readbins[read.query_name] == i:
+                outbam.write(read)
+
+    outbam.close()
+
+    # cleanup
+    for fn in pair:
+        os.remove(fn)
+
+    return outbamfn
 
 
 def makemut(args, bedline, alignopts):
@@ -374,7 +408,7 @@ def makemut(args, bedline, alignopts):
         trn_start = None
         trn_end   = None
 
-        is_transloc = c[3] in ('TRN', 'BIGDEL')
+        is_transloc = c[3] in ('TRN', 'BIGDEL', 'BIGINV', 'BIGDUP')
 
         if is_transloc:
             araw = [c[3]]
@@ -661,14 +695,17 @@ def makemut(args, bedline, alignopts):
                 mutinfo[mutid] = "\t".join(('bigdel',chrom,str(refstart),str(refend),action,str(mutseq.length()),trn_chrom,str(trn_refstart),str(trn_refend),str(trn_mutseq.length()),str(svfrac)))
                 logfile.write(mutinfo[mutid] + "\n")
 
+            elif action == 'BIGINV':
+                mutseq.fusion(mutseq.length()/2, trn_mutseq, trn_mutseq.length()/2, flip1=trn_left_flip, flip2=trn_right_flip)
+
+                mutinfo[mutid] = "\t".join(('biginv',chrom,str(refstart),str(refend),action,str(mutseq.length()),trn_chrom,str(trn_refstart),str(trn_refend),str(trn_mutseq.length()),str(svfrac)))
+                logfile.write(mutinfo[mutid] + "\n")
+
             elif action == 'BIGDUP':
                 raise NotImplementedError()
 
-            elif action == 'BIGINV':
-                raise NotImplementedError()
-
             else:
-                raise ValueError("ERROR\t" + now() + "\t" + mutid + "\t: mutation not one of: INS,INV,DEL,DUP,TRN,BIGDEL\n")
+                raise ValueError("ERROR\t" + now() + "\t" + mutid + "\t: mutation not one of: INS,INV,DEL,DUP,TRN,BIGDEL,BIGINV,BIGDUP\n")
 
             logfile.write(">" + chrom + ":" + str(refstart) + "-" + str(refend) +" AFTER\n" + str(mutseq) + "\n")
 
@@ -741,10 +778,14 @@ def main(args):
     assert os.path.exists('addsv_logs_' + os.path.basename(args.outBamFile)), "could not create output directory!"
     assert os.path.exists(args.tmpdir), "could not create temporary directory!"
 
-    bigdels = {}    
+    bigdels = {}
+    biginvs = {}
+    bigdups = {}
 
     with open(args.varFileName, 'r') as varfile:
         for bedline in varfile:
+            multi_part = []
+
             if re.search('^#',bedline):
                 continue
 
@@ -753,28 +794,59 @@ def main(args):
 
             # rewrite bigdel coords as translocation
             if bedline.strip().split()[3] == 'BIGDEL':
-                bd_svfrac=1.0
+                bdel_svfrac = float(args.svfrac)
                 if len(bedline.strip().split()) == 5:
-                    bd_svfrac = float(bedline.strip().split()[-1])
+                    bdel_svfrac = float(bedline.strip().split()[-1])
 
-                # rewrite bigdel coords as translocation
-                bd_chrom, bd_start, bd_end = bedline.strip().split()[:3]
-                bd_start = int(bd_start)
-                bd_end = int(bd_end)
+                bdel_chrom, bdel_start, bdel_end = bedline.strip().split()[:3]
+                bdel_start = int(bdel_start)
+                bdel_end   = int(bdel_end)
 
-                bd_left_start = bd_start - 2000
-                bd_left_end = bd_start + 2000
+                bdel_left_start = bdel_start - 2000
+                bdel_left_end   = bdel_start + 2000
 
-                bd_right_start = bd_end - 2000
-                bd_right_end = bd_end + 2000
+                bdel_right_start = bdel_end - 2000
+                bdel_right_end   = bdel_end + 2000
 
-                bedline = '%s %d %d BIGDEL %s %d %d %s %f' % (bd_chrom, bd_left_start, bd_left_end, bd_chrom, bd_right_start, bd_right_end, '++', bd_svfrac)
-                bd_mutid = '_'.join(map(str, bedline.strip().split()[:4]))
-                bigdels[bd_mutid] = (bd_chrom, bd_start, bd_end, bd_svfrac)
+                bedline = '%s %d %d BIGDEL %s %d %d %s %f' % (bdel_chrom, bdel_left_start, bdel_left_end, bdel_chrom, bdel_right_start, bdel_right_end, '++', bdel_svfrac)
+                bdel_mutid = '_'.join(map(str, bedline.strip().split()[:4]))
+                bigdels[bdel_mutid] = (bdel_chrom, bdel_start, bdel_end, bdel_svfrac)
 
-            # submit each mutation as its own thread
-            result = pool.apply_async(makemut, [args, bedline, alignopts])
-            results.append(result)
+            # rewrite biginv coords as translocations
+            if bedline.strip().split()[3] == 'BIGINV':
+
+                binv_svfrac = float(args.svfrac)
+                if len(bedline.strip().split()) == 5:
+                    binv_svfrac = float(bedline.strip().split()[-1])
+
+                binv_chrom, binv_start, binv_end = bedline.strip().split()[:3]
+                binv_start = int(binv_start)
+                binv_end = int(binv_end)
+
+                binv_left_start = binv_start - 2000
+                binv_left_end   = binv_start + 2000
+
+                binv_right_start = binv_end - 2000
+                binv_right_end   = binv_end + 2000
+
+                # left breakpoint
+                multi_part.append('%s %d %d BIGINV %s %d %d %s %f' % (binv_chrom, binv_left_start, binv_left_end, binv_chrom, binv_right_start, binv_right_end, '+-', binv_svfrac))
+
+                # right breakpoint
+                multi_part.append('%s %d %d BIGINV %s %d %d %s %f' % (binv_chrom, binv_left_start, binv_left_end, binv_chrom, binv_right_start, binv_right_end, '-+', binv_svfrac))
+
+                binv_mutid = '_'.join(map(str, (binv_chrom, binv_left_start, binv_left_end, 'BIGINV')))
+                biginvs[binv_mutid] = (binv_chrom, binv_start, binv_end, binv_svfrac)
+
+            if len(multi_part) == 0:
+                # submit each mutation as its own thread
+                result = pool.apply_async(makemut, [args, bedline, alignopts])
+                results.append(result)
+
+            else:
+                for bedline in multi_part:
+                    result = pool.apply_async(makemut, [args, bedline, alignopts])
+                    results.append(result)
 
             nmuts += 1
             if args.delay is not None:
@@ -808,19 +880,52 @@ def main(args):
 
     success_mutids = [os.path.basename(tmpbam).split('.')[0] for tmpbam in tmpbams]
 
-    # add additional excluded reads if bigdel(s) present
+    
     bigdel_excl = {}
+
     for mutid, mutinfo in master_mutinfo.iteritems():
+        # add additional excluded reads if bigdel(s) present
         if mutinfo.startswith('bigdel'):
-            bd_chrom, bd_start, bd_end, bd_svfrac = bigdels[mutid]
+            bdel_chrom, bdel_start, bdel_end, bdel_svfrac = bigdels[mutid]
 
-            bd_left_bnd = int(mutinfo.split()[3])
-            bd_right_bnd = int(mutinfo.split()[7])
+            bdel_left_bnd = int(mutinfo.split()[3])
+            bdel_right_bnd = int(mutinfo.split()[7])
 
-            bigdel_excl[mutid] = fetch_read_names(args, bd_chrom, bd_left_bnd, bd_right_bnd, svfrac=bd_svfrac)
+            bigdel_excl[mutid] = fetch_read_names(args, bdel_chrom, bdel_left_bnd, bdel_right_bnd, svfrac=bdel_svfrac)
+
+
+    # find translocation pairs corresponding to BIGINV, merge pairs / remove singletons
+    biginv_pairs = dd(list)
+
+    new_tmpbams = []
+
+    for tmpbamfn in tmpbams:
+        mutpos = os.path.basename(tmpbamfn).split('.')[0]
+        if mutpos.endswith('BIGINV'):
+            biginv_pairs[mutpos].append(tmpbamfn)
+        else:
+            new_tmpbams.append(tmpbamfn)
+
+    for binv_pair in biginv_pairs.values():
+        if len(binv_pair) == 2:
+            logger.info('merging biginv pair and reversing unassembled interval: %s' % str(binv_pair))
+
+            binv_mutid = os.path.basename(binv_pair[0]).split('.')[0]
+
+            assert binv_mutid in biginvs
+
+            binv_chrom, binv_start, binv_end, binv_svfrac = biginvs[binv_mutid]
+
+            merged_binv = merge_multi_trn(args, alignopts, binv_pair, binv_chrom, binv_start, binv_end, binv_svfrac)
+            new_tmpbams.append(merged_binv)
+
+    tmpbams = new_tmpbams
 
     logger.info("tmpbams: %s" % tmpbams)
     logger.info("exclude: %s" % exclfns)
+
+    if len(tmpbams) == 0:
+        sys.exit('no tmp bams remain, nothing to do!')
 
     excl_merged = 'addsv.exclude.final.' + str(uuid4()) + '.txt'
     mergedtmp = 'addsv.mergetmp.final.' + str(uuid4()) + '.bam'
@@ -833,10 +938,10 @@ def main(args):
                 exclout.write(line)
 
             # add reads excluded due to BIGDEL if breakpoint was successful
-            for bd_mutid in bigdel_excl:
-                if bd_mutid in success_mutids:
-                    for bd_rn in bigdel_excl[bd_mutid]:
-                        exclout.write(bd_rn+'\n')
+            for bdel_mutid in bigdel_excl:
+                if bdel_mutid in success_mutids:
+                    for bdel_rn in bigdel_excl[bdel_mutid]:
+                        exclout.write(bdel_rn+'\n')
 
     exclout.close()
 
