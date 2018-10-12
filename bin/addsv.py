@@ -35,9 +35,8 @@ sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)
 sys.stderr = os.fdopen(sys.stderr.fileno(), 'w', 0)
 
 
-def runwgsim(contig, newseq, svfrac, svtype, exclude, pemean, pesd, tmpdir, mutid='null', err_rate=0.0, seed=None, trn_contig=None):
-    ''' wrapper function for wgsim
-    '''
+def runwgsim(contig, newseq, svfrac, svtype, exclude, pemean, pesd, tmpdir, mutid='null', err_rate=0.0, seed=None, trn_contig=None, rename=True):
+    ''' wrapper function for wgsim, could swap out to support other reads simulators (future work?) '''
 
     readnames = [read.name for read in contig.reads.reads.values()]
     if trn_contig: readnames += [read.name for read in trn_contig.reads.reads.values()]
@@ -114,8 +113,9 @@ def runwgsim(contig, newseq, svfrac, svtype, exclude, pemean, pesd, tmpdir, muti
 
     os.remove(fasta)
 
-    fqReplaceList(fq1, pairednames, rquals, svfrac, svtype, exclude, mutid=mutid)
-    fqReplaceList(fq2, pairednames, mquals, svfrac, svtype, exclude, mutid=mutid)
+    if rename:
+        fqReplaceList(fq1, pairednames, rquals, svfrac, svtype, exclude, mutid=mutid)
+        fqReplaceList(fq2, pairednames, mquals, svfrac, svtype, exclude, mutid=mutid)
 
     return (fq1,fq2)
 
@@ -329,8 +329,70 @@ def trim_contig(mutid, chrom, start, end, contig, reffile):
     return contig, refseq, alignstats, refstart, refend, qrystart, qryend, tgtstart, tgtend
 
 
+def add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right_bnd, buf=200):
+    donorbam = pysam.AlignmentFile(args.donorbam)
+
+    tmpbam = pysam.AlignmentFile(tmpbamfn)
+
+    outbamfn = '%s/%s.%s.bigdup.merged.bam' % (args.tmpdir, mutid, str(uuid4()))
+    outbam = pysam.AlignmentFile(outbamfn, 'wb', template=tmpbam)
+
+    # identify zero coverage region
+
+    left_zero = None
+    right_zero = None
+
+    region = '%s:%d-%d' % (bdup_chrom, bdup_left_bnd+buf, bdup_right_bnd-buf)
+
+    #samtools mpileup -a addsv.mergetmp.final.45cf8b15-a5da-4fe1-9936-4eaa3bf72f0b.bam -r 22:33868746-33881044
+    args = ['samtools', 'mpileup', '-r', region, '-a', tmpbamfn]
+
+    FNULL = open(os.devnull, 'w')
+
+    p = subprocess.Popen(args,stdout=subprocess.PIPE,stderr=FNULL)
+
+    for line in p.stdout:
+        c = line.strip().split()
+        pos   = int(c[1])
+        depth = int(c[3])
+
+        if left_zero is None and depth == 0:
+            left_zero = pos
+
+        if left_zero is not None and depth == 0:
+            right_zero = pos
+
+    for read in tmpbam.fetch(until_eof=True):
+        outbam.write(read)
+
+    print ' '.join(args)
+    print 'bnd_l, bnd_r, left, right:', bdup_left_bnd, bdup_right_bnd, left_zero, right_zero
+
+    matepairs = {}
+    for read in donorbam.fetch(bdup_chrom, bdup_left_bnd, bdup_right_bnd):
+        if not read.is_duplicate and not read.is_secondary and not read.is_supplementary:
+            if (read.pos > left_zero and read.pos < right_zero) or (read.next_reference_start > left_zero and read.next_reference_start < right_zero):
+                if read.query_name not in matepairs:
+                    matepairs[read.query_name] = read
+                    
+                else:
+                    newname = str(uuid4())
+
+                    mate = matepairs[read.query_name]
+
+                    mate.query_name = newname
+                    read.query_name = newname
+
+                    outbam.write(mate)
+                    outbam.write(read)
+
+    outbam.close()
+
+    return outbamfn
+
+
 def fetch_read_names(args, chrom, start, end, svfrac=1.0):
-    bamfile = pysam.Samfile(args.bamFileName, 'rb')
+    bamfile = pysam.AlignmentFile(args.bamFileName, 'rb')
 
     names = []
 
@@ -481,6 +543,7 @@ def makemut(args, bedline, alignopts):
         maxcontig = sorted(contigs)[-1]
 
         trn_maxcontig = None
+        rename_reads = True
 
         if is_transloc:
             if len(trn_contigs) == 0:
@@ -702,7 +765,11 @@ def makemut(args, bedline, alignopts):
                 logfile.write(mutinfo[mutid] + "\n")
 
             elif action == 'BIGDUP':
-                raise NotImplementedError()
+                mutseq.fusion(mutseq.length()/2, trn_mutseq, trn_mutseq.length()/2)
+
+                mutinfo[mutid] = "\t".join(('bigdup',chrom,str(refstart),str(refend),action,str(mutseq.length()),trn_chrom,str(trn_refstart),str(trn_refend),str(trn_mutseq.length()),str(svfrac)))
+                logfile.write(mutinfo[mutid] + "\n")
+                rename_reads = False
 
             else:
                 raise ValueError("ERROR\t" + now() + "\t" + mutid + "\t: mutation not one of: INS,INV,DEL,DUP,TRN,BIGDEL,BIGINV,BIGDUP\n")
@@ -713,8 +780,9 @@ def makemut(args, bedline, alignopts):
         logger.info("%s set paired end mean distance: %f" % (mutid, pemean))
         logger.info("%s set paired end distance stddev: %f" % (mutid, pesd))
 
+
         # simulate reads
-        (fq1, fq2) = runwgsim(maxcontig, mutseq.seq, svfrac, actions, exclude, pemean, pesd, args.tmpdir, err_rate=float(args.simerr), mutid=mutid, seed=args.seed, trn_contig=trn_maxcontig)
+        (fq1, fq2) = runwgsim(maxcontig, mutseq.seq, svfrac, actions, exclude, pemean, pesd, args.tmpdir, err_rate=float(args.simerr), mutid=mutid, seed=args.seed, trn_contig=trn_maxcontig, rename=rename_reads)
 
         outreads = aligners.remap_fastq(args.aligner, fq1, fq2, args.refFasta, outbam_mutsfile, alignopts, mutid=mutid, threads=1)
 
@@ -812,6 +880,29 @@ def main(args):
                 bdel_mutid = '_'.join(map(str, bedline.strip().split()[:4]))
                 bigdels[bdel_mutid] = (bdel_chrom, bdel_start, bdel_end, bdel_svfrac)
 
+            # rewrite bigdup coords as translocation
+            if bedline.strip().split()[3] == 'BIGDUP':
+                bdup_svfrac = 1.0 # BIGDUP VAF is determined by donor bam
+                if args.donorbam is None:
+                    logger.warning('using BIGDUP requires specifying a --donorbam, skipping mutation: %s' % bedline.strip())
+                    continue
+                # if len(bedline.strip().split()) == 5:
+                #     bdup_svfrac = float(bedline.strip().split()[-1])
+
+                bdup_chrom, bdup_start, bdup_end = bedline.strip().split()[:3]
+                bdup_start = int(bdup_start)
+                bdup_end   = int(bdup_end)
+
+                bdup_left_start = bdup_start - 2000
+                bdup_left_end   = bdup_start + 2000
+
+                bdup_right_start = bdup_end - 2000
+                bdup_right_end   = bdup_end + 2000
+
+                bedline = '%s %d %d BIGDUP %s %d %d %s %f' % (bdup_chrom, bdup_right_start, bdup_right_end, bdup_chrom, bdup_left_start, bdup_left_end, '++', bdup_svfrac)
+                bdup_mutid = '_'.join(map(str, bedline.strip().split()[:4]))
+                bigdups[bdup_mutid] = (bdup_chrom, bdup_start, bdup_end, bdup_svfrac)
+
             # rewrite biginv coords as translocations
             if bedline.strip().split()[3] == 'BIGINV':
 
@@ -882,6 +973,7 @@ def main(args):
 
     
     bigdel_excl = {}
+    bigdup_add  = {}
 
     for mutid, mutinfo in master_mutinfo.iteritems():
         # add additional excluded reads if bigdel(s) present
@@ -893,19 +985,38 @@ def main(args):
 
             bigdel_excl[mutid] = fetch_read_names(args, bdel_chrom, bdel_left_bnd, bdel_right_bnd, svfrac=bdel_svfrac)
 
+        if mutinfo.startswith('bigdup'):
+            bdup_chrom, bdup_start, bdup_end, bdup_svfrac = bigdups[mutid]
 
-    # find translocation pairs corresponding to BIGINV, merge pairs / remove singletons
+            bdup_left_bnd = (int(mutinfo.split()[7])+int(mutinfo.split()[8]))/2
+            bdup_right_bnd = (int(mutinfo.split()[2])+int(mutinfo.split()[3]))/2
+
+            bigdup_add[mutid] = (bdup_chrom, bdup_left_bnd, bdup_right_bnd)
+
+
     biginv_pairs = dd(list)
 
     new_tmpbams = []
 
     for tmpbamfn in tmpbams:
-        mutpos = os.path.basename(tmpbamfn).split('.')[0]
-        if mutpos.endswith('BIGINV'):
-            biginv_pairs[mutpos].append(tmpbamfn)
+        mutid = os.path.basename(tmpbamfn).split('.')[0]
+
+        if mutid.endswith('BIGINV'):
+            biginv_pairs[mutid].append(tmpbamfn)
+        
+        elif mutid.endswith('BIGDUP'):
+            #print 'bigdup testing mutid:', mutid
+            #print 'bigdup testing known mutids:', bigdup_add.keys()
+            bdup_chrom, bdup_left_bnd, bdup_right_bnd = bigdup_add[mutid]
+
+            merged_bdup = add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right_bnd)
+
+            new_tmpbams.append(merged_bdup) # TODO merge bigdup reads
+
         else:
             new_tmpbams.append(tmpbamfn)
 
+    # find translocation pairs corresponding to BIGINV, merge pairs / remove singletons
     for binv_pair in biginv_pairs.values():
         if len(binv_pair) == 2:
             logger.info('merging biginv pair and reversing unassembled interval: %s' % str(binv_pair))
@@ -1020,6 +1131,8 @@ if __name__ == '__main__':
                         help="maximum number of mutations to make")
     parser.add_argument('-c', '--cnvfile', dest='cnvfile', default=None, 
                         help="tabix-indexed list of genome-wide absolute copy number values (e.g. 2 alleles = no change)")
+    parser.add_argument('--donorbam', dest='donorbam', default=None,
+                        help='bam file for donor reads if using BIGDUP mutations')
     parser.add_argument('--ismean', dest='ismean', default=300, 
                         help="mean insert size (default = estimate from region)")
     parser.add_argument('--issd', dest='issd', default=70, 
