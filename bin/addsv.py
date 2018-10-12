@@ -329,7 +329,7 @@ def trim_contig(mutid, chrom, start, end, contig, reffile):
     return contig, refseq, alignstats, refstart, refend, qrystart, qryend, tgtstart, tgtend
 
 
-def add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right_bnd):
+def add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right_bnd, buf=200):
     donorbam = pysam.AlignmentFile(args.donorbam)
 
     tmpbam = pysam.AlignmentFile(tmpbamfn)
@@ -342,16 +342,16 @@ def add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right
     left_zero = None
     right_zero = None
 
-    region = '%s:%d-%d' % (bdup_chrom, bdup_left_bnd, bdup_right_bnd)
+    region = '%s:%d-%d' % (bdup_chrom, bdup_left_bnd+buf, bdup_right_bnd-buf)
 
     #samtools mpileup -a addsv.mergetmp.final.45cf8b15-a5da-4fe1-9936-4eaa3bf72f0b.bam -r 22:33868746-33881044
     args = ['samtools', 'mpileup', '-r', region, '-a', tmpbamfn]
 
-    p = subprocess.Popen(args,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
-    p.wait()
-    pout = p.stdout.readlines()
+    FNULL = open(os.devnull, 'w')
 
-    for line in pout:
+    p = subprocess.Popen(args,stdout=subprocess.PIPE,stderr=FNULL)
+
+    for line in p.stdout:
         c = line.strip().split()
         pos   = int(c[1])
         depth = int(c[3])
@@ -359,20 +359,31 @@ def add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right
         if left_zero is None and depth == 0:
             left_zero = pos
 
-        if left_zero is not None:
+        if left_zero is not None and depth == 0:
             right_zero = pos
 
     for read in tmpbam.fetch(until_eof=True):
         outbam.write(read)
 
-    mate = {}
+    print ' '.join(args)
+    print 'bnd_l, bnd_r, left, right:', bdup_left_bnd, bdup_right_bnd, left_zero, right_zero
+
+    matepairs = {}
     for read in donorbam.fetch(bdup_chrom, bdup_left_bnd, bdup_right_bnd):
         if not read.is_duplicate and not read.is_secondary and not read.is_supplementary:
-            if read.pos > left_zero and read.pos < right_zero:
-                if read not in mate:
-                    mate[read] = read
+            if (read.pos > left_zero and read.pos < right_zero) or (read.next_reference_start > left_zero and read.next_reference_start < right_zero):
+                if read.query_name not in matepairs:
+                    matepairs[read.query_name] = read
+                    
                 else:
-                    outbam.write(mate[read])
+                    newname = str(uuid4())
+
+                    mate = matepairs[read.query_name]
+
+                    mate.query_name = newname
+                    read.query_name = newname
+
+                    outbam.write(mate)
                     outbam.write(read)
 
     outbam.close()
@@ -998,9 +1009,9 @@ def main(args):
             #print 'bigdup testing known mutids:', bigdup_add.keys()
             bdup_chrom, bdup_left_bnd, bdup_right_bnd = bigdup_add[mutid]
 
-            tmpbamfn = add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right_bnd)
+            merged_bdup = add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right_bnd)
 
-            new_tmpbams.append(tmpbamfn) # TODO merge bigdup reads
+            new_tmpbams.append(merged_bdup) # TODO merge bigdup reads
 
         else:
             new_tmpbams.append(tmpbamfn)

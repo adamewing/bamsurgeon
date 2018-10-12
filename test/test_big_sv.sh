@@ -23,7 +23,7 @@ then
     exit 65
 fi
 
-addsv.py -p 1 -v ../test_data/test_big_sv.txt -f ../test_data/testregion_realign.bam -r $1 -o ../test_data/testregion_sv_mut.bam --aligner mem --keepsecondary --seed 1234 --skipmerge --donorbam ../test_data/testregion_realign.bam 
+addsv.py -p 1 -v ../test_data/test_big_sv.txt -f ../test_data/testregion_realign.bam -r $1 -o ../test_data/testregion_sv_mut.bam --aligner mem --keepsecondary --seed 1234 --donorbam ../test_data/testregion_realign.bam 
 
 if [ $? -ne 0 ]
 then
