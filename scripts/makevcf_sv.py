@@ -63,7 +63,12 @@ def precise_interval(mutline, ref):
     refend   = int(refend)
     id = '.'
 
-    if m[0] == 'ins':
+    if m[0].startswith('big'):
+        bnd1 = (int(m[7])+int(m[8]))/2
+        bnd2 = (int(m[2])+int(m[3]))/2
+        m[0] = m[0].replace('big', '')
+
+    elif m[0] == 'ins':
         bnd1 = refstart+int(m[6])
         bnd2 = refstart+int(m[6])+1
         id = m[7]
@@ -120,7 +125,7 @@ def main(args):
         if filename.endswith('.log'):
             with open(args.logdir + '/' + filename, 'r') as log:
                 for line in log:
-                    for mutype in ('ins', 'del', 'inv', 'dup', 'trn'):
+                    for mutype in ('ins', 'del', 'inv', 'dup', 'trn', 'bigdup', 'biginv', 'bigdel'):
                         if line.startswith(mutype):
                             precise_interval(line.strip(), ref)
                             if args.mask:
