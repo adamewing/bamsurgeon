@@ -330,6 +330,8 @@ def trim_contig(mutid, chrom, start, end, contig, reffile):
 
 
 def add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right_bnd, buf=200):
+    assert bdup_left_bnd < bdup_right_bnd
+
     donorbam = pysam.AlignmentFile(args.donorbam)
 
     tmpbam = pysam.AlignmentFile(tmpbamfn)
@@ -339,8 +341,11 @@ def add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right
 
     # identify zero coverage region
 
-    left_zero = None
+    left_zero  = None
     right_zero = None
+
+    left_cover  = None
+    right_cover = None
 
     region = '%s:%d-%d' % (bdup_chrom, bdup_left_bnd+buf, bdup_right_bnd-buf)
 
@@ -359,14 +364,32 @@ def add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right
         if left_zero is None and depth == 0:
             left_zero = pos
 
+        if left_cover is None and depth > 0:
+            left_cover = pos
+
         if left_zero is not None and depth == 0:
             right_zero = pos
+
+        if depth > 0:
+            right_cover = pos
+
+
+    count_left  = tmpbam.count(reference=bdup_chrom, start=left_cover, end=left_zero)
+    count_right = tmpbam.count(reference=bdup_chrom, start=right_zero, end=right_cover)
+
+    cover_donor = donorbam.count(region=region) / float(bdup_right_bnd-bdup_left_bnd)
+
+    tmpbam.reset()
+    donorbam.reset()
+
+    cover_tmp = float(count_left+count_right) / float((left_zero-left_cover)+(right_cover-right_zero))
 
     for read in tmpbam.fetch(until_eof=True):
         outbam.write(read)
 
-    print ' '.join(args)
-    print 'bnd_l, bnd_r, left, right:', bdup_left_bnd, bdup_right_bnd, left_zero, right_zero
+    donor_norm_factor = min(cover_tmp,cover_donor)/max(cover_tmp,cover_donor)
+
+    logger.info('%s: BIGDUP donor coverage normalisation factor: %f' % (mutid, donor_norm_factor))
 
     matepairs = {}
     for read in donorbam.fetch(bdup_chrom, bdup_left_bnd, bdup_right_bnd):
@@ -383,8 +406,9 @@ def add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right
                     mate.query_name = newname
                     read.query_name = newname
 
-                    outbam.write(mate)
-                    outbam.write(read)
+                    if random.random() <= donor_norm_factor:
+                        outbam.write(mate)
+                        outbam.write(read)
 
     outbam.close()
 
@@ -437,15 +461,16 @@ def merge_multi_trn(args, alignopts, pair, chrom, start, end, vaf):
 
 
 def makemut(args, bedline, alignopts):
+    bedline = bedline.strip()
 
-    if args.seed is not None: random.seed(int(args.seed) + int(bedline.strip().split()[1]))
+    if args.seed is not None: random.seed(int(args.seed) + int(bedline.split()[1]))
 
-    mutid = '_'.join(map(str, bedline.strip().split()[:4]))
+    mutid = '_'.join(map(str, bedline.split()[:4]))
 
     try:
         bamfile = pysam.Samfile(args.bamFileName, 'rb')
         reffile = pysam.Fastafile(args.refFasta)
-        logfn = '_'.join(map(os.path.basename, bedline.strip().split()[:4])) + ".log"
+        logfn = '_'.join(map(os.path.basename, bedline.split()[:4])) + ".log"
         logfile = open('addsv_logs_' + os.path.basename(args.outBamFile) + '/' + os.path.basename(args.outBamFile) + '_' + logfn, 'w')
         exclfile = args.tmpdir + '/' + '.'.join((mutid, 'exclude', str(uuid4()), 'txt'))
         exclude = open(exclfile, 'w')
@@ -459,7 +484,7 @@ def makemut(args, bedline, alignopts):
         # temporary file to hold mutated reads
         outbam_mutsfile = args.tmpdir + '/' + '.'.join((mutid, str(uuid4()), "muts.bam"))
 
-        c = bedline.strip().split()
+        c = bedline.split()
         chrom  = c[0]
         start  = int(c[1])
         end    = int(c[2])
@@ -504,7 +529,7 @@ def makemut(args, bedline, alignopts):
                     assert svfrac <= 1.0, 'copy number from %s must be at least 1: %s' % (args.cnvfile, snregion.stri[()])
                     sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tadjusted default MAF: " + str(svfrac) + "\n")
 
-        logger.info("%s interval: %s" % (mutid, bedline.strip()))
+        logger.info("%s interval: %s" % (mutid, bedline))
         logger.info("%s length: %d" % (mutid, (end-start)))
 
        # modify start and end if interval is too short
@@ -852,6 +877,7 @@ def main(args):
 
     with open(args.varFileName, 'r') as varfile:
         for bedline in varfile:
+            bedline = bedline.strip()
             multi_part = []
 
             if re.search('^#',bedline):
@@ -860,13 +886,22 @@ def main(args):
             if args.maxmuts and nmuts >= int(args.maxmuts):
                 break
 
-            # rewrite bigdel coords as translocation
-            if bedline.strip().split()[3] == 'BIGDEL':
-                bdel_svfrac = float(args.svfrac)
-                if len(bedline.strip().split()) == 5:
-                    bdel_svfrac = float(bedline.strip().split()[-1])
+            mut_type = bedline.split()[3]
+            mut_len = int(bedline.split()[2]) - int(bedline.split()[1])
 
-                bdel_chrom, bdel_start, bdel_end = bedline.strip().split()[:3]
+            if mut_type in ('DEL', 'DUP', 'INV') and mut_len > 10000:
+                logger.warning('%s is over 10kbp long: recommend using BIG%s instead.' % (bedline, mut_type))
+
+            if mut_type.startswith('BIG') and mut_len < 5000:
+                logger.warning('%s is under 5kbp, "BIG" mutation types will yield unpredictable results' % bedline)
+
+            # rewrite bigdel coords as translocation
+            if bedline.split()[3] == 'BIGDEL':
+                bdel_svfrac = float(args.svfrac)
+                if len(bedline.split()) == 5:
+                    bdel_svfrac = float(bedline.split()[-1])
+
+                bdel_chrom, bdel_start, bdel_end = bedline.split()[:3]
                 bdel_start = int(bdel_start)
                 bdel_end   = int(bdel_end)
 
@@ -877,19 +912,18 @@ def main(args):
                 bdel_right_end   = bdel_end + 2000
 
                 bedline = '%s %d %d BIGDEL %s %d %d %s %f' % (bdel_chrom, bdel_left_start, bdel_left_end, bdel_chrom, bdel_right_start, bdel_right_end, '++', bdel_svfrac)
-                bdel_mutid = '_'.join(map(str, bedline.strip().split()[:4]))
+                bdel_mutid = '_'.join(map(str, bedline.split()[:4]))
                 bigdels[bdel_mutid] = (bdel_chrom, bdel_start, bdel_end, bdel_svfrac)
 
             # rewrite bigdup coords as translocation
-            if bedline.strip().split()[3] == 'BIGDUP':
+            if bedline.split()[3] == 'BIGDUP':
                 bdup_svfrac = 1.0 # BIGDUP VAF is determined by donor bam
-                if args.donorbam is None:
-                    logger.warning('using BIGDUP requires specifying a --donorbam, skipping mutation: %s' % bedline.strip())
-                    continue
-                # if len(bedline.strip().split()) == 5:
-                #     bdup_svfrac = float(bedline.strip().split()[-1])
 
-                bdup_chrom, bdup_start, bdup_end = bedline.strip().split()[:3]
+                if args.donorbam is None:
+                    logger.warning('using BIGDUP requires specifying a --donorbam, skipping mutation: %s' % bedline)
+                    continue
+
+                bdup_chrom, bdup_start, bdup_end = bedline.split()[:3]
                 bdup_start = int(bdup_start)
                 bdup_end   = int(bdup_end)
 
@@ -900,17 +934,17 @@ def main(args):
                 bdup_right_end   = bdup_end + 2000
 
                 bedline = '%s %d %d BIGDUP %s %d %d %s %f' % (bdup_chrom, bdup_right_start, bdup_right_end, bdup_chrom, bdup_left_start, bdup_left_end, '++', bdup_svfrac)
-                bdup_mutid = '_'.join(map(str, bedline.strip().split()[:4]))
+                bdup_mutid = '_'.join(map(str, bedline.split()[:4]))
                 bigdups[bdup_mutid] = (bdup_chrom, bdup_start, bdup_end, bdup_svfrac)
 
             # rewrite biginv coords as translocations
-            if bedline.strip().split()[3] == 'BIGINV':
+            if bedline.split()[3] == 'BIGINV':
 
                 binv_svfrac = float(args.svfrac)
-                if len(bedline.strip().split()) == 5:
-                    binv_svfrac = float(bedline.strip().split()[-1])
+                if len(bedline.split()) == 5:
+                    binv_svfrac = float(bedline.split()[-1])
 
-                binv_chrom, binv_start, binv_end = bedline.strip().split()[:3]
+                binv_chrom, binv_start, binv_end = bedline.split()[:3]
                 binv_start = int(binv_start)
                 binv_end = int(binv_end)
 

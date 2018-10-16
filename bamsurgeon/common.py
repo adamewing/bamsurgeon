@@ -135,7 +135,7 @@ def bamtofastq(bam, picardjar, threads=1, paired=True, twofastq=False):
 
     return None
 
-    
+
 def fastqreadcount(fastqfile):
     assert not fastqfile.endswith('gz') # not supported yet
     return sum(1 for line in open(fastqfile))/4
