@@ -675,17 +675,18 @@ def makemut(args, bedline, alignopts):
                     svfrac = float(a[2])/cn
 
             if action == 'DEL':
-                if len(a) > 1:
-                    dsize = float(a[1])
-                    if dsize > 1.0: # if DEL size is not a fraction, interpret as bp
-                        # since DEL 1 is default, if DEL 1 is specified, interpret as 1 bp deletion
-                        dlen = int(dsize)
-                        dsize = 1.0
-                else:
-                    dsize = 1.0
+                dsize = 1.0
+                # if len(a) > 1:
+                #     dsize = float(a[1])
+                #     if dsize > 1.0: # if DEL size is not a fraction, interpret as bp
+                #         # since DEL 1 is default, if DEL 1 is specified, interpret as 1 bp deletion
+                #         dlen = int(dsize)
+                #         dsize = 1.0
+                # else:
+                #     dsize = 1.0
 
-                if len(a) > 2: # VAF
-                    svfrac = float(a[2])/cn
+                if len(a) > 1: # VAF
+                    svfrac = float(a[1])/cn
 
             if action in ('TRN', 'BIGDEL', 'BIGINV', 'BIGDUP'):
                 if len(a) > 1: # translocation end orientation ++ / +- / -+ / --
@@ -890,13 +891,18 @@ def main(args):
             mut_len = int(bedline.split()[2]) - int(bedline.split()[1])
 
             if mut_type in ('DEL', 'DUP', 'INV') and mut_len > 10000:
-                logger.warning('%s is over 10kbp long: recommend using BIG%s instead.' % (bedline, mut_type))
+                logger.warning('%s is over 10kbp long: converting to use BIG%s instead.' % (bedline, mut_type))
+                mut_type = 'BIG' + mut_type
+                if mut_type == 'BIGDUP' and len(bedline.split()) == 6: # convert DUP to BIGDUP
+                    b = bedline.split()
+                    bedline = ' '.join((b[:4] + [b[-1]]))
 
             if mut_type.startswith('BIG') and mut_len < 5000:
-                logger.warning('%s is under 5kbp, "BIG" mutation types will yield unpredictable results' % bedline)
+                mut_type = mut_type.replace('BIG', '')
+                logger.warning('%s is under 5kbp, "BIG" mutation types will yield unpredictable results, converting to %s' % (bedline, mut_type))
 
             # rewrite bigdel coords as translocation
-            if bedline.split()[3] == 'BIGDEL':
+            if mut_type == 'BIGDEL':
                 bdel_svfrac = float(args.svfrac)
                 if len(bedline.split()) == 5:
                     bdel_svfrac = float(bedline.split()[-1])
@@ -916,11 +922,12 @@ def main(args):
                 bigdels[bdel_mutid] = (bdel_chrom, bdel_start, bdel_end, bdel_svfrac)
 
             # rewrite bigdup coords as translocation
-            if bedline.split()[3] == 'BIGDUP':
+            if mut_type == 'BIGDUP':
                 bdup_svfrac = 1.0 # BIGDUP VAF is determined by donor bam
 
                 if args.donorbam is None:
-                    logger.warning('using BIGDUP requires specifying a --donorbam, skipping mutation: %s' % bedline)
+                    logger.warning('%s: using BIGDUP requires specifying a --donorbam and none was provided, using %s' % (bedline, args.bamFileName))
+                    args.donorbam = args.bamFileName
                     continue
 
                 bdup_chrom, bdup_start, bdup_end = bedline.split()[:3]
@@ -938,7 +945,7 @@ def main(args):
                 bigdups[bdup_mutid] = (bdup_chrom, bdup_start, bdup_end, bdup_svfrac)
 
             # rewrite biginv coords as translocations
-            if bedline.split()[3] == 'BIGINV':
+            if mut_type == 'BIGINV':
 
                 binv_svfrac = float(args.svfrac)
                 if len(bedline.split()) == 5:
