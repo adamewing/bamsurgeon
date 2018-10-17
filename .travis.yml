@@ -1,80 +1,64 @@
 language: python
+
 dist: precise
+
 python:
-    - 2.7.8
     - 2.7
+
 sudo: required
+
 before_install: 
-    - bash prerequisites.sh
     - WORKDIR=`pwd`
+    - mkdir bin
+    - export PATH=$WORKDIR/bin/:$PATH
+
+install:
+    ## Python modules
+    - pip install cython
+    - pip install pysam
+
+    ## Picard
     - wget https://github.com/broadinstitute/picard/releases/download/1.131/picard-tools-1.131.zip
     - unzip picard-tools-1.131.zip
+
+    ## Exonerate
     - git clone https://github.com/adamewing/exonerate.git
     - cd exonerate
     - git checkout v2.4.0
     - autoreconf -i
     - ./configure --prefix=$WORKDIR && make && make check && make install
     - cd ..
+
+    # Velvet
     - wget https://www.ebi.ac.uk/~zerbino/velvet/velvet_1.2.10.tgz
     - tar xvzf velvet_1.2.10.tgz
     - sudo make -C velvet_1.2.10
     - sudo cp velvet_1.2.10/velvetg $WORKDIR/bin/
     - sudo cp velvet_1.2.10/velveth $WORKDIR/bin/
-    - wget https://github.com/pysam-developers/pysam/archive/9c4c00a22fbf0f836347283cb008dbc9183e5e56.zip
-    - unzip 9c4c00a22fbf0f836347283cb008dbc9183e5e56.zip
-    - mv pysam-9c4c00a22fbf0f836347283cb008dbc9183e5e56 pysam
-    - wget https://github.com/cython/cython/archive/137c064f3b28d4bb59d05a9751f60623f2fc9387.zip
-    - unzip 137c064f3b28d4bb59d05a9751f60623f2fc9387.zip
-    - mv cython-137c064f3b28d4bb59d05a9751f60623f2fc9387 cython
-    - cd cython
-    - python setup.py install
-    - cd ../pysam
-    - python setup.py build
-    - python setup.py install
-    - cd ..
-    - cd test_data
-    - cd ..
+
+    ## BWA
     - git clone https://github.com/lh3/bwa.git
-    - cd bwa 
-    - git checkout v0.7.16
-    - cd ..
     - sudo make -C bwa
-    - sudo cp bwa/bwa $WORKDIR/bin
+    - sudo mv bwa/bwa $WORKDIR/bin
+
+    ## HTSLIB
     - git clone https://github.com/samtools/htslib.git
-    - cd htslib
-    - git checkout 1.5
-    - cd ..
     - sudo make -C htslib
+
+    ## Samtools
     - git clone https://github.com/samtools/samtools.git
-    - cd samtools
-    - git checkout 1.5
-    - cd ..
     - sudo make -C samtools
-    - sudo cp samtools/samtools $WORKDIR/bin/
-    - sudo cp samtools/misc/wgsim $WORKDIR/bin/
+    - sudo mv samtools/samtools $WORKDIR/bin/
+    - sudo mv samtools/misc/wgsim $WORKDIR/bin/
+
+    ## Bcftools
     - git clone https://github.com/samtools/bcftools.git
-    - cd bcftools
-    - git checkout 1.5
-    - cd ..
     - sudo make -C bcftools
-    - sudo cp bcftools/bcftools $WORKDIR/bin/
-    - export PATH=$WORKDIR/bin/:$PATH
-install: true
+    - sudo mv bcftools/bcftools $WORKDIR/bin
+
 script:
     - python setup.py install
     - cd test
-    - ./test_snv.sh 10 20 ../test_data/Homo_sapiens_chr22_assembly19.fasta 
-    - ./test_indel.sh 20 ../test_data/Homo_sapiens_chr22_assembly19.fasta 
-    - ./test_snv_alt.sh 15 20 ../test_data/Homo_sapiens_chr22_assembly19.fasta 
-    - ./test_snv_avoid.sh 15 20 ../test_data/Homo_sapiens_chr22_assembly19.fasta 
-#    - ./test_indel_bwamem.sh 10 ../test_data/Homo_sapiens_chr22_assembly19.fasta ../picard-tools-1.131/picard.jar 
-    - ./test_indel_maxdepth.sh 10 ../test_data/Homo_sapiens_chr22_assembly19.fasta
-    - ./test_indel_minmutreads.sh 10 ../test_data/Homo_sapiens_chr22_assembly19.fasta 
-    - ./test_snv_bwamem.sh 15 20 ../test_data/Homo_sapiens_chr22_assembly19.fasta ../picard-tools-1.131/picard.jar
-#    - ./test_snv_maxdepth.sh 15 20 ../test_data/Homo_sapiens_chr22_assembly19.fasta
-    - ./test_snv_minmutreads.sh 15 20 ../test_data/Homo_sapiens_chr22_assembly19.fasta
-    - ./test_snv_skipmerge.sh 15 20 ../test_data/Homo_sapiens_chr22_assembly19.fasta
-#    - ./test_snv_tmap.sh 15 20 ../test_data/Homo_sapiens_chr22_assembly19.fasta ../picard-tools-1.131/picard.jar
-    - ./test_sv.sh 15 ../test_data/Homo_sapiens_chr22_assembly19.fasta
-    - ./test_sv_bwamem.sh ../test_data/Homo_sapiens_chr22_assembly19.fasta
-    - ./test_sv_inslib.sh ../test_data/Homo_sapiens_chr22_assembly19.fasta
+    - ./test_indel.sh ../picard-tools-1.131/picard.jar 
+    - ./test_snv.sh ../picard-tools-1.131/picard.jar
+    - ./test_sv.sh

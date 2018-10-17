@@ -19,7 +19,8 @@ then
     exit 65
 fi
 
-addsv.py -p 1 -v ../test_data/test_sv.txt -f ../test_data/testregion_realign.bam -r $REF -o ../test_data/testregion_sv_mut.bam --aligner mem --keepsecondary --seed 1234
+addsv.py -p 1 -v ../test_data/test_sv.txt -f ../test_data/testregion_realign.bam -r $REF -o ../test_data/testregion_sv_mut.bam --aligner mem --keepsecondary --seed 1234 --inslib ../test_data/test_inslib.fa
+
 if [ $? -ne 0 ]
 then
   echo "addsv.py failed."
