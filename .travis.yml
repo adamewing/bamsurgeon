@@ -9,7 +9,6 @@ sudo: required
 
 before_install: 
     - WORKDIR=`pwd`
-    - mkdir bin
     - export PATH=$WORKDIR/bin/:$PATH
 
 install:
