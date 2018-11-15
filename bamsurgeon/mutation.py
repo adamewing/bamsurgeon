@@ -228,10 +228,10 @@ def mutate(args, log, bamfile, bammate, chrom, mutstart, mutend, mutpos_list, av
                 if frac > maxfrac:
                     maxfrac = frac
                 if frac > float(args.snvfrac):
-                    sys.stderr.write("WARN " + now() + " " + region + " dropped for proximity to SNP, nearby SNP MAF: " + str(frac)  + " (max snv frac: " + args.snvfrac + ")\n")
+                    logger.warning(region + " dropped for proximity to SNP, nearby SNP MAF: " + str(frac)  + " (max snv frac: " + args.snvfrac + ")")
                     hasSNP = True
             else:
-                sys.stderr.write("WARN " + now() + " " + region + " could not pileup for region: " + chrom + ":" + str(pcol.pos))
+                logger.warning(region + " could not pileup for region: " + chrom + ":" + str(pcol.pos))
                 if not args.ignorepileup:
                     hasSNP = True
 

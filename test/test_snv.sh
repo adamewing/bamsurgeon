@@ -17,7 +17,7 @@ then
 fi
 
 
-addsnv.py -v ../test_data/random_snvs.txt -f ../test_data/testregion_realign.bam -r $REF -o ../test_data/testregion_mut.bam -n 5 -c ../test_data/test_cnvlist.txt.gz  --picardjar $1 --aligner mem --seed 1234 
+addsnv.py -v ../test_data/random_snvs.txt -f ../test_data/testregion_realign.bam -r $REF -o ../test_data/testregion_mut.bam -n 5 -c ../test_data/test_cnvlist.txt.gz  --picardjar $1 --aligner mem --seed 1234
 
 if [ $? -ne 0 ]
 then

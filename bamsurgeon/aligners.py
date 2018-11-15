@@ -21,7 +21,7 @@ logger.setLevel(logging.INFO)
 #
 
 
-supported_aligners_bam   = ['backtrack', 'mem', 'novoalign', 'gsnap', 'STAR', 'bowtie2', 'tmap','bwakit']
+supported_aligners_bam   = ['backtrack', 'mem', 'novoalign', 'gsnap', 'STAR', 'bowtie2', 'tmap', 'bwakit', 'minimap2']
 supported_aligners_fastq = ['backtrack', 'mem', 'novoalign']
 
 def checkoptions(name, options, picardjar, sv=False):
@@ -54,6 +54,10 @@ def checkoptions(name, options, picardjar, sv=False):
         if 'bowtie2ref' not in options:
             raise ValueError("ERROR '--aligner bowtie2' requires '--alignopts bowtie2ref:bowtie2_ref_basepath\n")
 
+    if name == 'minimap2':
+        if 'x' not in options:
+            raise ValueError("ERROR '--aligner minimap2' requires '--alignopts x:map-pb or x:map-ont\n")
+
 
 def remap_bam(name, bamfn, fastaref, options, mutid='null', threads=1, paired=True, picardjar=None, insane=False):
     ''' remap bam file with supported alignment method. "options" param is a dict of aligner-specific required options '''
@@ -70,6 +74,11 @@ def remap_bam(name, bamfn, fastaref, options, mutid='null', threads=1, paired=Tr
 
     if name == 'mem':
         remap_bwamem_bam(bamfn, threads, fastaref, picardjar, mutid=mutid, paired=paired, insane=insane)
+
+    if name == 'minimap2':
+        remap_mm2_bam(bamfn, threads, fastaref, picardjar, options['x'], mutid=mutid, paired=paired, insane=insane)
+        if paired:
+            raise ValueError("ERROR --aligner minimap2 requires --single option to be set\n")
 
     if name == 'bwakit':
         remap_bwakit_bam(bamfn, threads, fastaref, picardjar, mutid=mutid, paired=paired, insane=insane)
@@ -187,6 +196,63 @@ def remap_bwamem_bam(bamfn, threads, fastaref, picardjar, mutid='null', paired=T
     idx_cmd  = ['samtools', 'index', bamfn]
 
     logger.info("%s aligning %s with bwa mem" % (mutid, fastq))
+    with open(sam_out, 'w') as sam:
+        p = subprocess.Popen(sam_cmd, stdout=subprocess.PIPE)
+        for line in p.stdout:
+            sam.write(line)
+
+    logger.info("%s writing %s to BAM..." % (mutid, sam_out))
+    subprocess.call(bam_cmd)
+
+    logger.info("%s deleting SAM: %s" % (mutid, sam_out))
+    if deltmp: os.remove(sam_out)
+
+    logger.info("%s sorting output: %s " % (mutid, ' '.join(sort_cmd)))
+    subprocess.call(sort_cmd)
+
+    logger.info("%s remove original bam: %s" % (mutid, bamfn))
+    if deltmp: os.remove(bamfn)
+
+    logger.info("%s rename sorted bam: %s to original name: %s" % (mutid, sort_out, bamfn))
+    move(sort_out, bamfn)
+
+    logger.info("%s indexing: %s" % (mutid, ' '.join(idx_cmd)))
+    subprocess.call(idx_cmd)
+
+    # check if BAM readcount looks sane
+    if not insane:
+        if bamreadcount(bamfn) < fastqreadcount(fastq): 
+            raise ValueError("ERROR " + now() + " " + mutid + " bam readcount < fastq readcount, alignment sanity check failed!\n")
+
+    logger.info(mutid + " removing " + fastq)
+    if deltmp: os.remove(fastq)
+
+
+def remap_mm2_bam(bamfn, threads, fastaref, picardjar, x, mutid='null', paired=True, deltmp=True, insane=False):
+    """ call bwa mem and samtools to remap .bam
+    """
+    assert os.path.exists(picardjar)
+    assert bamreadcount(bamfn) > 0
+    if paired:
+        assert bamreadcount(bamfn) > 1 
+
+    sam_out  = bamfn + '.realign.sam'
+    sort_out = bamfn + '.realign.sorted.bam'
+
+    logger.info("%s converting %s to fastq" % (mutid, bamfn))
+    fastq = bamtofastq(bamfn, picardjar, threads=threads, paired=paired)[0]
+
+    sam_cmd = []
+
+    sam_cmd  = ['minimap2', '-ax', x, '-t', str(threads), fastaref, fastq]
+
+    assert len(sam_cmd) > 0
+
+    bam_cmd  = ['samtools', 'view', '-bt', fastaref + '.fai', '-o', bamfn, sam_out]
+    sort_cmd = ['samtools', 'sort', '-@', str(threads), '-T', sort_out, '-o', sort_out, bamfn]
+    idx_cmd  = ['samtools', 'index', bamfn]
+
+    logger.info("%s aligning %s with minimap2" % (mutid, fastq))
     with open(sam_out, 'w') as sam:
         p = subprocess.Popen(sam_cmd, stdout=subprocess.PIPE)
         for line in p.stdout:
