@@ -330,7 +330,7 @@ def trim_contig(mutid, chrom, start, end, contig, reffile):
 
 
 def add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right_bnd, buf=200):
-    assert bdup_left_bnd < bdup_right_bnd
+    assert bdup_left_bnd < bdup_right_bnd, '%s: bdup_left_bnd > bdup_right_bnd' % mutid
 
     donorbam = pysam.AlignmentFile(args.donorbam)
 
@@ -349,7 +349,6 @@ def add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right
 
     region = '%s:%d-%d' % (bdup_chrom, bdup_left_bnd+buf, bdup_right_bnd-buf)
 
-    #samtools mpileup -a addsv.mergetmp.final.45cf8b15-a5da-4fe1-9936-4eaa3bf72f0b.bam -r 22:33868746-33881044
     args = ['samtools', 'mpileup', '-r', region, '-a', tmpbamfn]
 
     FNULL = open(os.devnull, 'w')
@@ -373,6 +372,14 @@ def add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right
         if depth > 0:
             right_cover = pos
 
+
+    if left_cover > left_zero:
+        logger.warning('%s: left_cover > left_zero' % mutid)
+        left_cover, left_zero = left_zero, left_cover
+
+    if right_cover < right_zero:
+        logger.warning('%s: right_cover < right_zero' % mutid)
+        right_cover, right_zero = right_zero, right_cover
 
     count_left  = tmpbam.count(reference=bdup_chrom, start=left_cover, end=left_zero)
     count_right = tmpbam.count(reference=bdup_chrom, start=right_zero, end=right_cover)
