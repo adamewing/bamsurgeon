@@ -41,7 +41,9 @@ def countBaseAtPos(bamfile,chrom,pos,mutid='null'):
 
 
 def makeins(read, start, ins, debug=False):
-    assert len(read.seq) > len(ins) + 2, "INDELs must be less than one read length - 2bp"
+    if len(read.seq) < len(ins) + 2:
+        logger.warning("INDELs (ins) must be less than one read length, skipped read: %s" % read.query_name)
+        return read.seq
     
     logger.debug("DEBUG: INS: read.pos: %d" % read.pos)
     logger.debug("DEBUG: INS: start: %d" % start)
@@ -50,7 +52,15 @@ def makeins(read, start, ins, debug=False):
     logger.debug("DEBUG: is_reverse: %s" % read.is_reverse)
 
     orig_len = len(read.seq)
-    pos_in_read = start - read.pos + read.qstart
+    pos_in_read = None
+
+    for (qpos, rpos) in read.get_aligned_pairs():
+        if rpos == start:
+            pos_in_read = qpos
+
+    if pos_in_read is None:
+        logger.warning("ref position %d not covered in read %s" % (start, read.query_name))
+        return read.seq
 
     newseq = read.seq
 
@@ -81,7 +91,9 @@ def makeins(read, start, ins, debug=False):
 
 
 def makedel(read, chrom, start, end, ref, debug=False):
-    assert len(read.seq) > end-start-2, "INDELs must be less than one read length - 2bp"
+    if len(read.seq) < end-start-2:
+        logger.warning("INDELs (del) must be less than one read length, skipped read: %s" % read.query_name)
+        return read.seq
     
     logger.debug("DEBUG: DEL: read.pos: %d" % read.pos)
     logger.debug("DEBUG: DEL: start: %d" % start)
@@ -90,9 +102,30 @@ def makedel(read, chrom, start, end, ref, debug=False):
     logger.debug("DEBUG: DEL: orig seq: %s" % read.seq)
 
     orig_len = len(read.seq)
-    #orig_end = read.pos + orig_len
-    start_in_read = start - read.pos + read.qstart
-    end_in_read = end - read.pos + read.qstart
+    
+    start_in_read = None
+    end_in_read = None
+
+    for (qpos, rpos) in read.get_aligned_pairs():
+        if rpos == start:
+            start_in_read = qpos
+
+        if rpos == end:
+            end_in_read = qpos
+
+    if start_in_read is None and read.get_reference_positions()[0] > start:
+        start_in_read = start-read.get_reference_positions()[0]
+
+    if end_in_read is None and read.get_reference_positions()[-1] < end:
+        end_in_read = orig_len + (end-read.get_reference_positions()[-1])
+
+    if start_in_read is None:
+        logger.warning("ref position %d not covered in read %s" % (start, read.query_name))
+        return read.seq
+
+    if end_in_read is None:
+        logger.warning("ref position %d not covered in read %s" % (end, read.query_name))
+        return read.seq
 
     logger.debug("DEBUG: DEL: start_in_read: %d" % start_in_read)
     logger.debug("DEBUG: DEL: end_in_read: %d" % end_in_read)
@@ -122,6 +155,7 @@ def makedel(read, chrom, start, end, ref, debug=False):
 
     if debug:
         logger.debug("DEBUG: DEL: newseq: %s" % (left + right))
+
     return left + right
 
 

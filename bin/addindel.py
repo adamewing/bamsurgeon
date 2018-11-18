@@ -137,7 +137,7 @@ def makemut(args, chrom, start, end, vaf, ins, avoid, alignopts):
         random.shuffle(readlist)
 
         if len(readlist) < int(args.mindepth):
-            logger.warning("%s skipped, too few reads in region: %d" % (mutid, str(len(readlist))))
+            logger.warning("%s skipped, too few reads in region: %d" % (mutid, len(readlist)))
             outbam_muts.close()
             os.remove(tmpoutbamname)
             return None
