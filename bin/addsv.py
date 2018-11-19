@@ -394,7 +394,8 @@ def add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right
     for read in tmpbam.fetch(until_eof=True):
         outbam.write(read)
 
-    donor_norm_factor = min(cover_tmp,cover_donor)/max(cover_tmp,cover_donor)
+    #donor_norm_factor = min(cover_tmp,cover_donor)/max(cover_tmp,cover_donor)
+    donor_norm_factor = 1.0 # FIXME 
 
     logger.info('%s: BIGDUP donor coverage normalisation factor: %f' % (mutid, donor_norm_factor))
 
