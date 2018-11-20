@@ -42,6 +42,7 @@ class Contig:
         self.name = name
         self.seq = seq
         self.len = len(seq)
+        self.rc = False
 
         amosfile = dir + "/velvet_asm.afg"
         seqfile = dir + "/Sequences"

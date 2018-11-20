@@ -304,7 +304,7 @@ def trim_contig(mutid, chrom, start, end, contig, reffile):
 
     refseq = reffile.fetch(chrom,start,end)
     alignstats = align(contig.seq, refseq)
-    
+
     if len(alignstats) < 6:
         logger.warning("%s alignstats: %s" % (mutid, str(alignstats)))
         logger.warning("%s No good alignment between mutated contig and original, aborting mutation!" % mutid)
@@ -320,11 +320,15 @@ def trim_contig(mutid, chrom, start, end, contig, reffile):
     contig.trimseq(qrystart, qryend)
     logger.info("%s trimmed contig length: %d" % (mutid, contig.len))
 
+    if tgtstart > tgtend: # detect reverse complemented contig
+        contig.rc = True
+
     refstart = start + tgtstart
     refend = start + tgtend
 
     if refstart > refend:
         refstart, refend = refend, refstart
+
 
     return contig, refseq, alignstats, refstart, refend, qrystart, qryend, tgtstart, tgtend
 
@@ -369,17 +373,24 @@ def add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right
         if left_zero is not None and depth == 0:
             right_zero = pos
 
-        if depth > 0:
+        if depth > 0 and right_zero is not None:
             right_cover = pos
 
+    if right_cover is None:
+        right_cover = right_zero+1
 
-    if left_cover > left_zero:
-        logger.warning('%s: left_cover > left_zero' % mutid)
-        left_cover, left_zero = left_zero, left_cover
+    logger.info('%s: left_zero=%d, left_cover=%d, right_zero=%d, right_cover=%d' % (mutid, left_zero, left_cover, right_zero, right_cover))
 
-    if right_cover < right_zero:
-        logger.warning('%s: right_cover < right_zero' % mutid)
-        right_cover, right_zero = right_zero, right_cover
+
+    #if left_cover > left_zero:
+    #    logger.warning('%s: left_cover > left_zero' % mutid)
+    #    left_cover, left_zero = left_zero, left_cover
+
+    #if right_cover < right_zero:
+    #    logger.warning('%s: right_cover < right_zero' % mutid)
+    #    right_cover, right_zero = right_zero, right_cover
+
+    assert left_zero < right_zero, 'left_zero: %d, right_zero: %d' % (left_zero, right_zero)
 
     count_left  = tmpbam.count(reference=bdup_chrom, start=left_cover, end=left_zero)
     count_right = tmpbam.count(reference=bdup_chrom, start=right_zero, end=right_cover)
@@ -400,6 +411,11 @@ def add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right
     logger.info('%s: BIGDUP donor coverage normalisation factor: %f' % (mutid, donor_norm_factor))
 
     matepairs = {}
+
+    logger.info('%s: fetch donor reads from %s-%d-%d' % (mutid, bdup_chrom, bdup_left_bnd, bdup_right_bnd))
+
+    paircount = 0
+
     for read in donorbam.fetch(bdup_chrom, bdup_left_bnd, bdup_right_bnd):
         if not read.is_duplicate and not read.is_secondary and not read.is_supplementary:
             if (read.pos > left_zero and read.pos < right_zero) or (read.next_reference_start > left_zero and read.next_reference_start < right_zero):
@@ -417,8 +433,11 @@ def add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right
                     if random.random() <= donor_norm_factor:
                         outbam.write(mate)
                         outbam.write(read)
+                        paircount += 1
 
     outbam.close()
+
+    logger.info('%s: using %d donor read pairs' % (mutid, paircount))
 
     return outbamfn
 
@@ -639,7 +658,17 @@ def makemut(args, bedline, alignopts):
         # make mutation in the largest contig
         mutseq = ms.MutableSeq(maxcontig.seq)
 
-        if is_transloc: trn_mutseq = ms.MutableSeq(trn_maxcontig.seq)
+        if maxcontig.rc:
+            mutseq = ms.MutableSeq(rc(maxcontig.seq)) 
+
+        trn_mutseq = None
+
+        if is_transloc:
+            if trn_maxcontig.rc:
+                trn_mutseq = ms.MutableSeq(rc(trn_maxcontig.seq))
+            else:
+                trn_mutseq = ms.MutableSeq(trn_maxcontig.seq)
+
 
         # support for multiple mutations
         for actionstr in actions:
