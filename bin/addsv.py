@@ -644,6 +644,11 @@ def makemut(args, bedline, alignopts):
 
         if is_transloc:
             trn_maxcontig, trn_refseq, trn_alignstats, trn_refstart, trn_refend, trn_qrystart, trn_qryend, trn_tgtstart, trn_tgtend = trim_contig(mutid, trn_chrom, trn_start, trn_end, trn_maxcontig, reffile)
+
+            if trn_maxcontig is None:
+                logger.warning("%s best contig for translocation partner did not have sufficent match to reference, aborting mutation." % mutid)
+                return None, None, None
+                
             logger.info("%s trn_start: %d, trn_end: %d, trn_tgtstart: %d, trn_tgtend:%d , trn_refstart: %d, trn_refend: %d" % (mutid, trn_start, trn_end, trn_tgtstart, trn_tgtend, trn_refstart, trn_refend))
 
         # is there anough room to make mutations?
