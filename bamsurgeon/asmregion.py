@@ -109,7 +109,7 @@ def runVelvet(reads,refseqname,refseq,kmer,addsv_tmpdir,isPaired=True,long=False
     """
     reads is either a dictionary of ReadPair objects, kmer is an odd int
     """
-    reads_fasta_tmpfn = addsv_tmpdir + '/' + '.'.join((mutid, 'tmpreads', 'fasta'))
+    reads_fasta_tmpfn = addsv_tmpdir + '/' + '.'.join((mutid, 'tmpreads', str(uuid4()), 'fasta'))
 
     reads_fasta = open(reads_fasta_tmpfn, 'w')
 
