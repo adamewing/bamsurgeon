@@ -46,7 +46,7 @@ def printvcf(chrom, bnd1, bnd2, precise, type, svlen, ref, id, svfrac):
     info.append('SOMATIC')
     info.append('SVTYPE=' + type.upper())
     info.append('END=' + str(bnd2))
-    info.append('SVLEN=' + str(svlen))
+    info.append('SVLEN=' + str(abs(svlen)))
     info.append('VAF=' + svfrac)
     
     infostr = ';'.join(info)
@@ -64,8 +64,8 @@ def precise_interval(mutline, ref):
     id = '.'
 
     if m[0].startswith('big'):
-        bnd1 = (int(m[7])+int(m[8]))/2
-        bnd2 = (int(m[2])+int(m[3]))/2
+        bnd1 = int(m[2])+int(m[5])
+        bnd2 = int(m[7])+int(m[9])
         m[0] = m[0].replace('big', '')
 
     elif m[0] == 'ins':
@@ -77,8 +77,8 @@ def precise_interval(mutline, ref):
         chr1 = chrom
         chr2 = m[6]
 
-        bnd1 = (refstart+refend)/2
-        bnd2 = (int(m[7])+int(m[8]))/2
+        bnd1 = int(m[2])+int(m[5])
+        bnd2 = int(m[7])+int(m[9])
 
         id1 = str(uuid4()).split('-')[0]
         id2 = str(uuid4()).split('-')[0]
