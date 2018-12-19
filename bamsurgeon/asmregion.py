@@ -256,7 +256,7 @@ def main(args):
         os.mkdir(args.tmpdir)
         print "INFO\t" + now() + "\tcreated tmp directory: " + args.tmpdir
 
-    contigs = asm(chr, start, end, args.bamFileName, reffile, int(args.kmersize), args.tmpdir, args.noref, args.recycle)
+    contigs = asm(chr, start, end, args.bamFileName, reffile, int(args.kmersize), args.tmpdir)
 
     maxlen = 0
     maxeid = None
@@ -277,7 +277,6 @@ if __name__ == '__main__':
     parser.add_argument('-k', '--kmersize', dest='kmersize', default=31,
                         help='kmer size for velvet, default=31')
     parser.add_argument('-t', '--tmpdir', dest='tmpdir', default='addsv.tmp')
-    parser.add_argument('--noref', action="store_true")
-    parser.add_argument('--recycle', action="store_true")
+
     args = parser.parse_args()
     main(args)
