@@ -332,6 +332,19 @@ def trim_contig(mutid, chrom, start, end, contig, reffile):
 
     return contig, refseq, alignstats, refstart, refend, qrystart, qryend, tgtstart, tgtend
 
+def locate_contig_pos(refstart, refend, user_start, user_end, contig_len, maxlibsize):
+    contig_start = None
+    contig_end = None
+
+    if user_start - refstart > maxlibsize:
+        contig_start = (user_start - refstart)
+
+    if refend - user_end > maxlibsize:
+        contig_end = contig_len - (refend - user_end)
+
+    return contig_start, contig_end
+
+
 
 def add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right_bnd, buf=200):
     assert bdup_left_bnd < bdup_right_bnd, '%s: bdup_left_bnd > bdup_right_bnd' % mutid
@@ -517,6 +530,10 @@ def makemut(args, bedline, alignopts):
         end    = int(c[2])
         araw   = c[3:] # INV, DEL, INS,  DUP, TRN
  
+        # desired start/end
+        user_start = start
+        user_end   = end
+
         # translocation specific
         trn_chrom = None
         trn_start = None
@@ -529,13 +546,16 @@ def makemut(args, bedline, alignopts):
             if len(c) > 7:
                 araw += c[7:]
 
-            start -= 3000
-            end   += 3000
+            start -= int(args.minctglen)
+            end   += int(args.minctglen)
             if start < 0: start = 0
 
             trn_chrom = c[4]
-            trn_start = int(c[5]) - 3000
-            trn_end   = int(c[5]) + 3000
+            user_trn_start = int(c[5])
+            user_trn_end   = int(c[6])
+
+            trn_start = int(c[5]) - int(args.minctglen)
+            trn_end   = int(c[6]) + int(args.minctglen)
             if trn_start < 0: trn_start = 0
 
         actions = map(lambda x: x.strip(),' '.join(araw).split(';'))
@@ -566,12 +586,12 @@ def makemut(args, bedline, alignopts):
         if minctglen < 3*int(args.maxlibsize):
             minctglen = 3*int(args.maxlibsize)
 
-        if end-start < minctglen:
-            adj   = minctglen - (end-start)
-            start = start - adj/2
-            end   = end + adj/2
+        #if end-start < minctglen:
+        adj   = minctglen - (end-start)
+        start = start - adj/2
+        end   = end + adj/2
 
-            logger.info("%s note: interval size was too short, adjusted: %s:%d-%d" % (mutid, chrom,start,end))
+        #logger.info("%s note: interval size was too short, adjusted: %s:%d-%d" % (mutid, chrom, start, end))
 
         dfrac = discordant_fraction(args.bamFileName, chrom, start, end)
         logger.info("%s discordant fraction: %f" % (mutid, dfrac))
@@ -747,8 +767,48 @@ def makemut(args, bedline, alignopts):
 
             logfile.write(">" + chrom + ":" + str(refstart) + "-" + str(refend) + " BEFORE\n" + str(mutseq) + "\n")
 
+            contig_start = None
+            contig_end = None
+            trn_contig_start = None
+            trn_contig_end = None
+            exact_success = True
+
+            contig_start, contig_end = locate_contig_pos(refstart, refend, user_start, user_end, mutseq.length(), int(args.maxlibsize))
+
+            if contig_start is None:
+                logger.warning('%s contig does not cover user start' % mutid)
+                exact_success = False
+                #print refstart, refend, user_start, user_end, int(args.maxlibsize)
+
+            if contig_end is None:
+                logger.warning('%s contig does not cover user end' % mutid)
+                exact_success = False
+                #print refstart, refend, user_start, user_end, int(args.maxlibsize)
+
+            if is_transloc:
+                trn_contig_start, trn_contig_end = locate_contig_pos(trn_refstart, trn_refend, user_trn_start, user_trn_end, trn_mutseq.length(), int(args.maxlibsize))
+
+                if trn_contig_start is None:
+                    logger.warning('%s contig does not cover user translocation start' % mutid)
+                    exact_success = False
+                    #print trn_refstart, trn_refend, user_trn_start, user_trn_end, int(args.maxlibsize)
+
+                if trn_contig_end is None:
+                    logger.warning('%s contig does not cover user translocation end' % mutid)
+                    exact_success = False
+                    #print trn_refstart, trn_refend, user_trn_start, user_trn_end, int(args.maxlibsize)
+
+
+            if args.require_exact and not exact_success:
+                logger.warning('%s dropped mutation due to --require_exact')
+                return None, None, None
+
+
             if action == 'INS':
                 inspoint = mutseq.length()/2
+                if None not in (contig_start, contig_end):
+                    inspoint = (contig_start+contig_end)/2
+
                 if ins_motif is not None:
                     inspoint = mutseq.find_site(ins_motif, left_trim=int(args.maxlibsize), right_trim=int(args.maxlibsize))
 
@@ -782,6 +842,11 @@ def makemut(args, bedline, alignopts):
             elif action == 'INV':
                 invstart = int(args.maxlibsize)
                 invend = mutseq.length() - invstart
+
+                if None not in (contig_start, contig_end):
+                    invstart = contig_start
+                    invend   = contig_end
+
                 mutseq.inversion(invstart,invend)
 
                 mutinfo[mutid] = "\t".join(('inv',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(invstart),str(invend),str(svfrac)))
@@ -790,16 +855,20 @@ def makemut(args, bedline, alignopts):
             elif action == 'DEL':
                 delstart = int(args.maxlibsize)
                 delend = mutseq.length() - delstart
-                if dlen == 0: # bp size not specified, delete fraction of contig
-                    dlen = int((float(delend-delstart) * dsize)+0.5) 
+                # if dlen == 0: # bp size not specified, delete fraction of contig
+                #     dlen = int((float(delend-delstart) * dsize)+0.5) 
 
-                dadj = delend-delstart-dlen
-                if dadj < 0:
-                    dadj = 0
-                    logger.warning("%s warning: deletion of length 0" % mutid)
+                # dadj = delend-delstart-dlen
+                # if dadj < 0:
+                #     dadj = 0
+                #     logger.warning("%s warning: deletion of length 0" % mutid)
 
-                delstart += dadj/2
-                delend   -= dadj/2
+                # delstart += dadj/2
+                # delend   -= dadj/2
+
+                if None not in (contig_start, contig_end):
+                    delstart = contig_start
+                    delend   = contig_end
 
                 mutseq.deletion(delstart,delend)
 
@@ -809,33 +878,74 @@ def makemut(args, bedline, alignopts):
             elif action == 'DUP':
                 dupstart = int(args.maxlibsize)
                 dupend = mutseq.length() - dupstart
+
+                if None not in (contig_start, contig_end):
+                    dupstart = contig_start
+                    dupend   = contig_end
+
                 mutseq.duplication(dupstart,dupend,ndups)
 
                 mutinfo[mutid] = "\t".join(('dup',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(dupstart),str(dupend),str(ndups),str(svfrac)))
                 logfile.write(mutinfo[mutid] + "\n")
 
             elif action == 'TRN':
-                mutseq.fusion(mutseq.length()/2, trn_mutseq, trn_mutseq.length()/2, flip1=trn_left_flip, flip2=trn_right_flip)
+                trnpoint_1 = mutseq.length()/2
+                trnpoint_2 = trn_mutseq.length()/2
 
-                mutinfo[mutid] = "\t".join(('trn',chrom,str(refstart),str(refend),action,str(mutseq.length()),trn_chrom,str(trn_refstart),str(trn_refend),str(trn_mutseq.length()),str(svfrac)))
+                if None not in (contig_start, contig_end):
+                    trnpoint_1 = (contig_start + contig_end)/2
+
+                if None not in (trn_contig_start, trn_contig_end):
+                    trnpoint_2 = (trn_contig_start + trn_contig_end)/2
+
+                mutseq.fusion(trnpoint_1, trn_mutseq, trnpoint_2, flip1=trn_left_flip, flip2=trn_right_flip)
+
+                mutinfo[mutid] = "\t".join(('trn',chrom,str(refstart),str(refend),action,str(trnpoint_1),trn_chrom,str(trn_refstart),str(trn_refend),str(trnpoint_2),str(svfrac)))
                 logfile.write(mutinfo[mutid] + "\n")
 
             elif action == 'BIGDEL':
-                mutseq.fusion(mutseq.length()/2, trn_mutseq, trn_mutseq.length()/2)
+                trnpoint_1 = mutseq.length()/2
+                trnpoint_2 = trn_mutseq.length()/2
 
-                mutinfo[mutid] = "\t".join(('bigdel',chrom,str(refstart),str(refend),action,str(mutseq.length()),trn_chrom,str(trn_refstart),str(trn_refend),str(trn_mutseq.length()),str(svfrac)))
+                if None not in (contig_start, contig_end):
+                    trnpoint_1 = (contig_start + contig_end)/2
+
+                if None not in (trn_contig_start, trn_contig_end):
+                    trnpoint_2 = (trn_contig_start + trn_contig_end)/2
+
+                mutseq.fusion(trnpoint_1, trn_mutseq, trnpoint_2)
+
+                mutinfo[mutid] = "\t".join(('bigdel',chrom,str(refstart),str(refend),action,str(trnpoint_1),trn_chrom,str(trn_refstart),str(trn_refend),str(trnpoint_2),str(svfrac)))
                 logfile.write(mutinfo[mutid] + "\n")
 
             elif action == 'BIGINV':
-                mutseq.fusion(mutseq.length()/2, trn_mutseq, trn_mutseq.length()/2, flip1=trn_left_flip, flip2=trn_right_flip)
+                trnpoint_1 = mutseq.length()/2
+                trnpoint_2 = trn_mutseq.length()/2
 
-                mutinfo[mutid] = "\t".join(('biginv',chrom,str(refstart),str(refend),action,str(mutseq.length()),trn_chrom,str(trn_refstart),str(trn_refend),str(trn_mutseq.length()),str(svfrac)))
+                if None not in (contig_start, contig_end):
+                    trnpoint_1 = (contig_start + contig_end)/2
+
+                if None not in (trn_contig_start, trn_contig_end):
+                    trnpoint_2 = (trn_contig_start + trn_contig_end)/2
+
+                mutseq.fusion(trnpoint_1, trn_mutseq, trnpoint_2, flip1=trn_left_flip, flip2=trn_right_flip)
+
+                mutinfo[mutid] = "\t".join(('biginv',chrom,str(refstart),str(refend),action,str(trnpoint_1),trn_chrom,str(trn_refstart),str(trn_refend),str(trnpoint_2),str(svfrac)))
                 logfile.write(mutinfo[mutid] + "\n")
 
             elif action == 'BIGDUP':
-                mutseq.fusion(mutseq.length()/2, trn_mutseq, trn_mutseq.length()/2)
+                trnpoint_1 = mutseq.length()/2
+                trnpoint_2 = trn_mutseq.length()/2
 
-                mutinfo[mutid] = "\t".join(('bigdup',chrom,str(refstart),str(refend),action,str(mutseq.length()),trn_chrom,str(trn_refstart),str(trn_refend),str(trn_mutseq.length()),str(svfrac)))
+                if None not in (contig_start, contig_end):
+                    trnpoint_1 = (contig_start + contig_end)/2
+
+                if None not in (trn_contig_start, trn_contig_end):
+                    trnpoint_2 = (trn_contig_start + trn_contig_end)/2
+
+                mutseq.fusion(trnpoint_1, trn_mutseq, trnpoint_2)
+
+                mutinfo[mutid] = "\t".join(('bigdup',chrom,str(refstart),str(refend),action,str(trnpoint_1),trn_chrom,str(trn_refstart),str(trn_refend),str(trnpoint_2),str(svfrac)))
                 logfile.write(mutinfo[mutid] + "\n")
                 rename_reads = False
 
@@ -953,11 +1063,11 @@ def main(args):
                 bdel_start = int(bdel_start)
                 bdel_end   = int(bdel_end)
 
-                bdel_left_start = bdel_start - 2000
-                bdel_left_end   = bdel_start + 2000
+                bdel_left_start = bdel_start
+                bdel_left_end   = bdel_start
 
-                bdel_right_start = bdel_end - 2000
-                bdel_right_end   = bdel_end + 2000
+                bdel_right_start = bdel_end
+                bdel_right_end   = bdel_end
 
                 bedline = '%s %d %d BIGDEL %s %d %d %s %f' % (bdel_chrom, bdel_left_start, bdel_left_end, bdel_chrom, bdel_right_start, bdel_right_end, '++', bdel_svfrac)
                 bdel_mutid = '_'.join(map(str, bedline.split()[:4]))
@@ -976,11 +1086,11 @@ def main(args):
                 bdup_start = int(bdup_start)
                 bdup_end   = int(bdup_end)
 
-                bdup_left_start = bdup_start - 2000
-                bdup_left_end   = bdup_start + 2000
+                bdup_left_start = bdup_start
+                bdup_left_end   = bdup_start
 
-                bdup_right_start = bdup_end - 2000
-                bdup_right_end   = bdup_end + 2000
+                bdup_right_start = bdup_end
+                bdup_right_end   = bdup_end
 
                 bedline = '%s %d %d BIGDUP %s %d %d %s %f' % (bdup_chrom, bdup_right_start, bdup_right_end, bdup_chrom, bdup_left_start, bdup_left_end, '++', bdup_svfrac)
                 bdup_mutid = '_'.join(map(str, bedline.split()[:4]))
@@ -997,11 +1107,11 @@ def main(args):
                 binv_start = int(binv_start)
                 binv_end = int(binv_end)
 
-                binv_left_start = binv_start - 2000
-                binv_left_end   = binv_start + 2000
+                binv_left_start = binv_start
+                binv_left_end   = binv_start
 
-                binv_right_start = binv_end - 2000
-                binv_right_end   = binv_end + 2000
+                binv_right_start = binv_end
+                binv_right_end   = binv_end
 
                 # left breakpoint
                 multi_part.append('%s %d %d BIGINV %s %d %d %s %f' % (binv_chrom, binv_left_start, binv_left_end, binv_chrom, binv_right_start, binv_right_end, '+-', binv_svfrac))
@@ -1023,8 +1133,6 @@ def main(args):
                     results.append(result)
 
             nmuts += 1
-            if args.delay is not None:
-                sleep(int(args.delay))
 
     ## process the results of mutation jobs
 
@@ -1208,8 +1316,10 @@ if __name__ == '__main__':
                         help="kmer size for assembly (default = 31)")
     parser.add_argument('-s', '--svfrac', dest='svfrac', default=1.0, 
                         help="allele fraction of variant (default = 1.0)")
-    parser.add_argument('--minctglen', dest='minctglen', default=3000,
-                        help="pad input intervals out to a minimum length for contig generation (default=3000)")
+    parser.add_argument('--require_exact', default=False, action='store_true',
+                        help="drop mutation if breakpoints cannot be made exactly as input")
+    parser.add_argument('--minctglen', dest='minctglen', default=4000,
+                        help="minimum length for contig generation, also used to pad assembly (default=4000)")
     parser.add_argument('-n', dest='maxmuts', default=None,
                         help="maximum number of mutations to make")
     parser.add_argument('-c', '--cnvfile', dest='cnvfile', default=None, 
@@ -1226,10 +1336,6 @@ if __name__ == '__main__':
                         help="split into multiple processes (default=1)")
     parser.add_argument('--inslib', default=None,
                         help='FASTA file containing library of possible insertions, use INS RND instead of INS filename to pick one')
-    parser.add_argument('--delay', default=None, 
-                        help='time delay between jobs (try to avoid thrashing disks)')
-    parser.add_argument('--noref', action='store_true', default=False, 
-                        help="do not perform reference based assembly")
     parser.add_argument('--aligner', default='backtrack',
                         help='supported aligners: ' + ','.join(aligners.supported_aligners_fastq))
     parser.add_argument('--alignopts', default=None,
