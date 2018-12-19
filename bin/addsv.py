@@ -332,15 +332,15 @@ def trim_contig(mutid, chrom, start, end, contig, reffile):
 
     return contig, refseq, alignstats, refstart, refend, qrystart, qryend, tgtstart, tgtend
 
-def locate_contig_pos(refstart, refend, qrystart, qryend, user_start, user_end, maxlibsize):
+def locate_contig_pos(refstart, refend, user_start, user_end, contig_len, maxlibsize):
     contig_start = None
     contig_end = None
 
     if user_start - refstart > maxlibsize:
-        contig_start = qrystart + (user_start - refstart)
+        contig_start = (user_start - refstart)
 
     if refend - user_end > maxlibsize:
-        contig_end = qryend - (refend - user_end)
+        contig_end = contig_len - (refend - user_end)
 
     return contig_start, contig_end
 
@@ -773,30 +773,31 @@ def makemut(args, bedline, alignopts):
             trn_contig_end = None
             exact_success = True
 
-            contig_start, contig_end = locate_contig_pos(refstart, refend, qrystart, qryend, user_start, user_end, int(args.maxlibsize))
+            contig_start, contig_end = locate_contig_pos(refstart, refend, user_start, user_end, mutseq.length(), int(args.maxlibsize))
 
             if contig_start is None:
                 logger.warning('%s contig does not cover user start' % mutid)
                 exact_success = False
-                #print refstart, refend, qrystart, qryend, user_start, user_end, int(args.maxlibsize)
+                #print refstart, refend, user_start, user_end, int(args.maxlibsize)
 
             if contig_end is None:
                 logger.warning('%s contig does not cover user end' % mutid)
                 exact_success = False
-                #print refstart, refend, qrystart, qryend, user_start, user_end, int(args.maxlibsize)
+                #print refstart, refend, user_start, user_end, int(args.maxlibsize)
 
             if is_transloc:
-                trn_contig_start, trn_contig_end = locate_contig_pos(trn_refstart, trn_refend, trn_qrystart, trn_qryend, user_trn_start, user_trn_end, int(args.maxlibsize))
+                trn_contig_start, trn_contig_end = locate_contig_pos(trn_refstart, trn_refend, user_trn_start, user_trn_end, trn_mutseq.length(), int(args.maxlibsize))
 
                 if trn_contig_start is None:
                     logger.warning('%s contig does not cover user translocation start' % mutid)
                     exact_success = False
-                    #print trn_refstart, trn_refend, trn_qrystart, trn_qryend, user_trn_start, user_trn_end, int(args.maxlibsize)
+                    #print trn_refstart, trn_refend, user_trn_start, user_trn_end, int(args.maxlibsize)
 
                 if trn_contig_end is None:
                     logger.warning('%s contig does not cover user translocation end' % mutid)
                     exact_success = False
-                    #print trn_refstart, trn_refend, trn_qrystart, trn_qryend, user_trn_start, user_trn_end, int(args.maxlibsize)
+                    #print trn_refstart, trn_refend, user_trn_start, user_trn_end, int(args.maxlibsize)
+
 
             if args.require_exact and not exact_success:
                 logger.warning('%s dropped mutation due to --require_exact')
