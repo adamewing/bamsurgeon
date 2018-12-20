@@ -12,7 +12,7 @@
 \title{BAMSurgeon: Methods for spike-in mutations on BAM files}
 \author{Adam D. Ewing (adam.ewing@mater.uq.edu.au)}
 \begin{document}
- \date{October 16, 2018}
+ \date{December 20, 2018}
  \maketitle
 
 \section{Introduction}
@@ -366,7 +366,10 @@ optional arguments:
     Compound variants are also possible by chaining a number of mutations together in a semicolon-delimited list, e.g. \texttt{DUP 1;DEL 0.5;INS AAATCC;INV} would duplicate the region inside the largest contig once, delete half the width of the region, insert the sequence \texttt{AAATCC}, and invert the region (not currently supported with transductions). Good luck!
 
 \subsection{Mutation Size}
-foo
+Mutation types DEL, DUP, and INV are created within a single contig unless they are greater than 10kbp in length. Larger mutations are created using TRN mutations as the breakpoints with coverage adjustments to the intervening region. Internally these mutation types are named BIGDEL, BIGDUP, and BIGINV which can be specified in the variant input file but will be converted to DEL, DUP, and INV, respectively, if they are less than 5kbp in length. For duplications, the additional reads are supplied through a BAM file specified by the \texttt{--donorbam} parameter. If \texttt{--donorbam} is not given the BAM specified by \texttt{-f/--bamfile} is used instead (which is not ideal!). Ideally the donor BAM and the input BAM would be seperate partitions of the same higher coverage BAM.
+
+\subsection{Exact Breakpoints}
+BAMSurgeon will prefer to create the user input breakpoints unless the assembled contig does not cover the breakpoint position. If \texttt{--require\_exact} is specified, mutations that do not cover the user input breakpoint(s) will be dropped. In any case, the mutation positions output by the \texttt{makevcf\_sv.py} script will reflect the actual breakpoints added.
 
 \subsection{Controlling SV VAF}
 Variant allele fraction for \texttt{addsv.py} can be controlled either via the \texttt{-c/--cnvfile} option (see Section 2.3) or through addition of a column in the input file (float value between 0.0 and 1.0). Note that all other optional columns must be specified for the VAF column to be effective, which means the input format for \texttt{addsv.py} really needs an overhaul.
@@ -385,6 +388,7 @@ Here are some extended descriptions for additional options not mentioned yet:
 \item -k/--kmer : kmer size to be fed to velvet, which is used for assembly
 \item -n : only attempt this many mutations
 \item --ismean/--issd : the mean and standard deviation of the library size should be estimated from the original bam and specified through these arguments. This can be accomplished a number of ways, I suggest CollectInsertSizeMetrics from the picard tools.
+\item --simerr : control sequencing error rate around breakends
 \item --inslib : a FASTA file can be specified and insertions can be tagged with RND instead of a sequence or file. If this is done, a sequence will be chosen at random from the FASTA file specified by --inslib and inserted.
 \item --skipmerge : same meaning as for addsnv/addindel
 \item --allowN : useful if desired mutations are being dropped due to one or more N bases present in the assembled contig
