@@ -394,14 +394,13 @@ def add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right
 
     logger.info('%s: left_zero=%d, left_cover=%d, right_zero=%d, right_cover=%d' % (mutid, left_zero, left_cover, right_zero, right_cover))
 
+    if left_cover > left_zero:
+       logger.warning('%s: left_cover > left_zero' % mutid)
+       left_cover, left_zero = left_zero, left_cover
 
-    #if left_cover > left_zero:
-    #    logger.warning('%s: left_cover > left_zero' % mutid)
-    #    left_cover, left_zero = left_zero, left_cover
-
-    #if right_cover < right_zero:
-    #    logger.warning('%s: right_cover < right_zero' % mutid)
-    #    right_cover, right_zero = right_zero, right_cover
+    if right_cover < right_zero:
+       logger.warning('%s: right_cover < right_zero' % mutid)
+       right_cover, right_zero = right_zero, right_cover
 
     assert left_zero < right_zero, 'left_zero: %d, right_zero: %d' % (left_zero, right_zero)
 
@@ -738,14 +737,6 @@ def makemut(args, bedline, alignopts):
 
             if action == 'DEL':
                 dsize = 1.0
-                # if len(a) > 1:
-                #     dsize = float(a[1])
-                #     if dsize > 1.0: # if DEL size is not a fraction, interpret as bp
-                #         # since DEL 1 is default, if DEL 1 is specified, interpret as 1 bp deletion
-                #         dlen = int(dsize)
-                #         dsize = 1.0
-                # else:
-                #     dsize = 1.0
 
                 if len(a) > 1: # VAF
                     svfrac = float(a[1])/cn
@@ -855,16 +846,6 @@ def makemut(args, bedline, alignopts):
             elif action == 'DEL':
                 delstart = int(args.maxlibsize)
                 delend = mutseq.length() - delstart
-                # if dlen == 0: # bp size not specified, delete fraction of contig
-                #     dlen = int((float(delend-delstart) * dsize)+0.5) 
-
-                # dadj = delend-delstart-dlen
-                # if dadj < 0:
-                #     dadj = 0
-                #     logger.warning("%s warning: deletion of length 0" % mutid)
-
-                # delstart += dadj/2
-                # delend   -= dadj/2
 
                 if None not in (contig_start, contig_end):
                     delstart = contig_start
