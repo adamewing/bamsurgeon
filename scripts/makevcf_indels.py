@@ -45,6 +45,7 @@ if len(sys.argv) == 3:
         
                     if line.startswith('indel'):
                         indelinfo = line.strip().split()[1].split(':')
+                        info.append('VAF=%f' % float(line.strip().split()[7]))
                         if indelinfo[0] == 'DEL':
                             chrom, start, end = indelinfo[1:4]
                             ref = fa.fetch(chrom, int(start)-1, int(end)).upper()
