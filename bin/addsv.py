@@ -1174,6 +1174,9 @@ def main(args):
             bdel_left_bnd = int(mutinfo.split()[3])
             bdel_right_bnd = int(mutinfo.split()[7])
 
+            if bdel_left_bnd > bdel_right_bnd:
+                bdel_left_bnd, bdel_right_bnd, bdel_right_bnd, bdel_left_bnd
+
             bigdel_excl[mutid] = fetch_read_names(args, bdel_chrom, bdel_left_bnd, bdel_right_bnd, svfrac=bdel_svfrac)
 
         if mutinfo.startswith('bigdup'):
@@ -1200,6 +1203,12 @@ def main(args):
             #print 'bigdup testing known mutids:', bigdup_add.keys()
             bdup_chrom, bdup_left_bnd, bdup_right_bnd = bigdup_add[mutid]
 
+            bdup_left_bnd  = int(bdup_left_bnd)
+            bdup_right_bnd = int(bdup_right_bnd)
+
+            if bdup_left_bnd > bdup_right_bnd:
+                bdup_left_bnd, bdup_right_bnd = bdup_right_bnd, bdup_left_bnd
+
             merged_bdup = add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right_bnd)
 
             new_tmpbams.append(merged_bdup) # TODO merge bigdup reads
@@ -1217,6 +1226,12 @@ def main(args):
             assert binv_mutid in biginvs
 
             binv_chrom, binv_start, binv_end, binv_svfrac = biginvs[binv_mutid]
+
+            binv_left_end  = int(binv_left_end)
+            binv_right_end = int(binv_right_end)
+
+            if binv_left_end > binv_right_end:
+                binv_left_end, binv_right_end = binv_right_end, binv_left_end
 
             merged_binv = merge_multi_trn(args, alignopts, binv_pair, binv_chrom, binv_start, binv_end, binv_svfrac)
             new_tmpbams.append(merged_binv)

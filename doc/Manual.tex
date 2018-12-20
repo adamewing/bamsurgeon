@@ -280,13 +280,13 @@ For deletions, the sequence from the start to the end (columns two and three) is
 \subsection{Usage}
 \begin{verbatim}
 usage: addsv.py [-h] -v VARFILENAME -f BAMFILENAME -r REFFASTA -o OUTBAMFILE
-                [-l MAXLIBSIZE] [-k KMERSIZE] [-s SVFRAC]
+                [-l MAXLIBSIZE] [-k KMERSIZE] [-s SVFRAC] [--require_exact]
                 [--minctglen MINCTGLEN] [-n MAXMUTS] [-c CNVFILE]
                 [--donorbam DONORBAM] [--ismean ISMEAN] [--issd ISSD]
-                [--simerr SIMERR] [-p PROCS] [--inslib INSLIB] [--delay DELAY]
-                [--noref] [--aligner ALIGNER] [--alignopts ALIGNOPTS]
-                [--tagreads] [--skipmerge] [--keepsecondary] [--debug]
-                [--tmpdir TMPDIR] [--seed SEED] [--allowN]
+                [--simerr SIMERR] [-p PROCS] [--inslib INSLIB]
+                [--aligner ALIGNER] [--alignopts ALIGNOPTS] [--tagreads]
+                [--skipmerge] [--keepsecondary] [--debug] [--tmpdir TMPDIR]
+                [--seed SEED] [--allowN]
 
 adds SVs to reads, outputs modified reads as .bam along with mates
 
@@ -308,9 +308,11 @@ optional arguments:
                         kmer size for assembly (default = 31)
   -s SVFRAC, --svfrac SVFRAC
                         allele fraction of variant (default = 1.0)
+  --require_exact       drop mutation if breakpoints cannot be made exactly as
+                        input
   --minctglen MINCTGLEN
-                        pad input intervals out to a minimum length for contig
-                        generation (default=3000)
+                        minimum length for contig generation, also used to pad
+                        assembly (default=4000)
   -n MAXMUTS            maximum number of mutations to make
   -c CNVFILE, --cnvfile CNVFILE
                         tabix-indexed list of genome-wide absolute copy number
@@ -319,12 +321,11 @@ optional arguments:
   --ismean ISMEAN       mean insert size (default = estimate from region)
   --issd ISSD           insert size standard deviation (default = estimate
                         from region)
+  --simerr SIMERR       error rate for wgsim-generated reads
   -p PROCS, --procs PROCS
                         split into multiple processes (default=1)
   --inslib INSLIB       FASTA file containing library of possible insertions,
                         use INS RND instead of INS filename to pick one
-  --delay DELAY         time delay between jobs (try to avoid thrashing disks)
-  --noref               do not perform reference based assembly
   --aligner ALIGNER     supported aligners: backtrack,mem,novoalign
   --alignopts ALIGNOPTS
                         aligner-specific options as comma delimited list of
@@ -364,13 +365,20 @@ optional arguments:
 
     Compound variants are also possible by chaining a number of mutations together in a semicolon-delimited list, e.g. \texttt{DUP 1;DEL 0.5;INS AAATCC;INV} would duplicate the region inside the largest contig once, delete half the width of the region, insert the sequence \texttt{AAATCC}, and invert the region (not currently supported with transductions). Good luck!
 
+\subsection{Mutation Size}
+foo
+
 \subsection{Controlling SV VAF}
 Variant allele fraction for \texttt{addsv.py} can be controlled either via the \texttt{-c/--cnvfile} option (see Section 2.3) or through addition of a column in the input file (float value between 0.0 and 1.0). Note that all other optional columns must be specified for the VAF column to be effective, which means the input format for \texttt{addsv.py} really needs an overhaul.
 
 \subsection{Output}
     Where mutations add sequence (e.g. duplications), new reads are created that will be added to the original BAM, and where mutations remove sequence (e.g. deletions) those reads are maked as excluded (excluded read names are recorded in the file specified by \texttt{-x/--excluded}). Excluded reads are not carried over from the original BAM to the mutated BAM, creating the copy number effect associated with deletion.
     
-     Output consists of a BAM file containing the spike-in mutations and a directory of log files describing which bases were changed in which reads (one log per mutation) and the local assemblies for each region where a mutation was made. Currently, the directory containing output logs for SV spike-ins can be transformed into VCF format using the script \texttt {makevcf\_sv.py} in the \texttt {etc/} subdirectory. The spike-in process may be done concurrently through the use of the \texttt {-p/--procs} option. Here are some extended descriptions for additional options not mentioned yet:
+     Output consists of a BAM file containing the spike-in mutations and a directory of log files describing which bases were changed in which reads (one log per mutation) and the local assemblies for each region where a mutation was made. Currently, the directory containing output logs for SV spike-ins can be transformed into VCF format using the script \texttt {makevcf\_sv.py} in the \texttt {etc/} subdirectory. The spike-in process may be done concurrently through the use of the \texttt {-p/--procs} option.
+     
+     
+\subsection{Additional Options}
+Here are some extended descriptions for additional options not mentioned yet:
      
 \begin{itemize}
 \item -s/--svfrac : equivalent to -m/--mutfrac for addindel.py and addsnv.py
