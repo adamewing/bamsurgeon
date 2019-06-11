@@ -241,7 +241,7 @@ def makemut(args, hc, avoid, alignopts):
                     read.seq = mutreads[extqname] # make mutation
                     read.qual = qual
                     nmut += 1
-            if not hasSNP or args.force:
+            if (not hasSNP) or args.force:
                 wrote += 1
                 mut_out[extqname] = read
 

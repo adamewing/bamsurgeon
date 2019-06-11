@@ -38,15 +38,15 @@ def cleanup(read,orig,RG):
         # use RG from original read if it exists
         if orig is not None:
             if not hasRG and orig.tags is not None:
-                for tag in orig.tags:
-                    if tag[0] == 'RG':
-                        read.tags = read.tags + [tag] 
-                        hasRG = True
+                if orig.has_tag('RG'):
+                    read.set_tag('RG', orig.get_tag('RG'), "Z")
+                    hasRG = True
 
         if not hasRG:
             # give up and add random read group from list in header (e.g. for simulated reads)
             newRG = RG[random.randint(0,len(RG)-1)]
-            read.tags = read.tags + [("RG",newRG)]
+            read.set_tag('RG', newRG, "Z")
+            
     return read
 
 def getRGs(bam):
