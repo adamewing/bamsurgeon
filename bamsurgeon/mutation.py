@@ -183,9 +183,9 @@ def mutate(args, log, bamfile, bammate, chrom, mutstart, mutend, mutpos_list, av
 
     maxfrac = None
 
-    for pcol in bamfile.pileup(reference=chrom, start=mutstart, end=mutend, max_depth=int(args.maxdepth)):
+    for pcol in bamfile.pileup(reference=chrom, start=mutstart-1, end=mutend+1, max_depth=int(args.maxdepth)):
         if pcol.pos:
-            if args.ignorepileup and (pcol.pos < mutstart or pcol.pos > mutend):
+            if args.ignorepileup and (pcol.pos < mutstart-1 or pcol.pos > mutend+1):
                 continue
 
             refbase = reffile.fetch(chrom, pcol.pos-1, pcol.pos)
@@ -206,18 +206,19 @@ def mutate(args, log, bamfile, bammate, chrom, mutstart, mutend, mutpos_list, av
 
                     extqname = ','.join((pread.alignment.qname,str(pread.alignment.pos),pairname))
 
-                    if pcol.pos in mutpos_list:
+                    if pcol.pos+1 in mutpos_list:
+
                         if not pread.alignment.is_secondary and bin(pread.alignment.flag & 2048) != bin(2048) and not pread.alignment.mate_is_unmapped:
                             outreads[extqname] = pread.alignment
-                            mutid = mutid_list[mutpos_list.index(pcol.pos)]
+                            mutid = mutid_list[mutpos_list.index(pcol.pos+1)]
 
                             if is_snv:
                                 if extqname not in mutreads:
                                     mutreads[extqname] = pread.alignment.seq
 
-                                mutbase = mutbase_list[mutpos_list.index(pcol.pos)]
+                                mutbase = mutbase_list[mutpos_list.index(pcol.pos+1)]
                                 mutbases = list(mutreads[extqname])
-                                mutbases[pread.query_position-1] = mutbase
+                                mutbases[pread.query_position] = mutbase
                                 mutread = ''.join(mutbases)
                                 mutreads[extqname] = mutread
 

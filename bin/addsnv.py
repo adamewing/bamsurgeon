@@ -121,7 +121,7 @@ def makemut(args, hc, avoid, alignopts):
                 logger.warning("multiple VAFs for single haplotype, using first encountered VAF: %f" % vaf)
 
             mutpos = int(random.uniform(site['start'],site['end']+1)) # position of mutation in genome
-            mutpos_list.append(mutpos) # FIXME
+            mutpos_list.append(mutpos)
             altbase_list.append(site['altbase'])
 
         mutbase_list = []
