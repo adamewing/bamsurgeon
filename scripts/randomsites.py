@@ -54,7 +54,7 @@ class Genome:
 
         else:
             goodmut = False
-            while not goodmut: 
+            while not goodmut:
                 rchrom = random.choice(self.chrmap)
                 rpos   = int(random.uniform(1, self.chrlen[rchrom]))
 
@@ -70,7 +70,7 @@ class Genome:
 def randomseq(len):
     ''' make a random DNA sequence '''
     return ''.join([random.choice(['A','T','G','C']) for _ in range(int(len))])
-    
+
 
 def randomsv():
     ''' random SV information '''
@@ -168,6 +168,7 @@ def main(args):
     if args.seed is not None:
         random.seed(int(args.seed))
 
+    assert args.minvaf < args.maxvaf, "--minvaf( = %s) is higher than --maxvaf ( = %s)" % (args.minvaf, args.maxvaf)
     assert os.path.exists(args.genome + '.fai'), "reference FASTA not indexed: " + args.genome
 
     g = Genome(args.genome, bedfile=args.bed)
@@ -194,16 +195,16 @@ if __name__ == '__main__':
     parser_indel = subparsers.add_parser('indel')
     parser_indel.add_argument('--minlen', default=1,  help='minimum SV contig length (default = 1)')
     parser_indel.add_argument('--maxlen', default=90, help='maximum SV contig length (default = 90)')
-    parser_indel.add_argument('--lenbeta1', default=0.5, help='left shape parameter for beta dist. of indel lengths (default = 0.5)') 
-    parser_indel.add_argument('--lenbeta2', default=4.0, help='right shape parameter for beta dist. of indel lengths (default = 4.0)') 
+    parser_indel.add_argument('--lenbeta1', default=0.5, help='left shape parameter for beta dist. of indel lengths (default = 0.5)')
+    parser_indel.add_argument('--lenbeta2', default=4.0, help='right shape parameter for beta dist. of indel lengths (default = 4.0)')
     parser_indel.set_defaults(func=run_indel)
 
     parser_sv = subparsers.add_parser('sv')
     parser_sv.add_argument('--minlen', default=3000,  help='minimum SV contig length (default = 3000)')
     parser_sv.add_argument('--maxlen', default=30000, help='maximum SV contig length (default = 30000)')
-    parser_sv.add_argument('--lenbeta1', default=1.0, help='left shape parameter for beta dist. of indel lengths (default = 1.0)') 
+    parser_sv.add_argument('--lenbeta1', default=1.0, help='left shape parameter for beta dist. of indel lengths (default = 1.0)')
     parser_sv.add_argument('--lenbeta2', default=1.0, help='right shape parameter for beta dist. of indel lengths (default = 1.0)')
-    parser_sv.add_argument('--cnvfile', default='cnvs.txt', help='output file for CNV information (used for SV VAF)') 
+    parser_sv.add_argument('--cnvfile', default='cnvs.txt', help='output file for CNV information (used for SV VAF)')
     parser_sv.set_defaults(func=run_sv)
 
     args = parser.parse_args()
