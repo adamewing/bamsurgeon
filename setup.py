@@ -92,10 +92,10 @@ if __name__ == '__main__':
     if not check_wgsim(): sys.exit('Dependency problem: wgsim not found (required for addsv)')
     if not check_velvet(): sys.exit('Dependency problem: velvet >= 1.2 not found (required for addsv)')
     if not check_exonerate(): sys.exit('Dependency problem: exonerate >= 2.2 not found (required for addsv)')
-
+    if not check_java(): sys.exit('Dependency problem: java not found')
 
 setup(name='bamsurgeon',
-	version='1.0',
+	version='1.2',
 	author='Adam Ewing',
 	license='MIT',
 	scripts=['bin/addindel.py',
