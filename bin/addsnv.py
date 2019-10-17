@@ -514,6 +514,10 @@ def run():
     parser.add_argument('--tmpdir', default='addsnv.tmp', help='temporary directory (default=addsnv.tmp)')
     parser.add_argument('--seed', default=None, help='seed random number generation')
     args = parser.parse_args()
+
+    if 'BAMSURGEON_PICARD_JAR' in os.environ:
+        args.picardjar = os.environ['BAMSURGEON_PICARD_JAR']
+
     main(args)
 
 if __name__ == '__main__':

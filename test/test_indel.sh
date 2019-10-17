@@ -12,7 +12,7 @@ REF=../test_data/Homo_sapiens_chr22_assembly19.fasta
 
 command -v addindel.py >/dev/null 2>&1 || { echo "addindel.py isn't installed" >&2; exit 65; }
 
-if [ ! -e $3 ]
+if [ ! -e $1 ]
 then
     echo "cannot find picard.jar"
     exit 65
