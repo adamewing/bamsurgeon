@@ -7,7 +7,7 @@ import re
 def check_java():
     p = subprocess.Popen(['java', '-version'], stderr=subprocess.PIPE)
     for line in p.stderr:
-        if line.startswith('java version'):
+        if line.startswith('java version') or line.startswith('openjdk version'):
             return True
 
     return False
