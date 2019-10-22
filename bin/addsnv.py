@@ -299,7 +299,7 @@ def makemut(args, hc, avoid, alignopts):
                 tmpbams.append(tmpoutbamname)
                 for n,site in enumerate(hc):
                     snvstr = chrom + ":" + str(site['start']) + "-" + str(site['end']) + " (VAF=" + str(vaf) + ")"
-                    log.write("\t".join(("snv",snvstr,str(mutpos_list[n]),mutstr_list[n],str(avgoutcover),str(avgoutcover),str(spikein_snvfrac),str(maxfrac)))+"\n")
+                    log.write("\t".join(("snv",snvstr,str(mutpos_list[n]),mutstr_list[n],str(avgincover),str(avgoutcover),str(spikein_snvfrac),str(maxfrac)))+"\n")
             else:
 
                 outbam_muts.close()
