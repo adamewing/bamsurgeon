@@ -29,10 +29,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     samtools \
     bcftools \
     bwa \
-    && rm -rf /var/lib/apt/lists/* 
+    && rm -rf /var/lib/apt/lists/*
 
-#have to do it with the & because pysam needs cython
-RUN pip install cython && pip install pysam
 
 RUN mkdir $HOME/bin
 
@@ -42,6 +40,9 @@ RUN cp velvet_1.2.10/velvetg $HOME/bin && cp velvet_1.2.10/velveth $HOME/bin
 
 RUN git clone https://github.com/adamewing/exonerate.git
 RUN cd exonerate && autoreconf -fi  && ./configure && make && make install
+
+#have to do it with the & because pysam needs cython
+RUN pip install cython && pip install pysam==0.12.0
 
 RUN git clone https://github.com/adamewing/bamsurgeon.git
 RUN export PATH=$PATH:$HOME/bin && cd bamsurgeon && python setup.py install
