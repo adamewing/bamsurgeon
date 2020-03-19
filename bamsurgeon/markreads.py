@@ -19,5 +19,5 @@ if __name__ == '__main__':
         markreads(*sys.argv[1:])
 
     else:
-        print 'usage:', sys.argv[0], '<input BAM> <output BAM>'
+        sys.exit('usage: %s <input BAM> <output BAM>' % sys.argv[0])
             
