@@ -254,6 +254,7 @@ def align(qryseq, refseq):
     topscore = 0
 
     for pline in p.stdout.readlines():
+        pline = pline.decode()
         if pline.startswith('SUMMARY'):
             c = pline.strip().split()
             if int(c[1]) > topscore:
@@ -369,6 +370,7 @@ def add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right
     p = subprocess.Popen(args,stdout=subprocess.PIPE,stderr=FNULL)
 
     for line in p.stdout:
+        line = line.decode()
         c = line.strip().split()
         pos   = int(c[1])
         depth = int(c[3])
@@ -805,7 +807,7 @@ def makemut(args, bedline, alignopts):
             if insseqfile: # seq in file
                 if insseqfile == 'RND':
                     assert args.inslib is not None # insertion library needs to exist
-                    insseqfile = random.choice(args.inslib.keys())
+                    insseqfile = random.choice(list(args.inslib.keys()))
                     logger.info("%s chose sequence from insertion library: %s" % (mutid, insseqfile))
                     mutseq.insertion(inspoint, args.inslib[insseqfile], tsdlen)
 
@@ -1138,7 +1140,7 @@ def main(args):
     bigdel_excl = {}
     bigdup_add  = {}
 
-    for mutid, mutinfo in master_mutinfo.iteritems():
+    for mutid, mutinfo in master_mutinfo.items():
         # add additional excluded reads if bigdel(s) present
         if mutinfo.startswith('bigdel'):
             bdel_chrom, bdel_start, bdel_end, bdel_svfrac = bigdels[mutid]

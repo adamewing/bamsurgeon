@@ -10,7 +10,7 @@ import argparse
 from uuid import uuid4
 
 def print_header():
-    print textwrap.dedent("""\
+    print(textwrap.dedent("""\
     ##fileformat=VCFv4.1
     ##phasing=none
     ##INDIVIDUAL=TRUTH
@@ -29,7 +29,7 @@ def print_header():
     ##ALT=<ID=INS,Description="Insertion">
     ##ALT=<ID=IGN,Description="Ignore SNVs in Interval">
     ##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
-    #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tSPIKEIN""")
+    #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tSPIKEIN"""))
 
 def printvcf(chrom, bnd1, bnd2, precise, type, svlen, ref, id, svfrac):
     base1 = ref.fetch(chrom, bnd1-1, bnd1) 
@@ -51,7 +51,7 @@ def printvcf(chrom, bnd1, bnd2, precise, type, svlen, ref, id, svfrac):
     
     infostr = ';'.join(info)
 
-    print '\t'.join((chrom, str(bnd1), id, base1, alt, '100', 'PASS', infostr, 'GT', './.'))
+    print('\t'.join((chrom, str(bnd1), id, base1, alt, '100', 'PASS', infostr, 'GT', './.')))
 
 
 def precise_interval(mutline, ref):
@@ -89,8 +89,8 @@ def precise_interval(mutline, ref):
         alt1 = '%s[%s:%d[' % (base1, chr2, bnd2) 
         alt2 = ']%s:%d]%s' % (chr1, bnd1, base2) 
 
-        print '\t'.join((chr1, str(bnd1), id1, base1, alt1, '100', 'PASS', 'SOMATIC;SVTYPE=BND;PRECISE;MATEID='+id2+';VAF='+svfrac, 'GT', './.'))
-        print '\t'.join((chr2, str(bnd2), id2, base2, alt2, '100', 'PASS', 'SOMATIC;SVTYPE=BND;PRECISE;MATEID='+id1+';VAF='+svfrac, 'GT', './.'))
+        print('\t'.join((chr1, str(bnd1), id1, base1, alt1, '100', 'PASS', 'SOMATIC;SVTYPE=BND;PRECISE;MATEID='+id2+';VAF='+svfrac, 'GT', './.')))
+        print('\t'.join((chr2, str(bnd2), id2, base2, alt2, '100', 'PASS', 'SOMATIC;SVTYPE=BND;PRECISE;MATEID='+id1+';VAF='+svfrac, 'GT', './.')))
 
     else:
         contigstart = int(m[6])

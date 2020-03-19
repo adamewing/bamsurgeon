@@ -7,6 +7,12 @@ import sys
 from re import sub
 from collections import defaultdict as dd
 
+import logging
+FORMAT = '%(levelname)s %(asctime)s %(message)s'
+logging.basicConfig(format=FORMAT)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
 def split(inbamfn, keep_secondary=False, keep_supplementary=False, seed=None):
 
     if seed is not None:
@@ -14,7 +20,7 @@ def split(inbamfn, keep_secondary=False, keep_supplementary=False, seed=None):
 
     else:
         seed = int(random.random()*1000)
-        print "using seed: %d" % seed
+        logger.info("using seed: %d" % seed)
         random.seed(seed)
 
 
@@ -72,10 +78,10 @@ def split(inbamfn, keep_secondary=False, keep_supplementary=False, seed=None):
     inbam.close()
 
     if not args.secondary and skip_secondary >= 1:
-        print "skipped %d secondary reads" % skip_secondary
+        logger.info("skipped %d secondary reads" % skip_secondary)
 
     if not args.supplementary and skip_supplementary >= 1:
-        print "skipped %d supplementary reads" % skip_supplementary
+        logger.info("skipped %d supplementary reads" % skip_supplementary)
 
 def main(args):
     split(args.bam, keep_secondary=args.secondary, keep_supplementary=args.supplementary,seed=args.seed)

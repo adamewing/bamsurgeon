@@ -5,11 +5,16 @@ try to do ref-directed assembly for paired reads in a region of a .bam file
 """
 
 import pysam,argparse,subprocess,sys,shutil,os,re
-import bamsurgeon.parseamos
+import bamsurgeon.parseamos as parseamos
 import datetime
 
 from uuid import uuid4
 
+import logging
+FORMAT = '%(levelname)s %(asctime)s %(message)s'
+logging.basicConfig(format=FORMAT)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 def now():
     return str(datetime.datetime.now())
@@ -72,7 +77,7 @@ class Contig:
 
         # modify read list
         new_reads = parseamos.ContigReads(self.eid)
-        for src, read in self.reads.reads.iteritems():
+        for src, read in self.reads.reads.items():
             if int(read.off) > int(start) and int(read.off) < int(end):
                 new_reads.reads[read.src] = read
         assert new_reads is not None

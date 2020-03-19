@@ -136,8 +136,8 @@ def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=No
         else:
             nullcount += 1
 
-    logger.info('secondary reads count:'+ str(sum([len(v) for k,v in secondary.iteritems()])))
-    logger.info('supplementary reads count:'+ str(sum([len(v) for k,v in supplementary.iteritems()])))
+    logger.info('secondary reads count:'+ str(sum([len(v) for k,v in secondary.items()])))
+    logger.info('supplementary reads count:'+ str(sum([len(v) for k,v in supplementary.items()])))
     sys.stdout.write("loaded " + str(nr) + " reads, (" + str(excount) + " excluded, " + str(nullcount) + " null or secondary or supplementary--> ignored)\n")
     excount = 0
     recount = 0 # number of replaced reads
@@ -199,8 +199,8 @@ def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=No
         else:
             excount += 1
     sys.stdout.write("replaced " + str(recount) + " reads (" + str(excount) + " excluded )\n")
-    sys.stdout.write("kept " + str(sum([len(v) for k,v in secondary.iteritems()])) + " secondary reads.\n")
-    sys.stdout.write("kept " + str(sum([len(v) for k,v in supplementary.iteritems()])) + " supplementary reads.\n") 
+    sys.stdout.write("kept " + str(sum([len(v) for k,v in secondary.items()])) + " secondary reads.\n")
+    sys.stdout.write("kept " + str(sum([len(v) for k,v in supplementary.items()])) + " supplementary reads.\n") 
     sys.stdout.write("ignored %d non-primary reads in target BAM.\n" % ignored_target) 
 
     nadded = 0

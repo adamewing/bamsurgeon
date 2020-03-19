@@ -6,7 +6,7 @@ import textwrap
 import os
 
 def print_header():
-    print textwrap.dedent("""\
+    print(textwrap.dedent("""\
     ##fileformat=VCFv4.1
     ##phasing=none
     ##INDIVIDUAL=TRUTH
@@ -24,7 +24,7 @@ def print_header():
     ##ALT=<ID=DEL,Description="Deletion">
     ##ALT=<ID=INS,Description="Insertion">
     ##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
-    #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tSPIKEIN""")
+    #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tSPIKEIN"""))
 
 if len(sys.argv) == 3:
 
@@ -58,7 +58,7 @@ if len(sys.argv) == 3:
         
                         assert ref != '' and alt != '' and start != ''
         
-                        print '\t'.join((chrom, start, '.', ref, alt, '100', 'PASS', ';'.join(info), 'GT', '0/1'))
+                        print('\t'.join((chrom, start, '.', ref, alt, '100', 'PASS', ';'.join(info), 'GT', '0/1')))
         
 else:
-    print "usage:",sys.argv[0],"<indel log directory> <samtools faidx indexed reference>"
+    sys.exit("usage: %s <indel log directory> <samtools faidx indexed reference>" % sys.argv[0])

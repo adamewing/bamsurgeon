@@ -68,7 +68,7 @@ def mergebams(bamlist, outbamfn, maxopen=100, debug=False):
                 mergenum += 1
             nmerge += 1
 
-        for submergefn, tmpbams in merge_sublists.iteritems():
+        for submergefn, tmpbams in merge_sublists.items():
             if len(tmpbams) == 1:
                 move(tmpbams[0], submergefn)
                 logger.info("renamed: " + tmpbams[0] + " --> " + submergefn)
@@ -78,10 +78,10 @@ def mergebams(bamlist, outbamfn, maxopen=100, debug=False):
                 subprocess.call(args)
 
         if len(merge_sublists.keys()) == 1:
-            logger.info("merge finished, renaming: " + merge_sublists.keys()[0] + " --> " + outbamfn)
-            move(merge_sublists.keys()[0], outbamfn)
+            logger.info("merge finished, renaming: " + list(merge_sublists.keys())[0] + " --> " + outbamfn)
+            move(list(merge_sublists.keys())[0], outbamfn)
         else:
-            args = ['samtools','merge','-f',outbamfn] + merge_sublists.keys()
+            args = ['samtools','merge','-f',outbamfn] + list(merge_sublists.keys())
             logger.info("final merge, cmd: " + ' '.join(args))
             subprocess.call(args)
 
@@ -145,7 +145,7 @@ def bamreadcount(bamfile):
     if os.path.exists(bamfile + '.bai'):
         return bam.mapped + bam.unmapped
     else:
-        return(list(bam.fetch(until_eof=True)))
+        return(len(list(bam.fetch(until_eof=True))))
 
 
 def dictlist(fn):

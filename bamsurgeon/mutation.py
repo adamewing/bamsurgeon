@@ -24,6 +24,7 @@ def countBaseAtPos(bamfile,chrom,pos,mutid='null'):
     pileup = None 
 
     for line in pout:
+        line = line.decode()
         try:
             c = line.strip().split()
             assert len(c) > 5

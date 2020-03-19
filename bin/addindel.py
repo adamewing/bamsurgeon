@@ -128,7 +128,7 @@ def makemut(args, chrom, start, end, vaf, ins, avoid, alignopts):
 
     # pick reads to change
     readlist = []
-    for extqname,read in outreads.iteritems():
+    for extqname,read in outreads.items():
         if read.seq != mutreads[extqname]:
             readlist.append(extqname)
 
@@ -194,7 +194,7 @@ def makemut(args, chrom, start, end, vaf, ins, avoid, alignopts):
     nmut = 0
     mut_out = {}
     # change reads from .bam to mutated sequences
-    for extqname,read in outreads.iteritems():
+    for extqname,read in outreads.items():
         if read.seq != mutreads[extqname]:
             if not args.nomut and extqname in readlist:
                 qual = read.qual # changing seq resets qual (see pysam API docs)

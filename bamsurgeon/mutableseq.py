@@ -4,13 +4,12 @@
 Methods for making mutations in a sequence
 '''
 
-import string
 import operator
 
 
 def rc(dna):
     ''' reverse complement '''
-    complements = string.maketrans('acgtrymkbdhvACGTRYMKBDHV', 'tgcayrkmvhdbTGCAYRKMVHDB')
+    complements = str.maketrans('acgtrymkbdhvACGTRYMKBDHV', 'tgcayrkmvhdbTGCAYRKMVHDB')
     return dna.translate(complements)[::-1]
 
 
@@ -25,7 +24,7 @@ def dist(seq1, seq2):
 
 class MutableSeq:
     def __init__(self,seq):
-        self.seq = string.upper(seq.strip())
+        self.seq = str.upper(seq.strip())
 
     def __str__(self):
         return self.seq
