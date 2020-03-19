@@ -20,7 +20,6 @@ from uuid import uuid4
 from time import sleep
 from shutil import move
 from math import sqrt
-from itertools import izip
 from collections import Counter
 from collections import defaultdict as dd
 from multiprocessing import Pool
@@ -30,9 +29,6 @@ FORMAT = '%(levelname)s %(asctime)s %(message)s'
 logging.basicConfig(format=FORMAT)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
-
-sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)
-sys.stderr = os.fdopen(sys.stderr.fileno(), 'w', 0)
 
 
 def runwgsim(contig, newseq, svfrac, svtype, exclude, pemean, pesd, tmpdir, mutid='null', err_rate=0.0, seed=None, trn_contig=None, rename=True):
@@ -506,461 +502,456 @@ def makemut(args, bedline, alignopts):
 
     mutid = '_'.join(map(str, bedline.split()[:4]))
 
-    try:
-        bamfile = pysam.Samfile(args.bamFileName, 'rb')
-        reffile = pysam.Fastafile(args.refFasta)
-        logfn = '_'.join(map(os.path.basename, bedline.split()[:4])) + ".log"
-        logfile = open('addsv_logs_' + os.path.basename(args.outBamFile) + '/' + os.path.basename(args.outBamFile) + '_' + logfn, 'w')
-        exclfile = args.tmpdir + '/' + '.'.join((mutid, 'exclude', str(uuid4()), 'txt'))
-        exclude = open(exclfile, 'w')
-        mutinfo = {}
-
-        # optional CNV file
-        cnv = None
-        if (args.cnvfile):
-            cnv = pysam.Tabixfile(args.cnvfile, 'r')
-
-        # temporary file to hold mutated reads
-        outbam_mutsfile = args.tmpdir + '/' + '.'.join((mutid, str(uuid4()), "muts.bam"))
-
-        c = bedline.split()
-        chrom  = c[0]
-        start  = int(c[1])
-        end    = int(c[2])
-        araw   = c[3:] # INV, DEL, INS,  DUP, TRN
- 
-        # desired start/end
-        user_start = start
-        user_end   = end
-
-        # translocation specific
-        trn_chrom = None
-        trn_start = None
-        trn_end   = None
-
-        is_transloc = c[3] in ('TRN', 'BIGDEL', 'BIGINV', 'BIGDUP')
-
-        if is_transloc:
-            araw = [c[3]]
-            if len(c) > 7:
-                araw += c[7:]
-
-            start -= int(args.minctglen)
-            end   += int(args.minctglen)
-            if start < 0: start = 0
-
-            trn_chrom = c[4]
-            user_trn_start = int(c[5])
-            user_trn_end   = int(c[6])
-
-            trn_start = int(c[5]) - int(args.minctglen)
-            trn_end   = int(c[6]) + int(args.minctglen)
-            if trn_start < 0: trn_start = 0
-
-        actions = map(lambda x: x.strip(),' '.join(araw).split(';'))
-
-        svfrac = float(args.svfrac) # default, can be overridden by cnv file or per-variant
-
-        cn = 1.0
-
-        trn_left_flip  = False
-        trn_right_flip = False
-
-        if cnv: # CNV file is present
-            if chrom in cnv.contigs:
-                for cnregion in cnv.fetch(chrom,start,end):
-                    cn = float(cnregion.strip().split()[3]) # expect chrom,start,end,CN
-                    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\t" + ' '.join(("copy number in sv region:",chrom,str(start),str(end),"=",str(cn))) + "\n")
-                    svfrac = svfrac/float(cn)
-                    assert svfrac <= 1.0, 'copy number from %s must be at least 1: %s' % (args.cnvfile, snregion.stri[()])
-                    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tadjusted default MAF: " + str(svfrac) + "\n")
-
-        logger.info("%s interval: %s" % (mutid, bedline))
-        logger.info("%s length: %d" % (mutid, (end-start)))
-
-       # modify start and end if interval is too short
-        minctglen = int(args.minctglen)
-
-        # adjust if minctglen is too short
-        if minctglen < 3*int(args.maxlibsize):
-            minctglen = 3*int(args.maxlibsize)
-
-        #if end-start < minctglen:
-        adj   = minctglen - (end-start)
-        start = start - adj/2
-        end   = end + adj/2
-
-        #logger.info("%s note: interval size was too short, adjusted: %s:%d-%d" % (mutid, chrom, start, end))
-
-        dfrac = discordant_fraction(args.bamFileName, chrom, start, end)
-        logger.info("%s discordant fraction: %f" % (mutid, dfrac))
-
-        maxdfrac = 0.1 # FIXME make a parameter
-        if dfrac > .1: 
-            logger.warning("%s discordant fraction > %f aborting mutation!\n" % (mutid, maxdfrac))
-            return None, None, None
-
-        contigs = ar.asm(chrom, start, end, args.bamFileName, reffile, int(args.kmersize), args.tmpdir, mutid=mutid, debug=args.debug)
-
-        if len(contigs) == 0:
-            logger.warning("%s generated no contigs, skipping site." % mutid)
-            return None, None, None
-
-        trn_contigs = None
-        if is_transloc:
-            logger.info("%s assemble translocation end: %s:%d-%d" % (mutid, trn_chrom, trn_start, trn_end))
-            trn_contigs = ar.asm(trn_chrom, trn_start, trn_end, args.bamFileName, reffile, int(args.kmersize), args.tmpdir, mutid=mutid, debug=args.debug)
-
-        maxcontig = sorted(contigs)[-1]
-
-        trn_maxcontig = None
-        rename_reads = True
-
-        if is_transloc:
-            if len(trn_contigs) == 0:
-                logger.warning("%s translocation partner generated no contigs, skipping site." % mutid)
-                return None, None, None
-
-            trn_maxcontig = sorted(trn_contigs)[-1]
-
-        if re.search('N', maxcontig.seq):
-            if args.allowN:
-                logger.warning("%s contig has ambiguous base (N), replaced with 'A'" % mutid)
-                maxcontig.seq = re.sub('N', 'A', maxcontig.seq)
-            else:
-                logger.warning("%s contig dropped due to ambiguous base (N), aborting mutation." % mutid)
-                return None, None, None
-
-        if is_transloc and re.search('N', trn_maxcontig.seq):
-            if args.allowN:
-                logger.warning("%s contig has ambiguous base (N), replaced with 'A'" % mutid)
-                trn_maxcontig.seq = re.sub('N', 'A', trn_maxcontig.seq)
-            else:
-                logger.warning("%s contig dropped due to ambiguous base (N), aborting mutation." % mutid)
-                return None, None, None
-
-        if maxcontig is None:
-            logger.warning("%s maxcontig has length 0, aborting mutation!" % mutid)
-            return None, None, None
-
-        if is_transloc and trn_maxcontig is None:
-            logger.warning("%s transloc maxcontig has length 0, aborting mutation!" % mutid)
-            return None, None, None
-
-        logger.info("%s best contig length: %d" % (mutid, sorted(contigs)[-1].len))
-
-        if is_transloc:
-            logger.info("%s best transloc contig length: %d" % (mutid, sorted(trn_contigs)[-1].len))
-
-        # trim contig to get best ungapped aligned region to ref.
-        maxcontig, refseq, alignstats, refstart, refend, qrystart, qryend, tgtstart, tgtend = trim_contig(mutid, chrom, start, end, maxcontig, reffile)
-
-        if maxcontig is None:
-            logger.warning("%s best contig did not have sufficent match to reference, aborting mutation." % mutid)
-            return None, None, None
-    
-        logger.info("%s start: %d, end: %d, tgtstart: %d, tgtend: %d, refstart: %d, refend: %d" % (mutid, start, end, tgtstart, tgtend, refstart, refend))
-
-        if is_transloc:
-            trn_maxcontig, trn_refseq, trn_alignstats, trn_refstart, trn_refend, trn_qrystart, trn_qryend, trn_tgtstart, trn_tgtend = trim_contig(mutid, trn_chrom, trn_start, trn_end, trn_maxcontig, reffile)
-
-            if trn_maxcontig is None:
-                logger.warning("%s best contig for translocation partner did not have sufficent match to reference, aborting mutation." % mutid)
-                return None, None, None
-                
-            logger.info("%s trn_start: %d, trn_end: %d, trn_tgtstart: %d, trn_tgtend:%d , trn_refstart: %d, trn_refend: %d" % (mutid, trn_start, trn_end, trn_tgtstart, trn_tgtend, trn_refstart, trn_refend))
-
-        # is there anough room to make mutations?
-        if maxcontig.len < 3*int(args.maxlibsize):
-            logger.warning("%s best contig too short to make mutation!" % mutid)
-            return None, None, None
-
-        if is_transloc and trn_maxcontig.len < 3*int(args.maxlibsize):
-            logger.warning("%s best transloc contig too short to make mutation!" % mutid)
-            return None, None, None
-
-        # make mutation in the largest contig
-        mutseq = ms.MutableSeq(maxcontig.seq)
-
-        if maxcontig.rc:
-            mutseq = ms.MutableSeq(rc(maxcontig.seq)) 
-
-        trn_mutseq = None
-
-        if is_transloc:
-            if trn_maxcontig.rc:
-                trn_mutseq = ms.MutableSeq(rc(trn_maxcontig.seq))
-            else:
-                trn_mutseq = ms.MutableSeq(trn_maxcontig.seq)
-
-
-        # support for multiple mutations
-        for actionstr in actions:
-            a = actionstr.split()
-            action = a[0]
-
-            logger.info("%s action: %s %s" % (mutid, actionstr, action))
-
-            insseqfile = None
-            insseq = ''
-            tsdlen = 0  # target site duplication length
-            ndups = 0   # number of tandem dups
-            dsize = 0.0 # deletion size fraction
-            dlen = 0
-            ins_motif = None
-
-            if action == 'INS':
-                assert len(a) > 1 # insertion syntax: INS <file.fa> [optional TSDlen]
-                insseqfile = a[1]
-                if not (os.path.exists(insseqfile) or insseqfile == 'RND' or insseqfile.startswith('INSLIB:')): # not a file... is it a sequence? (support indel ins.)
-                    assert re.search('^[ATGCatgc]*$',insseqfile), "cannot determine SV type: %s" % insseqfile # make sure it's a sequence
-                    insseq = insseqfile.upper()
-                    insseqfile = None
-                if len(a) > 2: # field 5 for insertion is TSD Length
-                    tsdlen = int(a[2])
-
-                if len(a) > 3: # field 6 for insertion is motif, format = 'NNNN^NNNN where ^ is cut site
-                    ins_motif = a[3]
-                    assert '^' in ins_motif, 'insertion motif specification requires cut site defined by ^'
-
-                if len(a) > 4: # field 7 is VAF
-                    svfrac = float(a[4])/cn
-
-            if action == 'DUP':
-                if len(a) > 1:
-                    ndups = int(a[1])
-                else:
-                    ndups = 1
-
-                if len(a) > 2: # VAF
-                    svfrac = float(a[2])/cn
-
-            if action == 'DEL':
-                dsize = 1.0
-
-                if len(a) > 1: # VAF
-                    svfrac = float(a[1])/cn
-
-            if action in ('TRN', 'BIGDEL', 'BIGINV', 'BIGDUP'):
-                if len(a) > 1: # translocation end orientation ++ / +- / -+ / --
-                    trn_left_flip = a[1][0] == '-'
-                    trn_right_flip = a[1][1] == '-'
-
-                if len(a) > 2:
-                    svfrac = float(a[2])/cn
-
-            if action == 'INV':
-                if len(a) > 1:
-                    svfrac = float(a[1])/cn
-
-
-            logger.info("%s final VAF accounting for copy number %f: %f" % (mutid, cn, svfrac))
-
-            logfile.write(">" + chrom + ":" + str(refstart) + "-" + str(refend) + " BEFORE\n" + str(mutseq) + "\n")
-
-            contig_start = None
-            contig_end = None
-            trn_contig_start = None
-            trn_contig_end = None
-            exact_success = True
-
-            contig_start, contig_end = locate_contig_pos(refstart, refend, user_start, user_end, mutseq.length(), int(args.maxlibsize))
-
-            if contig_start is None:
-                logger.warning('%s contig does not cover user start' % mutid)
-                exact_success = False
-                #print refstart, refend, user_start, user_end, int(args.maxlibsize)
-
-            if contig_end is None:
-                logger.warning('%s contig does not cover user end' % mutid)
-                exact_success = False
-                #print refstart, refend, user_start, user_end, int(args.maxlibsize)
-
-            if is_transloc:
-                trn_contig_start, trn_contig_end = locate_contig_pos(trn_refstart, trn_refend, user_trn_start, user_trn_end, trn_mutseq.length(), int(args.maxlibsize))
-
-                if trn_contig_start is None:
-                    logger.warning('%s contig does not cover user translocation start' % mutid)
-                    exact_success = False
-                    #print trn_refstart, trn_refend, user_trn_start, user_trn_end, int(args.maxlibsize)
-
-                if trn_contig_end is None:
-                    logger.warning('%s contig does not cover user translocation end' % mutid)
-                    exact_success = False
-                    #print trn_refstart, trn_refend, user_trn_start, user_trn_end, int(args.maxlibsize)
-
-
-            if args.require_exact and not exact_success:
-                logger.warning('%s dropped mutation due to --require_exact')
-                return None, None, None
-
-
-            if action == 'INS':
-                inspoint = mutseq.length()/2
-                if None not in (contig_start, contig_end):
-                    inspoint = (contig_start+contig_end)/2
-
-                if ins_motif is not None:
-                    inspoint = mutseq.find_site(ins_motif, left_trim=int(args.maxlibsize), right_trim=int(args.maxlibsize))
-
-                    if inspoint < int(args.maxlibsize) or inspoint > mutseq.length() - int(args.maxlibsize):
-                        logger.info("%s picked midpoint, no cutsite found" % mutid)
-                        inspoint = mutseq.length()/2
-
-                if insseqfile: # seq in file
-                    if insseqfile == 'RND':
-                        assert args.inslib is not None # insertion library needs to exist
-                        insseqfile = random.choice(args.inslib.keys())
-                        logger.info("%s chose sequence from insertion library: %s" % (mutid, insseqfile))
-                        mutseq.insertion(inspoint, args.inslib[insseqfile], tsdlen)
-
-                    elif insseqfile.startswith('INSLIB:'):
-                        assert args.inslib is not None # insertion library needs to exist
-                        insseqfile = insseqfile.split(':')[1]
-                        logger.info("%s specify sequence from insertion library: %s" % (mutid, insseqfile))
-                        assert insseqfile in args.inslib, '%s not found in insertion library' % insseqfile
-                        mutseq.insertion(inspoint, args.inslib[insseqfile], tsdlen)
-
-                    else:
-                        mutseq.insertion(inspoint, singleseqfa(insseqfile, mutid=mutid), tsdlen)
-
-                else: # seq is input
-                    mutseq.insertion(inspoint, insseq, tsdlen)
-
-                mutinfo[mutid] = "\t".join(('ins',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(inspoint),str(insseqfile),str(tsdlen),str(svfrac)))
-                logfile.write(mutinfo[mutid] + "\n")
-
-            elif action == 'INV':
-                invstart = int(args.maxlibsize)
-                invend = mutseq.length() - invstart
-
-                if None not in (contig_start, contig_end):
-                    invstart = contig_start
-                    invend   = contig_end
-
-                mutseq.inversion(invstart,invend)
-
-                mutinfo[mutid] = "\t".join(('inv',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(invstart),str(invend),str(svfrac)))
-                logfile.write(mutinfo[mutid] + "\n")
-
-            elif action == 'DEL':
-                delstart = int(args.maxlibsize)
-                delend = mutseq.length() - delstart
-
-                if None not in (contig_start, contig_end):
-                    delstart = contig_start
-                    delend   = contig_end
-
-                mutseq.deletion(delstart,delend)
-
-                mutinfo[mutid] = "\t".join(('del',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(delstart),str(delend),str(dlen),str(svfrac)))
-                logfile.write(mutinfo[mutid] + "\n")
-
-            elif action == 'DUP':
-                dupstart = int(args.maxlibsize)
-                dupend = mutseq.length() - dupstart
-
-                if None not in (contig_start, contig_end):
-                    dupstart = contig_start
-                    dupend   = contig_end
-
-                mutseq.duplication(dupstart,dupend,ndups)
-
-                mutinfo[mutid] = "\t".join(('dup',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(dupstart),str(dupend),str(ndups),str(svfrac)))
-                logfile.write(mutinfo[mutid] + "\n")
-
-            elif action == 'TRN':
-                trnpoint_1 = mutseq.length()/2
-                trnpoint_2 = trn_mutseq.length()/2
-
-                if None not in (contig_start, contig_end):
-                    trnpoint_1 = (contig_start + contig_end)/2
-
-                if None not in (trn_contig_start, trn_contig_end):
-                    trnpoint_2 = (trn_contig_start + trn_contig_end)/2
-
-                mutseq.fusion(trnpoint_1, trn_mutseq, trnpoint_2, flip1=trn_left_flip, flip2=trn_right_flip)
-
-                mutinfo[mutid] = "\t".join(('trn',chrom,str(refstart),str(refend),action,str(trnpoint_1),trn_chrom,str(trn_refstart),str(trn_refend),str(trnpoint_2),str(svfrac)))
-                logfile.write(mutinfo[mutid] + "\n")
-
-            elif action == 'BIGDEL':
-                trnpoint_1 = mutseq.length()/2
-                trnpoint_2 = trn_mutseq.length()/2
-
-                if None not in (contig_start, contig_end):
-                    trnpoint_1 = (contig_start + contig_end)/2
-
-                if None not in (trn_contig_start, trn_contig_end):
-                    trnpoint_2 = (trn_contig_start + trn_contig_end)/2
-
-                mutseq.fusion(trnpoint_1, trn_mutseq, trnpoint_2)
-
-                mutinfo[mutid] = "\t".join(('bigdel',chrom,str(refstart),str(refend),action,str(trnpoint_1),trn_chrom,str(trn_refstart),str(trn_refend),str(trnpoint_2),str(svfrac)))
-                logfile.write(mutinfo[mutid] + "\n")
-
-            elif action == 'BIGINV':
-                trnpoint_1 = mutseq.length()/2
-                trnpoint_2 = trn_mutseq.length()/2
-
-                if None not in (contig_start, contig_end):
-                    trnpoint_1 = (contig_start + contig_end)/2
-
-                if None not in (trn_contig_start, trn_contig_end):
-                    trnpoint_2 = (trn_contig_start + trn_contig_end)/2
-
-                mutseq.fusion(trnpoint_1, trn_mutseq, trnpoint_2, flip1=trn_left_flip, flip2=trn_right_flip)
-
-                mutinfo[mutid] = "\t".join(('biginv',chrom,str(refstart),str(refend),action,str(trnpoint_1),trn_chrom,str(trn_refstart),str(trn_refend),str(trnpoint_2),str(svfrac)))
-                logfile.write(mutinfo[mutid] + "\n")
-
-            elif action == 'BIGDUP':
-                trnpoint_1 = mutseq.length()/2
-                trnpoint_2 = trn_mutseq.length()/2
-
-                if None not in (contig_start, contig_end):
-                    trnpoint_1 = (contig_start + contig_end)/2
-
-                if None not in (trn_contig_start, trn_contig_end):
-                    trnpoint_2 = (trn_contig_start + trn_contig_end)/2
-
-                mutseq.fusion(trnpoint_1, trn_mutseq, trnpoint_2)
-
-                mutinfo[mutid] = "\t".join(('bigdup',chrom,str(refstart),str(refend),action,str(trnpoint_1),trn_chrom,str(trn_refstart),str(trn_refend),str(trnpoint_2),str(svfrac)))
-                logfile.write(mutinfo[mutid] + "\n")
-                rename_reads = False
-
-            else:
-                raise ValueError("ERROR\t" + now() + "\t" + mutid + "\t: mutation not one of: INS,INV,DEL,DUP,TRN,BIGDEL,BIGINV,BIGDUP\n")
-
-            logfile.write(">" + chrom + ":" + str(refstart) + "-" + str(refend) +" AFTER\n" + str(mutseq) + "\n")
-
-        pemean, pesd = float(args.ismean), float(args.issd) 
-        logger.info("%s set paired end mean distance: %f" % (mutid, pemean))
-        logger.info("%s set paired end distance stddev: %f" % (mutid, pesd))
-
-
-        # simulate reads
-        (fq1, fq2) = runwgsim(maxcontig, mutseq.seq, svfrac, actions, exclude, pemean, pesd, args.tmpdir, err_rate=float(args.simerr), mutid=mutid, seed=args.seed, trn_contig=trn_maxcontig, rename=rename_reads)
-
-        outreads = aligners.remap_fastq(args.aligner, fq1, fq2, args.refFasta, outbam_mutsfile, alignopts, mutid=mutid, threads=1)
-
-        if outreads == 0:
-            logger.warning("%s outbam %s has no mapped reads!" % (mutid, outbam_mutsfile))
-            return None, None, None
-
-        logger.info("%s temporary bam: %s" % (mutid, outbam_mutsfile))
-
-        exclude.close()
-        bamfile.close()
-
-        return outbam_mutsfile, exclfile, mutinfo
-
-    except Exception, e:
-        sys.stderr.write("*"*60 + "\nencountered error in mutation spikein: " + bedline + "\n")
-        traceback.print_exc(file=sys.stderr)
-        sys.stderr.write("*"*60 + "\n")
+    bamfile = pysam.Samfile(args.bamFileName, 'rb')
+    reffile = pysam.Fastafile(args.refFasta)
+    logfn = '_'.join(map(os.path.basename, bedline.split()[:4])) + ".log"
+    logfile = open('addsv_logs_' + os.path.basename(args.outBamFile) + '/' + os.path.basename(args.outBamFile) + '_' + logfn, 'w')
+    exclfile = args.tmpdir + '/' + '.'.join((mutid, 'exclude', str(uuid4()), 'txt'))
+    exclude = open(exclfile, 'w')
+    mutinfo = {}
+
+    # optional CNV file
+    cnv = None
+    if (args.cnvfile):
+        cnv = pysam.Tabixfile(args.cnvfile, 'r')
+
+    # temporary file to hold mutated reads
+    outbam_mutsfile = args.tmpdir + '/' + '.'.join((mutid, str(uuid4()), "muts.bam"))
+
+    c = bedline.split()
+    chrom  = c[0]
+    start  = int(c[1])
+    end    = int(c[2])
+    araw   = c[3:] # INV, DEL, INS,  DUP, TRN
+
+    # desired start/end
+    user_start = start
+    user_end   = end
+
+    # translocation specific
+    trn_chrom = None
+    trn_start = None
+    trn_end   = None
+
+    is_transloc = c[3] in ('TRN', 'BIGDEL', 'BIGINV', 'BIGDUP')
+
+    if is_transloc:
+        araw = [c[3]]
+        if len(c) > 7:
+            araw += c[7:]
+
+        start -= int(args.minctglen)
+        end   += int(args.minctglen)
+        if start < 0: start = 0
+
+        trn_chrom = c[4]
+        user_trn_start = int(c[5])
+        user_trn_end   = int(c[6])
+
+        trn_start = int(c[5]) - int(args.minctglen)
+        trn_end   = int(c[6]) + int(args.minctglen)
+        if trn_start < 0: trn_start = 0
+
+    actions = map(lambda x: x.strip(),' '.join(araw).split(';'))
+
+    svfrac = float(args.svfrac) # default, can be overridden by cnv file or per-variant
+
+    cn = 1.0
+
+    trn_left_flip  = False
+    trn_right_flip = False
+
+    if cnv: # CNV file is present
+        if chrom in cnv.contigs:
+            for cnregion in cnv.fetch(chrom,start,end):
+                cn = float(cnregion.strip().split()[3]) # expect chrom,start,end,CN
+                sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\t" + ' '.join(("copy number in sv region:",chrom,str(start),str(end),"=",str(cn))) + "\n")
+                svfrac = svfrac/float(cn)
+                assert svfrac <= 1.0, 'copy number from %s must be at least 1: %s' % (args.cnvfile, snregion.stri[()])
+                sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tadjusted default MAF: " + str(svfrac) + "\n")
+
+    logger.info("%s interval: %s" % (mutid, bedline))
+    logger.info("%s length: %d" % (mutid, (end-start)))
+
+   # modify start and end if interval is too short
+    minctglen = int(args.minctglen)
+
+    # adjust if minctglen is too short
+    if minctglen < 3*int(args.maxlibsize):
+        minctglen = 3*int(args.maxlibsize)
+
+    #if end-start < minctglen:
+    adj   = minctglen - (end-start)
+    start = start - adj/2
+    end   = end + adj/2
+
+    #logger.info("%s note: interval size was too short, adjusted: %s:%d-%d" % (mutid, chrom, start, end))
+
+    dfrac = discordant_fraction(args.bamFileName, chrom, start, end)
+    logger.info("%s discordant fraction: %f" % (mutid, dfrac))
+
+    maxdfrac = 0.1 # FIXME make a parameter
+    if dfrac > .1: 
+        logger.warning("%s discordant fraction > %f aborting mutation!\n" % (mutid, maxdfrac))
         return None, None, None
+
+    contigs = ar.asm(chrom, start, end, args.bamFileName, reffile, int(args.kmersize), args.tmpdir, mutid=mutid, debug=args.debug)
+
+    if len(contigs) == 0:
+        logger.warning("%s generated no contigs, skipping site." % mutid)
+        return None, None, None
+
+    trn_contigs = None
+    if is_transloc:
+        logger.info("%s assemble translocation end: %s:%d-%d" % (mutid, trn_chrom, trn_start, trn_end))
+        trn_contigs = ar.asm(trn_chrom, trn_start, trn_end, args.bamFileName, reffile, int(args.kmersize), args.tmpdir, mutid=mutid, debug=args.debug)
+
+    maxcontig = sorted(contigs)[-1]
+
+    trn_maxcontig = None
+    rename_reads = True
+
+    if is_transloc:
+        if len(trn_contigs) == 0:
+            logger.warning("%s translocation partner generated no contigs, skipping site." % mutid)
+            return None, None, None
+
+        trn_maxcontig = sorted(trn_contigs)[-1]
+
+    if re.search('N', maxcontig.seq):
+        if args.allowN:
+            logger.warning("%s contig has ambiguous base (N), replaced with 'A'" % mutid)
+            maxcontig.seq = re.sub('N', 'A', maxcontig.seq)
+        else:
+            logger.warning("%s contig dropped due to ambiguous base (N), aborting mutation." % mutid)
+            return None, None, None
+
+    if is_transloc and re.search('N', trn_maxcontig.seq):
+        if args.allowN:
+            logger.warning("%s contig has ambiguous base (N), replaced with 'A'" % mutid)
+            trn_maxcontig.seq = re.sub('N', 'A', trn_maxcontig.seq)
+        else:
+            logger.warning("%s contig dropped due to ambiguous base (N), aborting mutation." % mutid)
+            return None, None, None
+
+    if maxcontig is None:
+        logger.warning("%s maxcontig has length 0, aborting mutation!" % mutid)
+        return None, None, None
+
+    if is_transloc and trn_maxcontig is None:
+        logger.warning("%s transloc maxcontig has length 0, aborting mutation!" % mutid)
+        return None, None, None
+
+    logger.info("%s best contig length: %d" % (mutid, sorted(contigs)[-1].len))
+
+    if is_transloc:
+        logger.info("%s best transloc contig length: %d" % (mutid, sorted(trn_contigs)[-1].len))
+
+    # trim contig to get best ungapped aligned region to ref.
+    maxcontig, refseq, alignstats, refstart, refend, qrystart, qryend, tgtstart, tgtend = trim_contig(mutid, chrom, start, end, maxcontig, reffile)
+
+    if maxcontig is None:
+        logger.warning("%s best contig did not have sufficent match to reference, aborting mutation." % mutid)
+        return None, None, None
+
+    logger.info("%s start: %d, end: %d, tgtstart: %d, tgtend: %d, refstart: %d, refend: %d" % (mutid, start, end, tgtstart, tgtend, refstart, refend))
+
+    if is_transloc:
+        trn_maxcontig, trn_refseq, trn_alignstats, trn_refstart, trn_refend, trn_qrystart, trn_qryend, trn_tgtstart, trn_tgtend = trim_contig(mutid, trn_chrom, trn_start, trn_end, trn_maxcontig, reffile)
+
+        if trn_maxcontig is None:
+            logger.warning("%s best contig for translocation partner did not have sufficent match to reference, aborting mutation." % mutid)
+            return None, None, None
+            
+        logger.info("%s trn_start: %d, trn_end: %d, trn_tgtstart: %d, trn_tgtend:%d , trn_refstart: %d, trn_refend: %d" % (mutid, trn_start, trn_end, trn_tgtstart, trn_tgtend, trn_refstart, trn_refend))
+
+    # is there anough room to make mutations?
+    if maxcontig.len < 3*int(args.maxlibsize):
+        logger.warning("%s best contig too short to make mutation!" % mutid)
+        return None, None, None
+
+    if is_transloc and trn_maxcontig.len < 3*int(args.maxlibsize):
+        logger.warning("%s best transloc contig too short to make mutation!" % mutid)
+        return None, None, None
+
+    # make mutation in the largest contig
+    mutseq = ms.MutableSeq(maxcontig.seq)
+
+    if maxcontig.rc:
+        mutseq = ms.MutableSeq(rc(maxcontig.seq)) 
+
+    trn_mutseq = None
+
+    if is_transloc:
+        if trn_maxcontig.rc:
+            trn_mutseq = ms.MutableSeq(rc(trn_maxcontig.seq))
+        else:
+            trn_mutseq = ms.MutableSeq(trn_maxcontig.seq)
+
+
+    # support for multiple mutations
+    for actionstr in actions:
+        a = actionstr.split()
+        action = a[0]
+
+        logger.info("%s action: %s %s" % (mutid, actionstr, action))
+
+        insseqfile = None
+        insseq = ''
+        tsdlen = 0  # target site duplication length
+        ndups = 0   # number of tandem dups
+        dsize = 0.0 # deletion size fraction
+        dlen = 0
+        ins_motif = None
+
+        if action == 'INS':
+            assert len(a) > 1 # insertion syntax: INS <file.fa> [optional TSDlen]
+            insseqfile = a[1]
+            if not (os.path.exists(insseqfile) or insseqfile == 'RND' or insseqfile.startswith('INSLIB:')): # not a file... is it a sequence? (support indel ins.)
+                assert re.search('^[ATGCatgc]*$',insseqfile), "cannot determine SV type: %s" % insseqfile # make sure it's a sequence
+                insseq = insseqfile.upper()
+                insseqfile = None
+            if len(a) > 2: # field 5 for insertion is TSD Length
+                tsdlen = int(a[2])
+
+            if len(a) > 3: # field 6 for insertion is motif, format = 'NNNN^NNNN where ^ is cut site
+                ins_motif = a[3]
+                assert '^' in ins_motif, 'insertion motif specification requires cut site defined by ^'
+
+            if len(a) > 4: # field 7 is VAF
+                svfrac = float(a[4])/cn
+
+        if action == 'DUP':
+            if len(a) > 1:
+                ndups = int(a[1])
+            else:
+                ndups = 1
+
+            if len(a) > 2: # VAF
+                svfrac = float(a[2])/cn
+
+        if action == 'DEL':
+            dsize = 1.0
+
+            if len(a) > 1: # VAF
+                svfrac = float(a[1])/cn
+
+        if action in ('TRN', 'BIGDEL', 'BIGINV', 'BIGDUP'):
+            if len(a) > 1: # translocation end orientation ++ / +- / -+ / --
+                trn_left_flip = a[1][0] == '-'
+                trn_right_flip = a[1][1] == '-'
+
+            if len(a) > 2:
+                svfrac = float(a[2])/cn
+
+        if action == 'INV':
+            if len(a) > 1:
+                svfrac = float(a[1])/cn
+
+
+        logger.info("%s final VAF accounting for copy number %f: %f" % (mutid, cn, svfrac))
+
+        logfile.write(">" + chrom + ":" + str(refstart) + "-" + str(refend) + " BEFORE\n" + str(mutseq) + "\n")
+
+        contig_start = None
+        contig_end = None
+        trn_contig_start = None
+        trn_contig_end = None
+        exact_success = True
+
+        contig_start, contig_end = locate_contig_pos(refstart, refend, user_start, user_end, mutseq.length(), int(args.maxlibsize))
+
+        if contig_start is None:
+            logger.warning('%s contig does not cover user start' % mutid)
+            exact_success = False
+            #print refstart, refend, user_start, user_end, int(args.maxlibsize)
+
+        if contig_end is None:
+            logger.warning('%s contig does not cover user end' % mutid)
+            exact_success = False
+            #print refstart, refend, user_start, user_end, int(args.maxlibsize)
+
+        if is_transloc:
+            trn_contig_start, trn_contig_end = locate_contig_pos(trn_refstart, trn_refend, user_trn_start, user_trn_end, trn_mutseq.length(), int(args.maxlibsize))
+
+            if trn_contig_start is None:
+                logger.warning('%s contig does not cover user translocation start' % mutid)
+                exact_success = False
+                #print trn_refstart, trn_refend, user_trn_start, user_trn_end, int(args.maxlibsize)
+
+            if trn_contig_end is None:
+                logger.warning('%s contig does not cover user translocation end' % mutid)
+                exact_success = False
+                #print trn_refstart, trn_refend, user_trn_start, user_trn_end, int(args.maxlibsize)
+
+
+        if args.require_exact and not exact_success:
+            logger.warning('%s dropped mutation due to --require_exact')
+            return None, None, None
+
+
+        if action == 'INS':
+            inspoint = mutseq.length()/2
+            if None not in (contig_start, contig_end):
+                inspoint = (contig_start+contig_end)/2
+
+            if ins_motif is not None:
+                inspoint = mutseq.find_site(ins_motif, left_trim=int(args.maxlibsize), right_trim=int(args.maxlibsize))
+
+                if inspoint < int(args.maxlibsize) or inspoint > mutseq.length() - int(args.maxlibsize):
+                    logger.info("%s picked midpoint, no cutsite found" % mutid)
+                    inspoint = mutseq.length()/2
+
+            if insseqfile: # seq in file
+                if insseqfile == 'RND':
+                    assert args.inslib is not None # insertion library needs to exist
+                    insseqfile = random.choice(args.inslib.keys())
+                    logger.info("%s chose sequence from insertion library: %s" % (mutid, insseqfile))
+                    mutseq.insertion(inspoint, args.inslib[insseqfile], tsdlen)
+
+                elif insseqfile.startswith('INSLIB:'):
+                    assert args.inslib is not None # insertion library needs to exist
+                    insseqfile = insseqfile.split(':')[1]
+                    logger.info("%s specify sequence from insertion library: %s" % (mutid, insseqfile))
+                    assert insseqfile in args.inslib, '%s not found in insertion library' % insseqfile
+                    mutseq.insertion(inspoint, args.inslib[insseqfile], tsdlen)
+
+                else:
+                    mutseq.insertion(inspoint, singleseqfa(insseqfile, mutid=mutid), tsdlen)
+
+            else: # seq is input
+                mutseq.insertion(inspoint, insseq, tsdlen)
+
+            mutinfo[mutid] = "\t".join(('ins',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(inspoint),str(insseqfile),str(tsdlen),str(svfrac)))
+            logfile.write(mutinfo[mutid] + "\n")
+
+        elif action == 'INV':
+            invstart = int(args.maxlibsize)
+            invend = mutseq.length() - invstart
+
+            if None not in (contig_start, contig_end):
+                invstart = contig_start
+                invend   = contig_end
+
+            mutseq.inversion(invstart,invend)
+
+            mutinfo[mutid] = "\t".join(('inv',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(invstart),str(invend),str(svfrac)))
+            logfile.write(mutinfo[mutid] + "\n")
+
+        elif action == 'DEL':
+            delstart = int(args.maxlibsize)
+            delend = mutseq.length() - delstart
+
+            if None not in (contig_start, contig_end):
+                delstart = contig_start
+                delend   = contig_end
+
+            mutseq.deletion(delstart,delend)
+
+            mutinfo[mutid] = "\t".join(('del',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(delstart),str(delend),str(dlen),str(svfrac)))
+            logfile.write(mutinfo[mutid] + "\n")
+
+        elif action == 'DUP':
+            dupstart = int(args.maxlibsize)
+            dupend = mutseq.length() - dupstart
+
+            if None not in (contig_start, contig_end):
+                dupstart = contig_start
+                dupend   = contig_end
+
+            mutseq.duplication(dupstart,dupend,ndups)
+
+            mutinfo[mutid] = "\t".join(('dup',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(dupstart),str(dupend),str(ndups),str(svfrac)))
+            logfile.write(mutinfo[mutid] + "\n")
+
+        elif action == 'TRN':
+            trnpoint_1 = mutseq.length()/2
+            trnpoint_2 = trn_mutseq.length()/2
+
+            if None not in (contig_start, contig_end):
+                trnpoint_1 = (contig_start + contig_end)/2
+
+            if None not in (trn_contig_start, trn_contig_end):
+                trnpoint_2 = (trn_contig_start + trn_contig_end)/2
+
+            mutseq.fusion(trnpoint_1, trn_mutseq, trnpoint_2, flip1=trn_left_flip, flip2=trn_right_flip)
+
+            mutinfo[mutid] = "\t".join(('trn',chrom,str(refstart),str(refend),action,str(trnpoint_1),trn_chrom,str(trn_refstart),str(trn_refend),str(trnpoint_2),str(svfrac)))
+            logfile.write(mutinfo[mutid] + "\n")
+
+        elif action == 'BIGDEL':
+            trnpoint_1 = mutseq.length()/2
+            trnpoint_2 = trn_mutseq.length()/2
+
+            if None not in (contig_start, contig_end):
+                trnpoint_1 = (contig_start + contig_end)/2
+
+            if None not in (trn_contig_start, trn_contig_end):
+                trnpoint_2 = (trn_contig_start + trn_contig_end)/2
+
+            mutseq.fusion(trnpoint_1, trn_mutseq, trnpoint_2)
+
+            mutinfo[mutid] = "\t".join(('bigdel',chrom,str(refstart),str(refend),action,str(trnpoint_1),trn_chrom,str(trn_refstart),str(trn_refend),str(trnpoint_2),str(svfrac)))
+            logfile.write(mutinfo[mutid] + "\n")
+
+        elif action == 'BIGINV':
+            trnpoint_1 = mutseq.length()/2
+            trnpoint_2 = trn_mutseq.length()/2
+
+            if None not in (contig_start, contig_end):
+                trnpoint_1 = (contig_start + contig_end)/2
+
+            if None not in (trn_contig_start, trn_contig_end):
+                trnpoint_2 = (trn_contig_start + trn_contig_end)/2
+
+            mutseq.fusion(trnpoint_1, trn_mutseq, trnpoint_2, flip1=trn_left_flip, flip2=trn_right_flip)
+
+            mutinfo[mutid] = "\t".join(('biginv',chrom,str(refstart),str(refend),action,str(trnpoint_1),trn_chrom,str(trn_refstart),str(trn_refend),str(trnpoint_2),str(svfrac)))
+            logfile.write(mutinfo[mutid] + "\n")
+
+        elif action == 'BIGDUP':
+            trnpoint_1 = mutseq.length()/2
+            trnpoint_2 = trn_mutseq.length()/2
+
+            if None not in (contig_start, contig_end):
+                trnpoint_1 = (contig_start + contig_end)/2
+
+            if None not in (trn_contig_start, trn_contig_end):
+                trnpoint_2 = (trn_contig_start + trn_contig_end)/2
+
+            mutseq.fusion(trnpoint_1, trn_mutseq, trnpoint_2)
+
+            mutinfo[mutid] = "\t".join(('bigdup',chrom,str(refstart),str(refend),action,str(trnpoint_1),trn_chrom,str(trn_refstart),str(trn_refend),str(trnpoint_2),str(svfrac)))
+            logfile.write(mutinfo[mutid] + "\n")
+            rename_reads = False
+
+        else:
+            raise ValueError("ERROR\t" + now() + "\t" + mutid + "\t: mutation not one of: INS,INV,DEL,DUP,TRN,BIGDEL,BIGINV,BIGDUP\n")
+
+        logfile.write(">" + chrom + ":" + str(refstart) + "-" + str(refend) +" AFTER\n" + str(mutseq) + "\n")
+
+    pemean, pesd = float(args.ismean), float(args.issd) 
+    logger.info("%s set paired end mean distance: %f" % (mutid, pemean))
+    logger.info("%s set paired end distance stddev: %f" % (mutid, pesd))
+
+
+    # simulate reads
+    (fq1, fq2) = runwgsim(maxcontig, mutseq.seq, svfrac, actions, exclude, pemean, pesd, args.tmpdir, err_rate=float(args.simerr), mutid=mutid, seed=args.seed, trn_contig=trn_maxcontig, rename=rename_reads)
+
+    outreads = aligners.remap_fastq(args.aligner, fq1, fq2, args.refFasta, outbam_mutsfile, alignopts, mutid=mutid, threads=1)
+
+    if outreads == 0:
+        logger.warning("%s outbam %s has no mapped reads!" % (mutid, outbam_mutsfile))
+        return None, None, None
+
+    logger.info("%s temporary bam: %s" % (mutid, outbam_mutsfile))
+
+    exclude.close()
+    bamfile.close()
+
+    return outbam_mutsfile, exclfile, mutinfo
+
+
 
 
 def main(args):
@@ -983,7 +974,7 @@ def main(args):
         if args.inslib is not None:
             logger.info("loading insertion library from %s" % args.inslib)
             args.inslib = load_inslib(args.inslib)
-    except Exception, e:
+    except Exception:
         logger.error("failed to load insertion library %s" % args.inslib)
         traceback.print_exc(file=sys.stderr)
         sys.stderr.write("\n")

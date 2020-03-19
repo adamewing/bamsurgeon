@@ -5,7 +5,7 @@ import os
 import sys
 import subprocess
 
-from common import *
+from bamsurgeon.common import *
 from shutil import move
 from re import sub
 from uuid import uuid4

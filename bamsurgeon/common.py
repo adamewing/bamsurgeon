@@ -7,7 +7,6 @@ import pysam
 import os
 import sys
 
-from string import maketrans
 from collections import Counter
 from shutil import move
 from re import sub
@@ -25,7 +24,7 @@ def now():
 
 def rc(dna):
     ''' reverse complement '''
-    complements = maketrans('acgtrymkbdhvACGTRYMKBDHV', 'tgcayrkmvhdbTGCAYRKMVHDB')
+    complements = str.maketrans('acgtrymkbdhvACGTRYMKBDHV', 'tgcayrkmvhdbTGCAYRKMVHDB')
     return dna.translate(complements)[::-1]
 
 
@@ -49,10 +48,10 @@ def mergebams(bamlist, outbamfn, maxopen=100, debug=False):
     ''' call samtools to merge a list of bams hierarchically '''
 
     assert outbamfn.endswith('.bam')
-    print "INFO\t" + now() + "\tlen(bamlist)", len(bamlist)
+    logger.info("len(bamlist): %d" % len(bamlist))
 
     if len(bamlist) == 1:
-        print "INFO\t" + now() + "\tonly one BAM to merge, renaming",bamlist[0],"-->",outbamfn
+        logger.info("only one BAM to merge, renaming " + bamlist[0] + " --> " + outbamfn)
         move(bamlist[0], outbamfn)
     else:
         nmerge = 1
@@ -72,18 +71,18 @@ def mergebams(bamlist, outbamfn, maxopen=100, debug=False):
         for submergefn, tmpbams in merge_sublists.iteritems():
             if len(tmpbams) == 1:
                 move(tmpbams[0], submergefn)
-                print "INFO\t" + now() + "\trenamed:",tmpbams[0], " --> ", submergefn
+                logger.info("renamed: " + tmpbams[0] + " --> " + submergefn)
             else:
                 args = ['samtools','merge','-f',submergefn] + tmpbams 
-                print "INFO\t" + now() + "\tmerging, cmd: ", args
+                logger.info("merging, cmd: " + ' '.join(args))
                 subprocess.call(args)
 
         if len(merge_sublists.keys()) == 1:
-            print "INFO\t" + now() + "\tmerge finished, renaming: ", merge_sublists.keys()[0]," --> ", outbamfn
+            logger.info("merge finished, renaming: " + merge_sublists.keys()[0] + " --> " + outbamfn)
             move(merge_sublists.keys()[0], outbamfn)
         else:
             args = ['samtools','merge','-f',outbamfn] + merge_sublists.keys()
-            print "INFO\t" + now() + "\tfinal merge, cmd: ", args
+            logger.info("final merge, cmd: " + ' '.join(args))
             subprocess.call(args)
 
         for submergefn in merge_sublists.keys():

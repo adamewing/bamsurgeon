@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from common import *
+from bamsurgeon.common import *
 from collections import OrderedDict as od
 import subprocess
 
@@ -232,7 +232,7 @@ def mutate(args, log, bamfile, bammate, chrom, mutstart, mutend, mutpos_list, av
                             if not args.single:
                                 try:
                                     mate = find_mate(pread.alignment, bammate)
-                                except ValueError, e:
+                                except ValueError:
                                     raise ValueError('cannot find mate reference chrom for read %s, is this a single-ended BAM?' % pread.alignment.qname)
 
                                 if mate is None:

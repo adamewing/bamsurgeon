@@ -5,7 +5,7 @@ try to do ref-directed assembly for paired reads in a region of a .bam file
 """
 
 import pysam,argparse,subprocess,sys,shutil,os,re
-import parseamos
+import bamsurgeon.parseamos
 import datetime
 
 from uuid import uuid4
@@ -121,7 +121,6 @@ def runVelvet(reads,refseqname,refseq,kmer,addsv_tmpdir,isPaired=True,long=False
 
     tmpdir = addsv_tmpdir + '/' + mutid + '.' + str(uuid4()).split('-')[0]
 
-    print tmpdir
 
     if long:
         argsvelveth = ['velveth', tmpdir, str(kmer), '-long', reads_fasta_tmpfn]
@@ -196,7 +195,7 @@ def asm(chrom, start, end, bamfilename, reffile, kmersize, tmpdir, mutid='null',
                 if not read.is_proper_pair:
                     ndisc  += 1
                 if nreads % 1000 == 0:
-                    print "INFO\t" + now() + "\t" + mutid + "\tfound mates for", nreads, "reads,", float(ndisc)/float(nreads), "discordant."
+                    logger.info("found mates for %d reads, %.2f discordant." % (nreads, float(ndisc)/float(nreads)))
                 if read.is_read1:
                     if read.is_reverse:
                         rquals.append(read.qual[::-1])
@@ -212,9 +211,9 @@ def asm(chrom, start, end, bamfilename, reffile, kmersize, tmpdir, mutid='null',
                         rquals.append(mate.qual[::-1])
                         mquals.append(read.qual)
             except ValueError:
-                sys.stderr.write("WARN\t" + now() + "\t" + mutid + "\tcannot find mate for read marked paired: " + read.qname + "\n")
+                logger.warning("cannot find mate for read marked paired: " + read.qname)
 
-    sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tfound " + str(nreads) + " reads in region.\n")
+    logger.info("found " + str(nreads) + " reads in region.")
 
     if nreads == 0:
         return []
@@ -254,14 +253,13 @@ def main(args):
 
     if not os.path.exists(args.tmpdir):
         os.mkdir(args.tmpdir)
-        print "INFO\t" + now() + "\tcreated tmp directory: " + args.tmpdir
+        logger.info("created tmp directory: " + args.tmpdir)
 
     contigs = asm(chr, start, end, args.bamFileName, reffile, int(args.kmersize), args.tmpdir)
 
     maxlen = 0
     maxeid = None
     for contig in contigs:
-        print contig
         if contig.len > maxlen:
             maxlen = contig.len
             maxeid = contig.eid

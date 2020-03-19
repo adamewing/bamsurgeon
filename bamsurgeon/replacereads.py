@@ -5,11 +5,16 @@ import pysam
 import argparse
 import random
 from collections import defaultdict
-from string import maketrans
+
+import logging
+FORMAT = '%(levelname)s %(asctime)s %(message)s'
+logging.basicConfig(format=FORMAT)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 def rc(dna):
     ''' reverse complement '''
-    complements = maketrans('acgtrymkbdhvACGTRYMKBDHV', 'tgcayrkmvhdbTGCAYRKMVHDB')
+    complements = str.maketrans('acgtrymkbdhvACGTRYMKBDHV', 'tgcayrkmvhdbTGCAYRKMVHDB')
     return dna.translate(complements)[::-1]
 
 def cleanup(read,orig,RG):
@@ -131,8 +136,8 @@ def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=No
         else:
             nullcount += 1
 
-    print 'secondary reads count:'+ str(sum([len(v) for k,v in secondary.iteritems()]))
-    print 'supplementary reads count:'+ str(sum([len(v) for k,v in supplementary.iteritems()]))
+    logger.info('secondary reads count:'+ str(sum([len(v) for k,v in secondary.iteritems()])))
+    logger.info('supplementary reads count:'+ str(sum([len(v) for k,v in supplementary.iteritems()])))
     sys.stdout.write("loaded " + str(nr) + " reads, (" + str(excount) + " excluded, " + str(nullcount) + " null or secondary or supplementary--> ignored)\n")
     excount = 0
     recount = 0 # number of replaced reads

@@ -141,4 +141,4 @@ if __name__ == '__main__':
         inputseqs = InputSeqs(seqfile)
         contigmap = contigreadmap(amosfile,inputseqs)
         for eid,contig in contigmap.iteritems():
-            print contig
+            print(contig)
