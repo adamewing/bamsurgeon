@@ -59,6 +59,7 @@ class MutableSeq:
 
     def insertion(self, loc, seq, tsdlen=0):
         ''' inserts seq after position loc, adds taret site duplication (tsd) if tsdlen > 0 '''
+        loc = int(loc)
         tsd = self.seq[loc:loc+tsdlen]
         self.seq = self.seq[:loc] + tsd + seq + self.seq[loc:]
 

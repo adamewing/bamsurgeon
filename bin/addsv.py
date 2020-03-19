@@ -584,8 +584,8 @@ def makemut(args, bedline, alignopts):
 
     #if end-start < minctglen:
     adj   = minctglen - (end-start)
-    start = start - adj/2
-    end   = end + adj/2
+    start = int(start - adj/2)
+    end   = int(end + adj/2)
 
     #logger.info("%s note: interval size was too short, adjusted: %s:%d-%d" % (mutid, chrom, start, end))
 
@@ -793,16 +793,16 @@ def makemut(args, bedline, alignopts):
 
 
         if action == 'INS':
-            inspoint = mutseq.length()/2
+            inspoint = int(mutseq.length()/2)
             if None not in (contig_start, contig_end):
-                inspoint = (contig_start+contig_end)/2
+                inspoint = int((contig_start+contig_end)/2)
 
             if ins_motif is not None:
                 inspoint = mutseq.find_site(ins_motif, left_trim=int(args.maxlibsize), right_trim=int(args.maxlibsize))
 
                 if inspoint < int(args.maxlibsize) or inspoint > mutseq.length() - int(args.maxlibsize):
                     logger.info("%s picked midpoint, no cutsite found" % mutid)
-                    inspoint = mutseq.length()/2
+                    inspoint = int(mutseq.length()/2)
 
             if insseqfile: # seq in file
                 if insseqfile == 'RND':
@@ -867,14 +867,14 @@ def makemut(args, bedline, alignopts):
             logfile.write(mutinfo[mutid] + "\n")
 
         elif action == 'TRN':
-            trnpoint_1 = mutseq.length()/2
-            trnpoint_2 = trn_mutseq.length()/2
+            trnpoint_1 = int(mutseq.length()/2)
+            trnpoint_2 = int(trn_mutseq.length()/2)
 
             if None not in (contig_start, contig_end):
-                trnpoint_1 = (contig_start + contig_end)/2
+                trnpoint_1 = int((contig_start + contig_end)/2)
 
             if None not in (trn_contig_start, trn_contig_end):
-                trnpoint_2 = (trn_contig_start + trn_contig_end)/2
+                trnpoint_2 = int((trn_contig_start + trn_contig_end)/2)
 
             mutseq.fusion(trnpoint_1, trn_mutseq, trnpoint_2, flip1=trn_left_flip, flip2=trn_right_flip)
 
@@ -882,14 +882,14 @@ def makemut(args, bedline, alignopts):
             logfile.write(mutinfo[mutid] + "\n")
 
         elif action == 'BIGDEL':
-            trnpoint_1 = mutseq.length()/2
-            trnpoint_2 = trn_mutseq.length()/2
+            trnpoint_1 = int(mutseq.length()/2)
+            trnpoint_2 = int(trn_mutseq.length()/2)
 
             if None not in (contig_start, contig_end):
-                trnpoint_1 = (contig_start + contig_end)/2
+                trnpoint_1 = int((contig_start + contig_end)/2)
 
             if None not in (trn_contig_start, trn_contig_end):
-                trnpoint_2 = (trn_contig_start + trn_contig_end)/2
+                trnpoint_2 = int((trn_contig_start + trn_contig_end)/2)
 
             mutseq.fusion(trnpoint_1, trn_mutseq, trnpoint_2)
 
@@ -897,14 +897,14 @@ def makemut(args, bedline, alignopts):
             logfile.write(mutinfo[mutid] + "\n")
 
         elif action == 'BIGINV':
-            trnpoint_1 = mutseq.length()/2
-            trnpoint_2 = trn_mutseq.length()/2
+            trnpoint_1 = int(mutseq.length()/2)
+            trnpoint_2 = int(trn_mutseq.length()/2)
 
             if None not in (contig_start, contig_end):
-                trnpoint_1 = (contig_start + contig_end)/2
+                trnpoint_1 = int((contig_start + contig_end)/2)
 
             if None not in (trn_contig_start, trn_contig_end):
-                trnpoint_2 = (trn_contig_start + trn_contig_end)/2
+                trnpoint_2 = int((trn_contig_start + trn_contig_end)/2)
 
             mutseq.fusion(trnpoint_1, trn_mutseq, trnpoint_2, flip1=trn_left_flip, flip2=trn_right_flip)
 
@@ -912,16 +912,18 @@ def makemut(args, bedline, alignopts):
             logfile.write(mutinfo[mutid] + "\n")
 
         elif action == 'BIGDUP':
-            trnpoint_1 = mutseq.length()/2
-            trnpoint_2 = trn_mutseq.length()/2
+            trnpoint_1 = int(mutseq.length()/2)
+            trnpoint_2 = int(trn_mutseq.length()/2)
 
             if None not in (contig_start, contig_end):
-                trnpoint_1 = (contig_start + contig_end)/2
+                trnpoint_1 = int((contig_start + contig_end)/2)
 
             if None not in (trn_contig_start, trn_contig_end):
-                trnpoint_2 = (trn_contig_start + trn_contig_end)/2
+                trnpoint_2 = int((trn_contig_start + trn_contig_end)/2)
 
             mutseq.fusion(trnpoint_1, trn_mutseq, trnpoint_2)
+
+
 
             mutinfo[mutid] = "\t".join(('bigdup',chrom,str(refstart),str(refend),action,str(trnpoint_1),trn_chrom,str(trn_refstart),str(trn_refend),str(trnpoint_2),str(svfrac)))
             logfile.write(mutinfo[mutid] + "\n")
@@ -1156,8 +1158,8 @@ def main(args):
         if mutinfo.startswith('bigdup'):
             bdup_chrom, bdup_start, bdup_end, bdup_svfrac = bigdups[mutid]
 
-            bdup_left_bnd = (int(mutinfo.split()[7])+int(mutinfo.split()[8]))/2
-            bdup_right_bnd = (int(mutinfo.split()[2])+int(mutinfo.split()[3]))/2
+            bdup_left_bnd = int((int(mutinfo.split()[7])+int(mutinfo.split()[8]))/2)
+            bdup_right_bnd = int((int(mutinfo.split()[2])+int(mutinfo.split()[3]))/2)
 
             bigdup_add[mutid] = (bdup_chrom, bdup_left_bnd, bdup_right_bnd)
 
