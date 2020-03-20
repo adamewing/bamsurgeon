@@ -2,6 +2,11 @@
 
 import sys, re
 
+import logging
+FORMAT = '%(levelname)s %(asctime)s %(message)s'
+logging.basicConfig(format=FORMAT)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 class Read:
     def __init__(self, src):
@@ -24,13 +29,13 @@ class ContigReads:
         self.reads[src] = Read(src)
 
     def getReadNames(self,seqs):
-        for src, read in self.reads.iteritems():
+        for src, read in self.reads.items():
             self.reads[src].name = seqs.srcread[src]
             self.reads[src].seq  = seqs.seqmap[seqs.srcread[src]]
 
     def __str__(self):
         output = []
-        for eid, read in self.reads.iteritems():
+        for eid, read in self.reads.items():
             output.append(str(read))
         return '\n'.join(output)
 
@@ -67,7 +72,7 @@ class InputSeqs:
 
     def __str__(self):
         output = ""
-        for name, seq in self.seqmap.iteritems():
+        for name, seq in self.seqmap.items():
             output += ">" + name + "\n" + seq + "\n"
         return output
 
@@ -140,5 +145,5 @@ if __name__ == '__main__':
         seqfile  = sys.argv[1].strip() + "/Sequences"
         inputseqs = InputSeqs(seqfile)
         contigmap = contigreadmap(amosfile,inputseqs)
-        for eid,contig in contigmap.iteritems():
-            print contig
+        for eid,contig in contigmap.items():
+            print(contig)

@@ -24,8 +24,8 @@ logging.basicConfig(format=FORMAT)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)
-sys.stderr = os.fdopen(sys.stderr.fileno(), 'w', 0)
+#sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)
+#sys.stderr = os.fdopen(sys.stderr.fileno(), 'w', 0)
 
 
 def countReadCoverage(bam,chrom,start,end):
@@ -88,204 +88,194 @@ def makemut(args, chrom, start, end, vaf, ins, avoid, alignopts):
     else:
         mutid += ':INS:' + ins
 
-    try:
-        bamfile = pysam.Samfile(args.bamFileName, 'rb')
-        bammate = pysam.Samfile(args.bamFileName, 'rb') # use for mates to avoid iterator problems
-        reffile = pysam.Fastafile(args.refFasta)
-        tmpbams = []
 
-        is_insertion = ins is not None
-        is_deletion  = ins is None
+    bamfile = pysam.Samfile(args.bamFileName, 'rb')
+    bammate = pysam.Samfile(args.bamFileName, 'rb') # use for mates to avoid iterator problems
+    reffile = pysam.Fastafile(args.refFasta)
+    tmpbams = []
 
-        snvfrac = float(args.snvfrac)
+    is_insertion = ins is not None
+    is_deletion  = ins is None
 
-        mutstr = get_mutstr(chrom, start, end, ins, reffile)
+    snvfrac = float(args.snvfrac)
 
-        del_ln = 0
-        if is_deletion:
-            del_ln = end-start
+    mutstr = get_mutstr(chrom, start, end, ins, reffile)
 
-        mutpos = start
-        mutpos_list = [start]
+    del_ln = 0
+    if is_deletion:
+        del_ln = end-start
 
-        # optional CNV file
-        cnv = None
-        if (args.cnvfile):
-            cnv = pysam.Tabixfile(args.cnvfile, 'r')
+    mutpos = start
+    mutpos_list = [start]
 
-        log = open('addindel_logs_' + os.path.basename(args.outBamFile) + '/' + os.path.basename(args.outBamFile) + "." + "_".join((chrom,str(start),str(end))) + ".log",'w')
+    # optional CNV file
+    cnv = None
+    if (args.cnvfile):
+        cnv = pysam.Tabixfile(args.cnvfile, 'r')
 
-        tmpoutbamname = args.tmpdir + "/" + mutid + ".tmpbam." + str(uuid4()) + ".bam"
-        logger.info("%s creating tmp bam: %s" % (mutid ,tmpoutbamname))
-        outbam_muts = pysam.Samfile(tmpoutbamname, 'wb', template=bamfile)
+    log = open('addindel_logs_' + os.path.basename(args.outBamFile) + '/' + os.path.basename(args.outBamFile) + "." + "_".join((chrom,str(start),str(end))) + ".log",'w')
 
-        mutfail, hasSNP, maxfrac, outreads, mutreads, mutmates = mutation.mutate(args, log, bamfile, bammate, chrom, mutpos, mutpos+del_ln+1, mutpos_list, avoid=avoid, mutid_list=[mutid], is_insertion=is_insertion, is_deletion=is_deletion, ins_seq=ins, reffile=reffile, indel_start=start, indel_end=end)
+    tmpoutbamname = args.tmpdir + "/" + mutid + ".tmpbam." + str(uuid4()) + ".bam"
+    logger.info("%s creating tmp bam: %s" % (mutid ,tmpoutbamname))
+    outbam_muts = pysam.Samfile(tmpoutbamname, 'wb', template=bamfile)
 
-        if mutfail:
-            outbam_muts.close()
-            os.remove(tmpoutbamname)
-            return None
+    mutfail, hasSNP, maxfrac, outreads, mutreads, mutmates = mutation.mutate(args, log, bamfile, bammate, chrom, mutpos, mutpos+del_ln+1, mutpos_list, avoid=avoid, mutid_list=[mutid], is_insertion=is_insertion, is_deletion=is_deletion, ins_seq=ins, reffile=reffile, indel_start=start, indel_end=end)
 
-        # pick reads to change
-        readlist = []
-        for extqname,read in outreads.iteritems():
-            if read.seq != mutreads[extqname]:
-                readlist.append(extqname)
-
-        logger.info("%s len(readlist): %d" % (mutid, len(readlist)))
-        readlist.sort()
-        random.shuffle(readlist)
-
-        if len(readlist) < int(args.mindepth):
-            logger.warning("%s skipped, too few reads in region: %d" % (mutid, len(readlist)))
-            outbam_muts.close()
-            os.remove(tmpoutbamname)
-            return None
-
-        if vaf is None:
-            vaf = float(args.mutfrac) # default minor allele freq if not otherwise specified
-        if cnv: # cnv file is present
-            if chrom in cnv.contigs:
-                for cnregion in cnv.fetch(chrom,start,end):
-                    cn = float(cnregion.strip().split()[3]) # expect chrom,start,end,CN
-                    logger.info(mutid + "\t" + ' '.join(("copy number in snp region:",chrom,str(start),str(end),"=",str(cn))))
-                    if float(cn) > 0.0:
-                        vaf = 1.0/float(cn)
-                    else:
-                        vaf = 0.0
-                    logger.info("%s adjusted VAF: %f" % (mutid, vaf))
-        else:
-            logger.info("%s selected VAF: %f" % (mutid, vaf))
-
-        lastread = int(len(readlist)*vaf)
-
-        # pick at least args.minmutreads if possible
-        if lastread < int(args.minmutreads):
-            if len(readlist) > int(args.minmutreads):
-                lastread = int(args.minmutreads)
-                logger.warning("%s forced %d reads" % (mutid, lastread))
-            else:
-                logger.warning("%s dropped site with fewer reads than --minmutreads" % mutid)
-                os.remove(tmpoutbamname)
-                return None
-
-        readtrack = dd(list)
-
-        for readname in readlist:
-            orig_name, readpos, pairend = readname.split(',')
-            readtrack[orig_name].append('%s,%s' % (readpos, pairend))
-
-        usedreads = 0
-        newreadlist = []
-
-        for orig_name in readtrack:
-            for read_instance in readtrack[orig_name]:
-                newreadlist.append(orig_name + ',' + read_instance)
-                usedreads += 1
-
-            if usedreads >= lastread:
-                break
-
-        readlist = newreadlist
-
-        logger.info("%s picked: %d reads" % (mutid, len(readlist)))
-
-        wrote = 0
-        nmut = 0
-        mut_out = {}
-        # change reads from .bam to mutated sequences
-        for extqname,read in outreads.iteritems():
-            if read.seq != mutreads[extqname]:
-                if not args.nomut and extqname in readlist:
-                    qual = read.qual # changing seq resets qual (see pysam API docs)
-                    read.seq = mutreads[extqname] # make mutation
-                    read.qual = qual
-                    nmut += 1
-            if not hasSNP or args.force:
-                wrote += 1
-                mut_out[extqname] = read
-
-        muts_written = {}
-
-        for extqname in mut_out:
-            if extqname not in muts_written:
-                outbam_muts.write(mut_out[extqname])
-                muts_written[extqname] = True
-
-                if mutmates[extqname] is not None:
-                    # is mate also in mutated list?
-                    mate_read = mutmates[extqname]
-
-                    pairname = 'F' # read is first in pair
-                    if mate_read.is_read2:
-                        pairname = 'S' # read is second in pair
-                    if not mate_read.is_paired:
-                        pairname = 'U' # read is unpaired
-
-                    mateqname = ','.join((mate_read.qname,str(mate_read.pos),pairname))
-
-                    if mateqname in mut_out:
-                        # yes: output mutated mate
-                        outbam_muts.write(mut_out[mateqname])
-                        muts_written[mateqname] = True
-
-                    else:
-                        # no: output original mate
-                        outbam_muts.write(mate_read)
-
-        logger.info("%s wrote: %d, mutated: %d" % (mutid,wrote,nmut))
-
-        if not hasSNP or args.force:
-            outbam_muts.close()
-            aligners.remap_bam(args.aligner, tmpoutbamname, args.refFasta, alignopts, mutid=mutid, paired=(not args.single), picardjar=args.picardjar, insane=args.insane)
-
-            outbam_muts = pysam.Samfile(tmpoutbamname,'rb')
-            coverwindow = 1
-            incover  = countReadCoverage(bamfile,chrom,mutpos-coverwindow,mutpos+del_ln+coverwindow)
-            outcover = countReadCoverage(outbam_muts,chrom,mutpos-coverwindow,mutpos+del_ln+coverwindow)
-
-            avgincover  = float(sum(incover))/float(len(incover)) 
-            avgoutcover = float(sum(outcover))/float(len(outcover))
-            spikein_frac = 0.0
-            if wrote > 0:
-                spikein_frac = float(nmut)/float(wrote)
-
-            # qc cutoff for final snv depth 
-            if (avgoutcover > 0 and avgincover > 0 and avgoutcover/avgincover >= float(args.coverdiff)) or args.force:
-                tmpbams.append(tmpoutbamname)
-                indelstr = ''
-                if is_insertion:
-                    indelstr = ':'.join(('INS', chrom, str(start), ins))
-                else:
-                    indelstr = ':'.join(('DEL', chrom, str(start), str(end)))
-
-                snvstr = chrom + ":" + str(start) + "-" + str(end) + " (VAF=" + str(vaf) + ")"
-                log.write("\t".join(("indel",indelstr,str(mutpos),mutstr,str(avgincover),str(avgoutcover),str(spikein_frac),str(maxfrac)))+"\n")
-            else:
-                outbam_muts.close()
-                os.remove(tmpoutbamname)
-                if os.path.exists(tmpoutbamname + '.bai'):
-                    os.remove(tmpoutbamname + '.bai')
-                    
-                logger.warning("%s dropped for outcover/incover < %s" % (mutid, str(args.coverdiff)))
-                return None
-
+    if mutfail:
         outbam_muts.close()
-        bamfile.close()
-        bammate.close()
-        log.close() 
-
-        return sorted(tmpbams)
-        
-    except Exception, e:
-        sys.stderr.write("*"*60 + "\nencountered error in mutation spikein: " + mutid + "\n")
-        traceback.print_exc(file=sys.stdout)
-        sys.stderr.write("*"*60 + "\n")
-        if os.path.exists(tmpoutbamname):
-            os.remove(tmpoutbamname)
-        if os.path.exists(tmpoutbamname + '.bai'):
-            os.remove(tmpoutbamname + '.bai')
+        os.remove(tmpoutbamname)
         return None
+
+    # pick reads to change
+    readlist = []
+    for extqname,read in outreads.items():
+        if read.seq != mutreads[extqname]:
+            readlist.append(extqname)
+
+    logger.info("%s len(readlist): %d" % (mutid, len(readlist)))
+    readlist.sort()
+    random.shuffle(readlist)
+
+    if len(readlist) < int(args.mindepth):
+        logger.warning("%s skipped, too few reads in region: %d" % (mutid, len(readlist)))
+        outbam_muts.close()
+        os.remove(tmpoutbamname)
+        return None
+
+    if vaf is None:
+        vaf = float(args.mutfrac) # default minor allele freq if not otherwise specified
+    if cnv: # cnv file is present
+        if chrom in cnv.contigs:
+            for cnregion in cnv.fetch(chrom,start,end):
+                cn = float(cnregion.strip().split()[3]) # expect chrom,start,end,CN
+                logger.info(mutid + "\t" + ' '.join(("copy number in snp region:",chrom,str(start),str(end),"=",str(cn))))
+                if float(cn) > 0.0:
+                    vaf = 1.0/float(cn)
+                else:
+                    vaf = 0.0
+                logger.info("%s adjusted VAF: %f" % (mutid, vaf))
+    else:
+        logger.info("%s selected VAF: %f" % (mutid, vaf))
+
+    lastread = int(len(readlist)*vaf)
+
+    # pick at least args.minmutreads if possible
+    if lastread < int(args.minmutreads):
+        if len(readlist) > int(args.minmutreads):
+            lastread = int(args.minmutreads)
+            logger.warning("%s forced %d reads" % (mutid, lastread))
+        else:
+            logger.warning("%s dropped site with fewer reads than --minmutreads" % mutid)
+            os.remove(tmpoutbamname)
+            return None
+
+    readtrack = dd(list)
+
+    for readname in readlist:
+        orig_name, readpos, pairend = readname.split(',')
+        readtrack[orig_name].append('%s,%s' % (readpos, pairend))
+
+    usedreads = 0
+    newreadlist = []
+
+    for orig_name in readtrack:
+        for read_instance in readtrack[orig_name]:
+            newreadlist.append(orig_name + ',' + read_instance)
+            usedreads += 1
+
+        if usedreads >= lastread:
+            break
+
+    readlist = newreadlist
+
+    logger.info("%s picked: %d reads" % (mutid, len(readlist)))
+
+    wrote = 0
+    nmut = 0
+    mut_out = {}
+    # change reads from .bam to mutated sequences
+    for extqname,read in outreads.items():
+        if read.seq != mutreads[extqname]:
+            if not args.nomut and extqname in readlist:
+                qual = read.qual # changing seq resets qual (see pysam API docs)
+                read.seq = mutreads[extqname] # make mutation
+                read.qual = qual
+                nmut += 1
+        if not hasSNP or args.force:
+            wrote += 1
+            mut_out[extqname] = read
+
+    muts_written = {}
+
+    for extqname in mut_out:
+        if extqname not in muts_written:
+            outbam_muts.write(mut_out[extqname])
+            muts_written[extqname] = True
+
+            if mutmates[extqname] is not None:
+                # is mate also in mutated list?
+                mate_read = mutmates[extqname]
+
+                pairname = 'F' # read is first in pair
+                if mate_read.is_read2:
+                    pairname = 'S' # read is second in pair
+                if not mate_read.is_paired:
+                    pairname = 'U' # read is unpaired
+
+                mateqname = ','.join((mate_read.qname,str(mate_read.pos),pairname))
+
+                if mateqname in mut_out:
+                    # yes: output mutated mate
+                    outbam_muts.write(mut_out[mateqname])
+                    muts_written[mateqname] = True
+
+                else:
+                    # no: output original mate
+                    outbam_muts.write(mate_read)
+
+    logger.info("%s wrote: %d, mutated: %d" % (mutid,wrote,nmut))
+
+    if not hasSNP or args.force:
+        outbam_muts.close()
+        aligners.remap_bam(args.aligner, tmpoutbamname, args.refFasta, alignopts, mutid=mutid, paired=(not args.single), picardjar=args.picardjar, insane=args.insane)
+
+        outbam_muts = pysam.Samfile(tmpoutbamname,'rb')
+        coverwindow = 1
+        incover  = countReadCoverage(bamfile,chrom,mutpos-coverwindow,mutpos+del_ln+coverwindow)
+        outcover = countReadCoverage(outbam_muts,chrom,mutpos-coverwindow,mutpos+del_ln+coverwindow)
+
+        avgincover  = float(sum(incover))/float(len(incover)) 
+        avgoutcover = float(sum(outcover))/float(len(outcover))
+        spikein_frac = 0.0
+        if wrote > 0:
+            spikein_frac = float(nmut)/float(wrote)
+
+        # qc cutoff for final snv depth 
+        if (avgoutcover > 0 and avgincover > 0 and avgoutcover/avgincover >= float(args.coverdiff)) or args.force:
+            tmpbams.append(tmpoutbamname)
+            indelstr = ''
+            if is_insertion:
+                indelstr = ':'.join(('INS', chrom, str(start), ins))
+            else:
+                indelstr = ':'.join(('DEL', chrom, str(start), str(end)))
+
+            snvstr = chrom + ":" + str(start) + "-" + str(end) + " (VAF=" + str(vaf) + ")"
+            log.write("\t".join(("indel",indelstr,str(mutpos),mutstr,str(avgincover),str(avgoutcover),str(spikein_frac),str(maxfrac)))+"\n")
+        else:
+            outbam_muts.close()
+            os.remove(tmpoutbamname)
+            if os.path.exists(tmpoutbamname + '.bai'):
+                os.remove(tmpoutbamname + '.bai')
+                
+            logger.warning("%s dropped for outcover/incover < %s" % (mutid, str(args.coverdiff)))
+            return None
+
+    outbam_muts.close()
+    bamfile.close()
+    bammate.close()
+    log.close() 
+
+    return sorted(tmpbams)
 
 
 def main(args):

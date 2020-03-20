@@ -4,7 +4,7 @@ import sys,os
 import textwrap
 
 def print_header():
-    print textwrap.dedent("""\
+    print(textwrap.dedent("""\
     ##fileformat=VCFv4.1
     ##phasing=none
     ##INDIVIDUAL=TRUTH
@@ -22,7 +22,7 @@ def print_header():
     ##ALT=<ID=DEL,Description="Deletion">
     ##ALT=<ID=INS,Description="Insertion">
     ##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
-    #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tSPIKEIN""")
+    #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tSPIKEIN"""))
 
 if len(sys.argv) == 2:
     print_header()
@@ -33,7 +33,6 @@ if len(sys.argv) == 2:
             with open(sys.argv[1] + '/' + filename, 'r') as infile:
                 for line in infile:
                     if line.startswith('snv'):
-                        #chrom, pos, mut = line.strip().split()
                         c = line.strip().split()
                         chrom = c[1].split(':')[0]
                         pos = c[3]
@@ -41,6 +40,6 @@ if len(sys.argv) == 2:
                         dpr = c[6]
                         vaf = c[7]
                         ref,alt = mut.split('-->')
-                        print "\t".join((chrom,pos,'.',ref,alt,'100','PASS','SOMATIC;VAF=' + vaf + ';DPR=' + dpr,'GT','0/1'))
+                        print("\t".join((chrom,pos,'.',ref,alt,'100','PASS','SOMATIC;VAF=' + vaf + ';DPR=' + dpr,'GT','0/1')))
 else:
-    print "usage:", sys.argv[0], "<log directory>"
+    sys.exit("usage: %s <log directory>" % sys.argv[0])

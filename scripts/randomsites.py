@@ -26,7 +26,7 @@ class Genome:
                 self.chrlen[chrom] = int(length)
                 bp += int(length)
 
-        for chrom, length in self.chrlen.iteritems():
+        for chrom, length in self.chrlen.items():
             self.chrmap += [chrom] * int(float(length) / float(bp) * bins)
 
         self.bed = []
@@ -111,7 +111,7 @@ def run_snv(g, args):
     for _ in range(int(args.numpicks)):
         rchrom, rstart, rend = g.pick(0, avoidN=args.avoidN, usebed=usebed)
         info = [rchrom, rstart, rend, vafscale(vaf())]
-        print '\t'.join(map(str, info))
+        print('\t'.join(map(str, info)))
 
 
 def run_indel(g, args):
@@ -132,7 +132,7 @@ def run_indel(g, args):
         else: # insertion
             info = [rchrom, rstart, rend, vafscale(vaf()), 'INS', randomseq(mutlen)]
 
-        print '\t'.join(map(str, info))
+        print('\t'.join(map(str, info)))
 
 
 def run_sv(g, args):
@@ -160,7 +160,7 @@ def run_sv(g, args):
 
             cnvinfo = [rchrom, rstart, rend, 1.0/(vafscale(vaf()))]
 
-            print '\t'.join(map(str, info))
+            print('\t'.join(map(str, info)))
 
             cnv.write('\t'.join(map(str, cnvinfo)) + '\n')
 

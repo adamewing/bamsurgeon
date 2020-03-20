@@ -280,7 +280,7 @@ def main(args):
             sys.stderr.write('\t'.join(map(str, ('fixed unmapped flag:', fixed_unmap, 'fixed mate ref:', fixed_materef, 'fixed tlen:', fixed_tlen))) + '\n')
 
     if len(paired.keys()) > 0:
-        sys.stderr.write("WARNING:\t" + now() + "\tfound " + str(len(paired.keys())) + " orphaned paired reads that were not output!\n") 
+        sys.stderr.write("WARNING:\t" + now() + "\tfound " + str(len(list(paired.keys()))) + " orphaned paired reads that were not output!\n") 
 
     outsam.close()
     makebam(outsamfn, args.fai, args.threads, args.mem)

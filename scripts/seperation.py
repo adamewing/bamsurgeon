@@ -63,4 +63,4 @@ if len(sys.argv) > 1:
                 out.write(str(site) + '\n')
 
 else:
-    print "usage:", sys.argv[0], "<mutation lists (chrom start end ... ) can input multiple files (file1.txt file2.txt ... )>"
+    sys.exit("usage: %s <mutation lists (chrom start end ... ) can input multiple files (file1.txt file2.txt ... )>" % sys.argv[0])

@@ -5,7 +5,7 @@ import os
 import sys
 import subprocess
 
-from common import *
+from bamsurgeon.common import *
 from shutil import move
 from re import sub
 from uuid import uuid4
@@ -199,6 +199,7 @@ def remap_bwamem_bam(bamfn, threads, fastaref, picardjar, mutid='null', paired=T
     with open(sam_out, 'w') as sam:
         p = subprocess.Popen(sam_cmd, stdout=subprocess.PIPE)
         for line in p.stdout:
+            line = line.decode()
             sam.write(line)
 
     logger.info("%s writing %s to BAM..." % (mutid, sam_out))
@@ -256,6 +257,7 @@ def remap_mm2_bam(bamfn, threads, fastaref, picardjar, x, mutid='null', paired=T
     with open(sam_out, 'w') as sam:
         p = subprocess.Popen(sam_cmd, stdout=subprocess.PIPE)
         for line in p.stdout:
+            line = line.decode()
             sam.write(line)
 
     logger.info("%s writing %s to BAM..." % (mutid, sam_out))
@@ -382,9 +384,10 @@ def remap_novoalign_bam(bamfn, threads, fastaref, picardjar, novoref, mutid='nul
     with open(sam_out, 'w') as sam:
         p = subprocess.Popen(sam_cmd, stdout=subprocess.PIPE)
         for line in p.stdout:
+            line = line.decode()
             sam.write(line)
 
-    logger.info(mutid + " writing " + sam_out + " to BAM...\n")
+    logger.info(mutid + " writing " + sam_out + " to BAM...")
     subprocess.call(bam_cmd)
 
     logger.info(mutid + " deleting SAM: " + sam_out)
@@ -454,6 +457,7 @@ def remap_gsnap_bam(bamfn, threads, fastaref, picardjar, gsnaprefdir, gsnaprefna
     with open(sam_out, 'w') as sam:
         p = subprocess.Popen(sam_cmd, stdout=subprocess.PIPE)
         for line in p.stdout:
+            line in line.decode()
             sam.write(line)
 
     logger.info(mutid + " writing " + sam_out + " to BAM...")
@@ -518,7 +522,7 @@ def remap_STAR_bam(bamfn, threads, fastaref, picardjar, STARrefdir, mutid='null'
 
     p = subprocess.call(sam_cmd)
 
-    logger.info(mutid + " writing " + sam_out + " to BAM...\n")
+    logger.info(mutid + " writing " + sam_out + " to BAM...")
     subprocess.call(bam_cmd)
 
     logger.info(mutid + " deleting SAM: " + sam_out)
@@ -588,9 +592,10 @@ def remap_bowtie2_bam(bamfn, threads, fastaref, picardjar, bowtie2ref, mutid='nu
     with open(sam_out, 'w') as sam:
         p = subprocess.Popen(sam_cmd, stdout=subprocess.PIPE)
         for line in p.stdout:
+            line = line.decode()
             sam.write(line)
 
-    logger.info(mutid + " writing " + sam_out + " to BAM...\n")
+    logger.info(mutid + " writing " + sam_out + " to BAM...")
     subprocess.call(bam_cmd)
 
     logger.info(mutid + " deleting SAM: " + sam_out)
@@ -656,9 +661,10 @@ def remap_tmap_bam(bamfn, threads, fastaref, picardjar, mutid='null', paired=Fal
     with open(sam_out, 'w') as sam:
         p = subprocess.Popen(sam_cmd, stdout=subprocess.PIPE)
         for line in p.stdout:
+            line = line.decode()
             sam.write(line)
 
-    logger.info(mutid + " writing " + sam_out + " to BAM...\n")
+    logger.info(mutid + " writing " + sam_out + " to BAM...")
     subprocess.call(bam_cmd)
 
     logger.info(mutid + " deleting SAM: " + sam_out)
@@ -734,9 +740,10 @@ def remap_bwamem_fastq(fq1, fq2, threads, fastaref, outbam, deltmp=True, mutid='
     with open(sam_out, 'w') as sam:
         p = subprocess.Popen(sam_cmd, stdout=subprocess.PIPE)
         for line in p.stdout:
+            line = line.decode()
             sam.write(line)
 
-    logger.info(mutid + " writing " + sam_out + " to BAM...\n")
+    logger.info(mutid + " writing " + sam_out + " to BAM...")
     subprocess.call(bam_cmd)
 
     if deltmp:
@@ -781,6 +788,7 @@ def remap_novoalign_fastq(fq1, fq2, threads, fastaref, novoref, outbam, deltmp=T
     with open(sam_out, 'w') as sam:
         p = subprocess.Popen(sam_cmd, stdout=subprocess.PIPE)
         for line in p.stdout:
+            line = line.decode()
             sam.write(line)
 
     logger.info(mutid + " writing " + sam_out + " to BAM...")

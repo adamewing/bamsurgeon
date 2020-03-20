@@ -46,9 +46,9 @@ if len(sys.argv) == 2:
             w += 1
 
         if n % 1000000 == 0:
-            print "Processed", n, "reads:", p, "paired,", u, "unpaired,", w, "written,", m, "mates found."
+            print("Processed", n, "reads:", p, "paired,", u, "unpaired,", w, "written,", m, "mates found.")
 
     outbam.close()
     inbam.close()
 else:
-    print "usage:",sys.argv[0],"<bam (uses less memory if sorted by readname)>"
+    sys.exit("usage: %s <bam (uses less memory if sorted by readname)>" % sys.argv[0])

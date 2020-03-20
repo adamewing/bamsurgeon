@@ -7,7 +7,7 @@ from re import sub
 if len(sys.argv) == 2:
     assert sys.argv[1].endswith('.bam')
     outname = sub('bam$', 'fixed.bam', sys.argv[1])
-    print "output bam:",outname
+    print("output bam: " + outname)
 
     inbam  = pysam.Samfile(sys.argv[1], 'rb')
     outbam = pysam.Samfile(outname, 'wb', template=inbam)
@@ -31,4 +31,4 @@ if len(sys.argv) == 2:
     outbam.close()
 
 else:
-    print "usage:",sys.argv[0],"<BAM file>"
+    sys.exit("usage: %s <BAM file>" % sys.argv[0])

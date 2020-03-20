@@ -5,6 +5,12 @@ import sys
 from re import sub
 from random import random
 
+import logging
+FORMAT = '%(levelname)s %(asctime)s %(message)s'
+logging.basicConfig(format=FORMAT)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
 if len(sys.argv) == 5:
     assert sys.argv[1].endswith('.bam')
     inbamfn = sys.argv[1]
@@ -39,11 +45,11 @@ if len(sys.argv) == 5:
                 lastname = read.qname
                 lastread = read
         else:
-            print "skipped secondary alignment: ", read.qname
+            logger.info("skipped secondary alignment: " + read.qname)
 
     outbam1.close()
     outbam2.close()
     inbam.close()
 else:
-    print "usage:",sys.argv[0],"<bam sorted by readname> <proportion split> <outbam1> <outbam2>"
+    sys.exit("usage: %s <bam sorted by readname> <proportion split> <outbam1> <outbam2>" % sys.argv[0])
 

@@ -28,4 +28,4 @@ if len(sys.argv) == 2:
     outbam.close()
 
 else:
-    sys.exit('%s <bamsurgeon .bam file using --tagreads>')
+    sys.exit('usage: %s <bamsurgeon .bam file using --tagreads>' % sys.argv[0])
