@@ -7,13 +7,13 @@ import os
 import sys
 import random
 import subprocess
-import traceback
 import argparse
 import pysam
 import bamsurgeon.replacereads as rr
 import bamsurgeon.asmregion as ar
 import bamsurgeon.mutableseq as ms
 import bamsurgeon.aligners as aligners
+import bamsurgeon.makevcf as makevcf
 
 from bamsurgeon.common import *
 from uuid import uuid4
@@ -1289,6 +1289,15 @@ def main(args):
                     os.remove(tmpbam + '.bai')
 
         logger.info("done.")
+
+    var_basename = '.'.join(os.path.basename(args.varFileName).split('.')[:-1])
+    bam_basename = '.'.join(os.path.basename(args.outBamFile).split('.')[:-1])
+
+    vcf_fn = bam_basename + '.addindel.' + var_basename + '.vcf'
+
+    makevcf.write_vcf_sv('addsv_logs_' + os.path.basename(args.outBamFile), args.refFasta, vcf_fn)
+
+    logger.info('vcf output written to ' + vcf_fn)
 
     
 if __name__ == '__main__':

@@ -9,7 +9,7 @@ import os
 import bamsurgeon.replacereads as rr
 import bamsurgeon.aligners as aligners
 import bamsurgeon.mutation as mutation
-import traceback
+import bamsurgeon.makevcf as makevcf
 
 from bamsurgeon.common import *
 from uuid import uuid4
@@ -384,6 +384,15 @@ def main(args):
 
         #cleanup
         os.remove(outbam_mutsfile)
+
+    var_basename = '.'.join(os.path.basename(args.varFileName).split('.')[:-1])
+    bam_basename = '.'.join(os.path.basename(args.outBamFile).split('.')[:-1])
+
+    vcf_fn = bam_basename + '.addindel.' + var_basename + '.vcf'
+
+    makevcf.write_vcf_indel('addindel_logs_' + os.path.basename(args.outBamFile), args.refFasta, vcf_fn)
+
+    logger.info('vcf output written to ' + vcf_fn)
     
 def run():
     # run this script

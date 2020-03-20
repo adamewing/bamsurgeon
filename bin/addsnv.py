@@ -7,9 +7,9 @@ import random
 import subprocess
 import os
 import bamsurgeon.replacereads as rr
-import traceback
 import bamsurgeon.aligners as aligners
 import bamsurgeon.mutation as mutation
+import bamsurgeon.makevcf as makevcf
 
 from operator import itemgetter
 from bamsurgeon.common import *
@@ -466,6 +466,15 @@ def main(args):
 
         #cleanup
         os.remove(outbam_mutsfile)
+
+    var_basename = '.'.join(os.path.basename(args.varFileName).split('.')[:-1])
+    bam_basename = '.'.join(os.path.basename(args.outBamFile).split('.')[:-1])
+
+    vcf_fn = bam_basename + '.addsnv.' + var_basename + '.vcf'
+
+    makevcf.write_vcf_snv('addsnv_logs_' + os.path.basename(args.outBamFile), vcf_fn)
+
+    logger.info('vcf output written to ' + vcf_fn)
 
 
 def run():
