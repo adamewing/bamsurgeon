@@ -7,13 +7,13 @@ WORKDIR ~/
 
 #install the bareminimum and remove the cache
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python \
-    python-dev \
-    python-numpy \
-    python-scipy \
-    python-pip \
-    python-setuptools \
-    python-wheel \
+    python3 \
+    python3-dev \
+    python3-numpy \
+    python3-scipy \
+    python3-pip \
+    python3-setuptools \
+    python3-wheel \
     zlib1g-dev \
     libbz2-dev \
     git \
@@ -41,7 +41,6 @@ RUN cp velvet_1.2.10/velvetg $HOME/bin && cp velvet_1.2.10/velveth $HOME/bin
 RUN git clone https://github.com/adamewing/exonerate.git
 RUN cd exonerate && autoreconf -fi  && ./configure && make && make install
 
-#have to do it with the & because pysam needs cython
 RUN pip install cython && pip install pysam==0.12.0
 
 RUN git clone https://github.com/adamewing/bamsurgeon.git
