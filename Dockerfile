@@ -41,9 +41,9 @@ RUN cp velvet_1.2.10/velvetg $HOME/bin && cp velvet_1.2.10/velveth $HOME/bin
 RUN git clone https://github.com/adamewing/exonerate.git
 RUN cd exonerate && autoreconf -fi  && ./configure && make && make install
 
-RUN pip install cython && pip install pysam==0.12.0
+RUN pip install cython && pip install pysam
 
 RUN git clone https://github.com/adamewing/bamsurgeon.git
-RUN export PATH=$PATH:$HOME/bin && cd bamsurgeon && python setup.py install
+RUN export PATH=$PATH:$HOME/bin && cd bamsurgeon && python3 setup.py install
 
 CMD []
