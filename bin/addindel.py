@@ -144,13 +144,14 @@ def makemut(args, chrom, start, end, vaf, ins, avoid, alignopts):
 
     if vaf is None:
         vaf = float(args.mutfrac) # default minor allele freq if not otherwise specified
+        
     if cnv: # cnv file is present
         if chrom in cnv.contigs:
             for cnregion in cnv.fetch(chrom,start,end):
                 cn = float(cnregion.strip().split()[3]) # expect chrom,start,end,CN
                 logger.info(mutid + "\t" + ' '.join(("copy number in snp region:",chrom,str(start),str(end),"=",str(cn))))
                 if float(cn) > 0.0:
-                    vaf = 1.0/float(cn)
+                    vaf = vaf/float(cn)
                 else:
                     vaf = 0.0
                 logger.info("%s adjusted VAF: %f" % (mutid, vaf))

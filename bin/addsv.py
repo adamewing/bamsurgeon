@@ -569,7 +569,7 @@ def makemut(args, bedline, alignopts):
                 cn = float(cnregion.strip().split()[3]) # expect chrom,start,end,CN
                 sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\t" + ' '.join(("copy number in sv region:",chrom,str(start),str(end),"=",str(cn))) + "\n")
                 svfrac = svfrac/float(cn)
-                assert svfrac <= 1.0, 'copy number from %s must be at least 1: %s' % (args.cnvfile, snregion.stri[()])
+                assert svfrac <= 1.0, 'copy number from %s must be at least 1: %s' % (args.cnvfile, cnregion.strip())
                 sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tadjusted default MAF: " + str(svfrac) + "\n")
 
     logger.info("%s interval: %s" % (mutid, bedline))
