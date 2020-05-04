@@ -135,5 +135,6 @@ setup(name='bamsurgeon',
 	packages=find_packages(),
     install_requires = [
         'pysam>=0.8.1',
+        'PyVCF',
     ],
 	)
