@@ -274,6 +274,8 @@ def mutate(args, log, bamfile, bammate, chrom, mutstart, mutend, mutpos_list, av
                 if not args.ignorepileup:
                     hasSNP = True
 
-    assert maxfrac is not None, "Error: could not pile up over region: %s" % region
+    if maxfrac is None:
+        logger.warning("could not pile up over region: %s" % region)
+        return True, False, maxfrac, {}, {}, {}
 
     return False, hasSNP, maxfrac, outreads, mutreads, mutmates # todo: convert to class
