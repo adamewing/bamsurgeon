@@ -184,7 +184,7 @@ def mutate(args, log, bamfile, bammate, chrom, mutstart, mutend, mutpos_list, av
 
     maxfrac = None
 
-    for pcol in bamfile.pileup(reference=chrom, start=mutstart-1, end=mutend+1, max_depth=int(args.maxdepth)):
+    for pcol in bamfile.pileup(reference=chrom, start=mutstart-1, end=mutend+1, max_depth=int(args.maxdepth), ignore_overlaps=False):
         if pcol.pos:
             if args.ignorepileup and (pcol.pos < mutstart-1 or pcol.pos > mutend+1):
                 continue
