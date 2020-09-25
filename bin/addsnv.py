@@ -279,7 +279,7 @@ def makemut(args, hc, avoid, alignopts):
     if not hasSNP or args.force:
         outbam_muts.close()
 
-        aligners.remap_bam(args.aligner, tmpoutbamname, args.refFasta, alignopts, mutid=hapstr, paired=(not args.single), picardjar=args.picardjar, insane=args.insane)
+        aligners.remap_bam(args.aligner, tmpoutbamname, args.refFasta, alignopts, threads=int(args.alignerthreads), mutid=hapstr, paired=(not args.single), picardjar=args.picardjar, insane=args.insane)
 
         outbam_muts = pysam.Samfile(tmpoutbamname,'rb')
         coverwindow = 1
@@ -508,6 +508,7 @@ def run():
     parser.add_argument('--skipmerge', action='store_true', default=False, help="final output is tmp file to be merged")
     parser.add_argument('--ignorepileup', action='store_true', default=False, help="do not check pileup depth in mutation regions")
     parser.add_argument('--aligner', default='backtrack', help='supported aligners: ' + ','.join(aligners.supported_aligners_bam))
+    parser.add_argument('--alignerthreads', default=1, help='threads used per realignment (default = 1)')
     parser.add_argument('--alignopts', default=None, help='aligner-specific options as comma delimited list of option1:value1,option2:value2,...')
     parser.add_argument('--tmpdir', default='addsnv.tmp', help='temporary directory (default=addsnv.tmp)')
     parser.add_argument('--seed', default=None, help='seed random number generation')

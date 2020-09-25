@@ -942,7 +942,7 @@ def makemut(args, bedline, alignopts):
     # simulate reads
     (fq1, fq2) = runwgsim(maxcontig, mutseq.seq, svfrac, actions, exclude, pemean, pesd, args.tmpdir, err_rate=float(args.simerr), mutid=mutid, seed=args.seed, trn_contig=trn_maxcontig, rename=rename_reads)
 
-    outreads = aligners.remap_fastq(args.aligner, fq1, fq2, args.refFasta, outbam_mutsfile, alignopts, mutid=mutid, threads=1)
+    outreads = aligners.remap_fastq(args.aligner, fq1, fq2, args.refFasta, outbam_mutsfile, alignopts, mutid=mutid, threads=int(args.alignerthreads))
 
     if outreads == 0:
         logger.warning("%s outbam %s has no mapped reads!" % (mutid, outbam_mutsfile))
@@ -1340,6 +1340,8 @@ if __name__ == '__main__':
                         help='supported aligners: ' + ','.join(aligners.supported_aligners_fastq))
     parser.add_argument('--alignopts', default=None,
                         help='aligner-specific options as comma delimited list of option1:value1,option2:value2,...')
+    parser.add_argument('--alignerthreads', default=1,
+                        help='threads used per realignment (default = 1)')
     parser.add_argument('--tagreads', action='store_true', default=False,
                         help='add BS tag to altered reads')
     parser.add_argument('--skipmerge', action='store_true', default=False,
