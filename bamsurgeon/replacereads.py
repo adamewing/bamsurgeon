@@ -83,7 +83,7 @@ def compare_ref(targetbam, donorbam):
     return True
     
 
-def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=None, allreads=False, keepqual=False, progress=False, keepsecondary=False, keepsupplementary=False, seed=None):
+def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=None, allreads=False, keepqual=False, progress=False, keepsecondary=False, keepsupplementary=False, seed=None, quiet=False):
     ''' targetbam, donorbam, and outputbam are pysam.Samfile objects
         outputbam must be writeable and use targetbam as template
         read names in excludefile will not appear in final output
@@ -198,10 +198,12 @@ def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=No
                 outputbam.write(newRead)
         else:
             excount += 1
-    sys.stdout.write("replaced " + str(recount) + " reads (" + str(excount) + " excluded )\n")
-    sys.stdout.write("kept " + str(sum([len(v) for k,v in secondary.items()])) + " secondary reads.\n")
-    sys.stdout.write("kept " + str(sum([len(v) for k,v in supplementary.items()])) + " supplementary reads.\n") 
-    sys.stdout.write("ignored %d non-primary reads in target BAM.\n" % ignored_target) 
+            
+    if not quiet:
+        sys.stdout.write("replaced " + str(recount) + " reads (" + str(excount) + " excluded )\n")
+        sys.stdout.write("kept " + str(sum([len(v) for k,v in secondary.items()])) + " secondary reads.\n")
+        sys.stdout.write("kept " + str(sum([len(v) for k,v in supplementary.items()])) + " supplementary reads.\n") 
+        sys.stdout.write("ignored %d non-primary reads in target BAM.\n" % ignored_target) 
 
     nadded = 0
     # dump the unused reads from the donor if requested with --all

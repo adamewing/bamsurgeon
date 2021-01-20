@@ -31,13 +31,33 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-def runwgsim(contig, newseq, svfrac, svtype, exclude, pemean, pesd, tmpdir, mutid='null', err_rate=0.0, seed=None, trn_contig=None, rename=True):
+def getreads(bam, chrom, start, end, svfrac, readlen=150):
+    samplefrac = 1-float(svfrac)
+    names = []
+    namecounter = dd(int)
+
+    buffer=readlen/2
+
+    for read in bam.fetch(chrom, start+buffer, end-buffer):
+        if read.is_secondary or read.is_supplementary or read.is_duplicate:
+            continue
+
+        namecounter[read.query_name] += 1
+
+    for name, count in namecounter.items():
+        if count == 2:
+            if random.uniform(0,1) > samplefrac:
+                names.append(name)
+
+    logger.info('fetched %d read pairs from %s:%d-%d, downsample factor: %f' % (len(names), chrom, start, end, samplefrac))
+
+    return names
+
+
+def runwgsim(contig, newseq, svfrac, svtype, exclude, pemean, pesd, tmpdir, region_reads, mutid='null', err_rate=0.0, seed=None, trn_contig=None, trn_region_reads=None, rename=True):
     ''' wrapper function for wgsim, could swap out to support other reads simulators (future work?) '''
 
-    readnames = [read.name for read in contig.reads.reads.values()]
-    if trn_contig: readnames += [read.name for read in trn_contig.reads.reads.values()]
-
-    namecount = Counter(readnames)
+    svfrac = float(svfrac)
 
     basefn = tmpdir + '/' + mutid + ".wgsimtmp." + str(uuid4())
     fasta = basefn + ".fasta"
@@ -48,44 +68,29 @@ def runwgsim(contig, newseq, svfrac, svtype, exclude, pemean, pesd, tmpdir, muti
     fout.write(">target\n" + newseq + "\n")
     fout.close()
 
-    totalreads = len(readnames)
-    paired = 0
-    single = 0
-    discard = 0
-    pairednames = []
-    # names with count 2 had both pairs in the contig
-    for name,count in namecount.items():
-        #print name,count
-        if count == 1:
-            single += 1
-        elif count == 2:
-            paired += 1 
-            pairednames.append(name)
-        else:
-            discard += 1
-
     ctg_len = len(contig)
     if trn_contig: ctg_len += len(trn_contig)
 
-    logger.info("%s paired reads: %d" %  (mutid, paired))
-    logger.info("%s single reads: %d" % (mutid, single))
-    logger.info("%s discard reads: %d" % (mutid, discard))
-    logger.info("%s total reads: %d" % (mutid, totalreads))
-
-    # adjustment factor for length of new contig vs. old contig
+    # # adjustment factor for length of new contig vs. old contig
     lenfrac = float(len(newseq))/float(ctg_len)
 
     logger.info("%s old ctg len: %d" % (mutid, ctg_len))
     logger.info("%s new ctg len: %d" % (mutid, len(newseq)))
     logger.info("%s adj. factor: %f" % (mutid, lenfrac))
+    logger.info("%s VAF(svfrac): %f" % (mutid, svfrac))
 
     # number of paried reads to simulate
-    nsimreads = int((paired + (single/2)) * svfrac * lenfrac)
+    nsimreads = len(region_reads)
+
+    if trn_region_reads:
+        nsimreads += len(trn_region_reads)
+
+    nsimreads = nsimreads*lenfrac*svfrac
 
     logger.info("%s num. sim. reads: %d" % (mutid, nsimreads))
     logger.info("%s PE mean outer distance: %f" % (mutid, pemean))
     logger.info("%s PE outer distance SD: %f" % (mutid, pesd))
-    logger.info("%s rerror rate: %f" % (mutid, err_rate))
+    logger.info("%s error rate: %f" % (mutid, err_rate))
 
     rquals = contig.rquals
     mquals = contig.mquals
@@ -109,90 +114,14 @@ def runwgsim(contig, newseq, svfrac, svtype, exclude, pemean, pesd, tmpdir, muti
 
     os.remove(fasta)
 
-    if rename:
-        fqReplaceList(fq1, pairednames, rquals, svfrac, svtype, exclude, mutid=mutid)
-        fqReplaceList(fq2, pairednames, mquals, svfrac, svtype, exclude, mutid=mutid)
+    for name in region_reads:
+        exclude.write(name + "\n")
+
+    if trn_region_reads:
+        for name in region_reads:
+            exclude.write(name + "\n")
 
     return (fq1,fq2)
-
-
-def fqReplaceList(fqfile, names, quals, svfrac, svtype, exclude, mutid='null'):
-    '''
-    Replace seq names in paired fastq files from a list until the list runs out
-    (then stick with original names). fqfile = fastq file, names = list
-
-    'exclude' is a filehandle, the exclude file contains read names that should
-    not appear in the final output BAM
-
-    '''
-    fqin = open(fqfile,'r')
-
-    ln = 0
-    namenum = 0
-    newnames = []
-    seqs = []
-    usednames = {}
-
-    for fqline in fqin:
-        if ln == 0:
-            if len(names) > namenum:
-                newnames.append(names[namenum])
-            else:
-                simname = fqline.strip().lstrip('@')
-                simname = re.sub('/1$','',simname)  #wgsim
-                simname = re.sub('/2$','',simname)  #wgsim
-                newnames.append(simname) 
-            namenum += 1
-            ln += 1
-        elif ln == 1:
-            seqs.append(fqline.strip())
-            ln += 1
-        elif ln == 2:
-            ln += 1
-        elif ln == 3:
-            ln = 0
-        else:
-            raise ValueError("ERROR\t" + now() + "\t" + mutid + "\tfastq iteration problem\n")
-
-    fqin.close()
-    os.remove(fqfile)
-
-    # make sure there's enough (bogus) quality scores
-    while len(seqs) > len(quals):
-        i = random.randint(0,len(quals)-1)
-        quals.append(quals[i])
-
-    # write .fq with new names
-    fqout = open(fqfile,'w')
-    for i in range(namenum):
-        fqout.write("@" + newnames[i] + "\n")
-
-        # make sure quality strings are the same length as the sequences
-        while len(seqs[i]) > len(quals[i]):
-            quals[i] = quals[i] + 'B'
-
-        if len(seqs[i]) < len(quals[i]):
-            quals[i] = quals[i][:len(seqs[i])]
-
-        fqout.write(seqs[i] + "\n+\n" + quals[i] + "\n")
-        if newnames[i] in usednames:
-            logger.warning("%s warning, used read name: %s in multiple pairs" % (mutid, newnames[i]))
-        usednames[newnames[i]] = True
-
-    is_del = False
-    for sv in svtype:
-        if re.search('DEL', sv):
-            is_del = True
-
-    # burn off excess if deletion
-    if is_del:
-        if len(seqs) > 0:
-            for name in names:
-                if name not in usednames:
-                    if random.uniform(0,1) < svfrac:  # this controls deletion depth
-                        exclude.write(name + "\n")
-
-    fqout.close()
 
 
 def singleseqfa(file,mutid='null'):
@@ -267,14 +196,14 @@ def align(qryseq, refseq):
     return best
 
 
-def replace(origbamfile, mutbamfile, outbamfile, excludefile, keepsecondary=False, seed=None):
+def replace(origbamfile, mutbamfile, outbamfile, excludefile, keepsecondary=False, seed=None, quiet=False):
     ''' open .bam file and call replacereads
     '''
     origbam = pysam.Samfile(origbamfile, 'rb')
     mutbam  = pysam.Samfile(mutbamfile, 'rb')
     outbam  = pysam.Samfile(outbamfile, 'wb', template=origbam)
 
-    rr.replaceReads(origbam, mutbam, outbam, excludefile=excludefile, allreads=True, keepsecondary=keepsecondary, seed=seed)
+    rr.replaceReads(origbam, mutbam, outbam, excludefile=excludefile, allreads=True, keepsecondary=keepsecondary, seed=seed, quiet=quiet)
 
     origbam.close()
     mutbam.close()
@@ -938,9 +867,23 @@ def makemut(args, bedline, alignopts):
     logger.info("%s set paired end mean distance: %f" % (mutid, pemean))
     logger.info("%s set paired end distance stddev: %f" % (mutid, pesd))
 
+    region_reads = getreads(bamfile, chrom, refstart, refend, svfrac)
+
+    for name in region_reads:
+        exclude.write(name + "\n")
+
+    trn_region_reads = None
+
+    if is_transloc:
+        trn_region_reads = getreads(bamfile, trn_chrom, trn_refstart, trn_refend, svfrac)
+
+        if trn_region_reads:
+            for name in trn_region_reads:
+                exclude.write(name + "\n")
+
 
     # simulate reads
-    (fq1, fq2) = runwgsim(maxcontig, mutseq.seq, svfrac, actions, exclude, pemean, pesd, args.tmpdir, err_rate=float(args.simerr), mutid=mutid, seed=args.seed, trn_contig=trn_maxcontig, rename=rename_reads)
+    (fq1, fq2) = runwgsim(maxcontig, mutseq.seq, svfrac, actions, exclude, pemean, pesd, args.tmpdir, region_reads, err_rate=float(args.simerr), mutid=mutid, seed=args.seed, trn_contig=trn_maxcontig, rename=rename_reads, trn_region_reads=trn_region_reads)
 
     outreads = aligners.remap_fastq(args.aligner, fq1, fq2, args.refFasta, outbam_mutsfile, alignopts, mutid=mutid, threads=int(args.alignerthreads))
 
@@ -1271,8 +1214,8 @@ def main(args):
             move(tmp_tag_bam, mergedtmp)
             logger.info("tagged reads.")
 
-        logger.info("swapping reads into original and writing to %s" % args.outBamFile)
-        replace(args.bamFileName, mergedtmp, args.outBamFile, excl_merged, keepsecondary=args.keepsecondary, seed=args.seed)
+        logger.info("writing to %s" % args.outBamFile)
+        replace(args.bamFileName, mergedtmp, args.outBamFile, excl_merged, keepsecondary=args.keepsecondary, seed=args.seed, quiet=True)
 
         if not args.debug:
             os.remove(excl_merged)
@@ -1293,7 +1236,7 @@ def main(args):
     var_basename = '.'.join(os.path.basename(args.varFileName).split('.')[:-1])
     bam_basename = '.'.join(os.path.basename(args.outBamFile).split('.')[:-1])
 
-    vcf_fn = bam_basename + '.addindel.' + var_basename + '.vcf'
+    vcf_fn = bam_basename + '.addsv.' + var_basename + '.vcf'
 
     makevcf.write_vcf_sv('addsv_logs_' + os.path.basename(args.outBamFile), args.refFasta, vcf_fn)
 
