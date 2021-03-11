@@ -8,6 +8,9 @@
 ## Bamsurgeon:
 *tools for adding mutations to .bam files, used for testing mutation callers*
 
+#### Before using simulation-based methods, consider whether there are validated benchmarking data available for your use case
+For example the [Genome in a Bottle](https://www.nist.gov/programs-projects/genome-bottle) or the [PrecisionFDA Truth Challenge](https://precision.fda.gov/challenges/truth/results) may provide a means to test on non-simulated data.
+
 Please see doc/Manual.pdf for instructions and contact adam.ewing@gmail.com with questions.
 
 # Installation
