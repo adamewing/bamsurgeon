@@ -109,7 +109,7 @@ if __name__ == '__main__':
     if not check_java(): sys.exit('Dependency problem: java not found')
 
 setup(name='bamsurgeon',
-	version='1.2',
+	version='1.3',
 	author='Adam Ewing',
 	license='MIT',
 	scripts=['bin/addindel.py',
