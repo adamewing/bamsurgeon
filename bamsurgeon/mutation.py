@@ -15,7 +15,7 @@ def countBaseAtPos(bamfile,chrom,pos,mutid='null'):
     """ return list of bases at position chrom,pos
     """
     locstr = chrom + ":" + str(pos) + "-" + str(pos)
-    args = ['samtools','mpileup',bamfile,'-r',locstr]
+    args = ['samtools','mpileup','Q',0,bamfile,'-r',locstr]
 
     p = subprocess.Popen(args,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
     p.wait()
