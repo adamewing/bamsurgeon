@@ -1,0 +1,3 @@
+# Ignore output files
+*_mut.bam
+*_mut.bam.bai
