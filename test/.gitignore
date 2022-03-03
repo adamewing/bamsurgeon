@@ -1,0 +1,4 @@
+# Ignore output files
+*.tmp
+*.vcf
+*_logs_*
