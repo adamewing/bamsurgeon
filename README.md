@@ -23,7 +23,7 @@ The following presumes $HOME/bin is in your $PATH
 Samtools / BCFTools / wgsim:
 
 ```
-git clone https://github.com/samtools/htslib.git
+git clone --recurse-submodules --remote-submodules https://github.com/samtools/htslib.git
 make -C htslib
 
 git clone https://github.com/samtools/samtools.git
