@@ -137,8 +137,8 @@ def runVelvet(reads,refseqname,refseq,kmer,addsv_tmpdir,isPaired=True,long=False
     else:
         argsvelvetg = ['velvetg', tmpdir, '-unused_reads', 'yes', '-read_trkg', 'yes', '-amos_file', 'yes']
         
-    subprocess.call(argsvelveth)
-    subprocess.call(argsvelvetg)
+    subprocess.check_call(argsvelveth)
+    subprocess.check_call(argsvelvetg)
 
     vcontigs = velvetContigs(tmpdir)
 

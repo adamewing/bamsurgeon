@@ -114,23 +114,23 @@ def remap_backtrack_bam(bamfn, threads, fastaref, mutid='null', paired=True):
         bamargs  = ['samtools', 'view', '-bt', refidx, '-o', bamfn, samfn] 
 
         logger.info("%s mapping 1st end, cmd: %s" % (mutid, " ".join(sai1args)))
-        subprocess.call(sai1args)
+        subprocess.check_call(sai1args)
         logger.info("%s mapping 2nd end, cmd: %s" % (mutid, " ".join(sai2args)))
-        subprocess.call(sai2args)
+        subprocess.check_call(sai2args)
         logger.info("%s pairing ends, building .sam, cmd: %s" % (mutid, " ".join(samargs)))
-        subprocess.call(samargs)
+        subprocess.check_call(samargs)
         logger.info("%s sam --> bam, cmd: %s" % (mutid, " ".join(bamargs)))
-        subprocess.call(bamargs)
+        subprocess.check_call(bamargs)
 
         sortfn = bamfn + ".sort.bam"
         sortargs = ['samtools','sort', '-T', sortfn ,'-o',sortfn, bamfn]
         logger.info("%s sorting, cmd: %s" % (mutid, " ".join(sortargs)))
-        subprocess.call(sortargs)
+        subprocess.check_call(sortargs)
         os.rename(sortfn, bamfn)
 
         indexargs = ['samtools','index',bamfn]
         logger.info("%s indexing, cmd: %s" % (mutid, " ".join(indexargs)))
-        subprocess.call(indexargs)
+        subprocess.check_call(indexargs)
 
         # cleanup
         os.remove(sai1fn)
@@ -147,21 +147,21 @@ def remap_backtrack_bam(bamfn, threads, fastaref, mutid='null', paired=True):
         bamargs  = ['samtools', 'view', '-bt', refidx, '-o', bamfn, samfn] 
 
         logger.info("%s mapping, cmd: %s" % (mutid, " ".join(saiargs)))
-        subprocess.call(saiargs)
+        subprocess.check_call(saiargs)
         logger.info("%s pairing ends, building .sam, cmd: %s" % (mutid, " ".join(samargs)))
-        subprocess.call(samargs)
+        subprocess.check_call(samargs)
         logger.info("%s sam --> bam, cmd: %s" % (mutid, " ".join(bamargs)))
-        subprocess.call(bamargs)
+        subprocess.check_call(bamargs)
 
         sortfn = bamfn + ".sort.bam"
         sortargs = ['samtools','sort', '-T', sortfn, '-o',sortfn, bamfn]
         logger.info("%s sorting, cmd: %s" % (mutid, " ".join(sortargs)))
-        subprocess.call(sortargs)
+        subprocess.check_call(sortargs)
         os.rename(sortfn,bamfn)
 
         indexargs = ['samtools','index',bamfn]
         logger.info("%s indexing, cmd: %s" % (mutid, " ".join(indexargs)))
-        subprocess.call(indexargs)
+        subprocess.check_call(indexargs)
 
         # cleanup
         os.remove(saifn)
@@ -203,13 +203,13 @@ def remap_bwamem_bam(bamfn, threads, fastaref, picardjar, mutid='null', paired=T
             sam.write(line)
 
     logger.info("%s writing %s to BAM..." % (mutid, sam_out))
-    subprocess.call(bam_cmd)
+    subprocess.check_call(bam_cmd)
 
     logger.info("%s deleting SAM: %s" % (mutid, sam_out))
     if deltmp: os.remove(sam_out)
 
     logger.info("%s sorting output: %s " % (mutid, ' '.join(sort_cmd)))
-    subprocess.call(sort_cmd)
+    subprocess.check_call(sort_cmd)
 
     logger.info("%s remove original bam: %s" % (mutid, bamfn))
     if deltmp: os.remove(bamfn)
@@ -218,7 +218,7 @@ def remap_bwamem_bam(bamfn, threads, fastaref, picardjar, mutid='null', paired=T
     move(sort_out, bamfn)
 
     logger.info("%s indexing: %s" % (mutid, ' '.join(idx_cmd)))
-    subprocess.call(idx_cmd)
+    subprocess.check_call(idx_cmd)
 
     # check if BAM readcount looks sane
     if not insane:
@@ -261,13 +261,13 @@ def remap_mm2_bam(bamfn, threads, fastaref, picardjar, x, mutid='null', paired=T
             sam.write(line)
 
     logger.info("%s writing %s to BAM..." % (mutid, sam_out))
-    subprocess.call(bam_cmd)
+    subprocess.check_call(bam_cmd)
 
     logger.info("%s deleting SAM: %s" % (mutid, sam_out))
     if deltmp: os.remove(sam_out)
 
     logger.info("%s sorting output: %s " % (mutid, ' '.join(sort_cmd)))
-    subprocess.call(sort_cmd)
+    subprocess.check_call(sort_cmd)
 
     logger.info("%s remove original bam: %s" % (mutid, bamfn))
     if deltmp: os.remove(bamfn)
@@ -276,7 +276,7 @@ def remap_mm2_bam(bamfn, threads, fastaref, picardjar, x, mutid='null', paired=T
     move(sort_out, bamfn)
 
     logger.info("%s indexing: %s" % (mutid, ' '.join(idx_cmd)))
-    subprocess.call(idx_cmd)
+    subprocess.check_call(idx_cmd)
 
     # check if BAM readcount looks sane
     if not insane:
@@ -323,7 +323,7 @@ def remap_bwakit_bam(bamfn, threads, fastaref, picardjar, mutid='null', paired=T
     move(bam_out, bamfn)
 
     logger.info(mutid + " sorting output: " + ' '.join(sort_cmd))
-    subprocess.call(sort_cmd)
+    subprocess.check_call(sort_cmd)
 
     logger.info(mutid + " remove original bam:" + bamfn)
     if deltmp: os.remove(bamfn)
@@ -332,7 +332,7 @@ def remap_bwakit_bam(bamfn, threads, fastaref, picardjar, mutid='null', paired=T
     move(sort_out, bamfn)
 
     logger.info(mutid + " indexing: " + ' '.join(idx_cmd))
-    subprocess.call(idx_cmd)
+    subprocess.check_call(idx_cmd)
 
     # check if BAM readcount looks sane
     if not insane:
@@ -388,13 +388,13 @@ def remap_novoalign_bam(bamfn, threads, fastaref, picardjar, novoref, mutid='nul
             sam.write(line)
 
     logger.info(mutid + " writing " + sam_out + " to BAM...")
-    subprocess.call(bam_cmd)
+    subprocess.check_call(bam_cmd)
 
     logger.info(mutid + " deleting SAM: " + sam_out)
     os.remove(sam_out)
 
     logger.info(mutid + " sorting output: " + ' '.join(sort_cmd))
-    subprocess.call(sort_cmd)
+    subprocess.check_call(sort_cmd)
 
     logger.info(mutid + " remove original bam:" + bamfn)
     os.remove(bamfn)
@@ -403,7 +403,7 @@ def remap_novoalign_bam(bamfn, threads, fastaref, picardjar, novoref, mutid='nul
     move(sort_out, bamfn)
 
     logger.info(mutid + " indexing: " + ' '.join(idx_cmd))
-    subprocess.call(idx_cmd)
+    subprocess.check_call(idx_cmd)
 
     # check if BAM readcount looks sane
     if not insane:
@@ -461,13 +461,13 @@ def remap_gsnap_bam(bamfn, threads, fastaref, picardjar, gsnaprefdir, gsnaprefna
             sam.write(line)
 
     logger.info(mutid + " writing " + sam_out + " to BAM...")
-    subprocess.call(bam_cmd)
+    subprocess.check_call(bam_cmd)
 
     logger.info(mutid + " deleting SAM: " + sam_out)
     os.remove(sam_out)
 
     logger.info(mutid + " sorting output: " + ' '.join(sort_cmd))
-    subprocess.call(sort_cmd)
+    subprocess.check_call(sort_cmd)
 
     logger.info(mutid + " remove original bam:" + bamfn)
     os.remove(bamfn)
@@ -476,7 +476,7 @@ def remap_gsnap_bam(bamfn, threads, fastaref, picardjar, gsnaprefdir, gsnaprefna
     move(sort_out, bamfn)
 
     logger.info(mutid + " indexing: " + ' '.join(idx_cmd))
-    subprocess.call(idx_cmd)
+    subprocess.check_call(idx_cmd)
 
     # check if BAM readcount looks sane
     if not insane:
@@ -520,10 +520,10 @@ def remap_STAR_bam(bamfn, threads, fastaref, picardjar, STARrefdir, mutid='null'
 
     logger.info(mutid + " aligning " + str(fastq) + " with STAR")
 
-    p = subprocess.call(sam_cmd)
+    p = subprocess.check_call(sam_cmd)
 
     logger.info(mutid + " writing " + sam_out + " to BAM...")
-    subprocess.call(bam_cmd)
+    subprocess.check_call(bam_cmd)
 
     logger.info(mutid + " deleting SAM: " + sam_out)
     os.remove(sam_out)
@@ -533,7 +533,7 @@ def remap_STAR_bam(bamfn, threads, fastaref, picardjar, STARrefdir, mutid='null'
     os.remove(bamfn + "SJ.out.tab")
 
     logger.info(mutid + " sorting output: " + ' '.join(sort_cmd))
-    subprocess.call(sort_cmd)
+    subprocess.check_call(sort_cmd)
 
     logger.info(mutid + " remove original bam:" + bamfn)
     os.remove(bamfn)
@@ -542,7 +542,7 @@ def remap_STAR_bam(bamfn, threads, fastaref, picardjar, STARrefdir, mutid='null'
     move(sort_out, bamfn)
 
     logger.info(mutid + " indexing: " + ' '.join(idx_cmd))
-    subprocess.call(idx_cmd)
+    subprocess.check_call(idx_cmd)
 
     # check if BAM readcount looks sane
     # STAR may not report unmapped reads in BAM
@@ -596,13 +596,13 @@ def remap_bowtie2_bam(bamfn, threads, fastaref, picardjar, bowtie2ref, mutid='nu
             sam.write(line)
 
     logger.info(mutid + " writing " + sam_out + " to BAM...")
-    subprocess.call(bam_cmd)
+    subprocess.check_call(bam_cmd)
 
     logger.info(mutid + " deleting SAM: " + sam_out)
     os.remove(sam_out)
 
     logger.info(mutid + " sorting output: " + ' '.join(sort_cmd))
-    subprocess.call(sort_cmd)
+    subprocess.check_call(sort_cmd)
 
 
     logger.info(mutid + " remove original bam:" + bamfn)
@@ -612,7 +612,7 @@ def remap_bowtie2_bam(bamfn, threads, fastaref, picardjar, bowtie2ref, mutid='nu
     move(sort_out, bamfn)
 
     logger.info(mutid + " indexing: " + ' '.join(idx_cmd))
-    subprocess.call(idx_cmd)
+    subprocess.check_call(idx_cmd)
 
     # check if BAM readcount looks sane
     if not insane:
@@ -665,13 +665,13 @@ def remap_tmap_bam(bamfn, threads, fastaref, picardjar, mutid='null', paired=Fal
             sam.write(line)
 
     logger.info(mutid + " writing " + sam_out + " to BAM...")
-    subprocess.call(bam_cmd)
+    subprocess.check_call(bam_cmd)
 
     logger.info(mutid + " deleting SAM: " + sam_out)
     os.remove(sam_out)
 
     logger.info(mutid + " sorting output: " + ' '.join(sort_cmd))
-    subprocess.call(sort_cmd)
+    subprocess.check_call(sort_cmd)
 
     logger.info(mutid + " remove original bam:" + bamfn)
     os.remove(bamfn)
@@ -680,7 +680,7 @@ def remap_tmap_bam(bamfn, threads, fastaref, picardjar, mutid='null', paired=Fal
     move(sort_out, bamfn)
 
     logger.info(mutid + " indexing: " + ' '.join(idx_cmd))
-    subprocess.call(idx_cmd)
+    subprocess.check_call(idx_cmd)
 
     # check if BAM readcount looks sane
     if not insane:
@@ -744,14 +744,14 @@ def remap_bwamem_fastq(fq1, fq2, threads, fastaref, outbam, deltmp=True, mutid='
             sam.write(line)
 
     logger.info(mutid + " writing " + sam_out + " to BAM...")
-    subprocess.call(bam_cmd)
+    subprocess.check_call(bam_cmd)
 
     if deltmp:
         logger.info(mutid + " deleting SAM: " + sam_out)
         os.remove(sam_out)
 
     logger.info(mutid + " sorting output: " + ' '.join(sort_cmd))
-    subprocess.call(sort_cmd)
+    subprocess.check_call(sort_cmd)
 
     logger.info(mutid + " remove original bam:" + outbam)
     os.remove(outbam)
@@ -760,7 +760,7 @@ def remap_bwamem_fastq(fq1, fq2, threads, fastaref, outbam, deltmp=True, mutid='
     move(sort_out, outbam)
 
     logger.info(mutid + " indexing: " + ' '.join(idx_cmd))
-    subprocess.call(idx_cmd)
+    subprocess.check_call(idx_cmd)
 
     if deltmp:
         logger.info(mutid + " removing " + fq1)
@@ -792,14 +792,14 @@ def remap_novoalign_fastq(fq1, fq2, threads, fastaref, novoref, outbam, deltmp=T
             sam.write(line)
 
     logger.info(mutid + " writing " + sam_out + " to BAM...")
-    subprocess.call(bam_cmd)
+    subprocess.check_call(bam_cmd)
 
     if deltmp:
         logger.info(mutid + " deleting SAM: " + sam_out)
         os.remove(sam_out)
 
     logger.info(mutid + " sorting output: " + ' '.join(sort_cmd))
-    subprocess.call(sort_cmd)
+    subprocess.check_call(sort_cmd)
 
     logger.info(mutid + " remove original bam:" + outbam)
     os.remove(outbam)
@@ -808,7 +808,7 @@ def remap_novoalign_fastq(fq1, fq2, threads, fastaref, novoref, outbam, deltmp=T
     move(sort_out, outbam)
 
     logger.info(mutid + " indexing: " + ' '.join(idx_cmd))
-    subprocess.call(idx_cmd)
+    subprocess.check_call(idx_cmd)
 
     if deltmp:
         logger.info(mutid + " removing " + fq1)

@@ -110,7 +110,7 @@ def runwgsim(contig, newseq, svfrac, svtype, exclude, pemean, pesd, tmpdir, regi
     if seed is not None: args += ['-S', str(seed)]
 
     logger.info(str(args))
-    subprocess.call(args)
+    subprocess.check_call(args)
 
     os.remove(fasta)
 
