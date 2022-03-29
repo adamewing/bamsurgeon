@@ -75,7 +75,7 @@ def mergebams(bamlist, outbamfn, maxopen=100, debug=False):
             else:
                 args = ['samtools','merge','-f',submergefn] + tmpbams 
                 logger.info("merging, cmd: " + ' '.join(args))
-                subprocess.call(args)
+                subprocess.check_call(args)
 
         if len(merge_sublists.keys()) == 1:
             logger.info("merge finished, renaming: " + list(merge_sublists.keys())[0] + " --> " + outbamfn)
@@ -83,7 +83,7 @@ def mergebams(bamlist, outbamfn, maxopen=100, debug=False):
         else:
             args = ['samtools','merge','-f',outbamfn] + list(merge_sublists.keys())
             logger.info("final merge, cmd: " + ' '.join(args))
-            subprocess.call(args)
+            subprocess.check_call(args)
 
         for submergefn in merge_sublists.keys():
             if os.path.exists(submergefn):
@@ -122,7 +122,7 @@ def bamtofastq(bam, picardjar, threads=1, paired=True, twofastq=False):
         cmd.append('FASTQ=' + outfq)
 
     sys.stdout.write("INFO\t" + now() + "\tconverting BAM " + bam + " to FASTQ\n")
-    subprocess.call(cmd)
+    subprocess.check_call(cmd)
 
     if outfq is not None:
         assert os.path.exists(outfq) # conversion failed
