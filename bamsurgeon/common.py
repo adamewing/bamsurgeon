@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-
+import open_files
 
 import datetime
 import subprocess
@@ -141,7 +141,7 @@ def fastqreadcount(fastqfile):
 
 
 def bamreadcount(bamfile):
-    bam = pysam.Samfile(bamfile, 'rb')
+    bam = open_files.open_aligment_file(bamfile, 'rb')
     if os.path.exists(bamfile + '.bai'):
         return bam.mapped + bam.unmapped
     else:

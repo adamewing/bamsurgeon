@@ -3,6 +3,7 @@
 """
 try to do ref-directed assembly for paired reads in a region of a .bam file
 """
+import open_files
 
 import pysam,argparse,subprocess,sys,shutil,os,re
 import bamsurgeon.parseamos as parseamos
@@ -181,8 +182,8 @@ class ReadPair:
 
 
 def asm(chrom, start, end, bamfilename, reffile, kmersize, tmpdir, mutid='null', debug=False):
-    bamfile  = pysam.Samfile(bamfilename,'rb')
-    matefile = pysam.Samfile(bamfilename,'rb')
+    bamfile  = open_files.open_aligment_file(bamfilename,'rb')
+    matefile = open_files.open_aligment_file(bamfilename,'rb')
 
     readpairs = {}
     nreads = 0

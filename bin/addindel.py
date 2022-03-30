@@ -10,6 +10,7 @@ import bamsurgeon.replacereads as rr
 import bamsurgeon.aligners as aligners
 import bamsurgeon.mutation as mutation
 import bamsurgeon.makevcf as makevcf
+import bamsurgeon.open_files as open_files
 
 from bamsurgeon.common import *
 from uuid import uuid4
@@ -54,9 +55,9 @@ def countReadCoverage(bam,chrom,start,end):
 def replace(origbamfile, mutbamfile, outbamfile, seed=None):
     ''' open .bam file and call replacereads
     '''
-    origbam = pysam.Samfile(origbamfile, 'rb')
-    mutbam  = pysam.Samfile(mutbamfile, 'rb')
-    outbam  = pysam.Samfile(outbamfile, 'wb', template=origbam)
+    origbam = open_files.open_aligment_file(origbamfile, 'rb')
+    mutbam  = open_files.open_aligment_file(mutbamfile, 'rb')
+    outbam  = open_files.open_aligment_file(outbamfile, 'wb', template=origbam)
 
     rr.replaceReads(origbam, mutbam, outbam, keepqual=True, seed=seed)
 
@@ -89,8 +90,8 @@ def makemut(args, chrom, start, end, vaf, ins, avoid, alignopts):
         mutid += ':INS:' + ins
 
 
-    bamfile = pysam.Samfile(args.bamFileName, 'rb')
-    bammate = pysam.Samfile(args.bamFileName, 'rb') # use for mates to avoid iterator problems
+    bamfile = open_files.open_aligment_file(args.bamFileName, 'rb')
+    bammate = open_files.open_aligment_file(args.bamFileName, 'rb') # use for mates to avoid iterator problems
     reffile = pysam.Fastafile(args.refFasta)
     tmpbams = []
 
@@ -117,7 +118,7 @@ def makemut(args, chrom, start, end, vaf, ins, avoid, alignopts):
 
     tmpoutbamname = args.tmpdir + "/" + mutid + ".tmpbam." + str(uuid4()) + ".bam"
     logger.info("%s creating tmp bam: %s" % (mutid ,tmpoutbamname))
-    outbam_muts = pysam.Samfile(tmpoutbamname, 'wb', template=bamfile)
+    outbam_muts = open_files.open_aligment_file(tmpoutbamname, 'wb', template=bamfile)
 
     mutfail, hasSNP, maxfrac, outreads, mutreads, mutmates = mutation.mutate(args, log, bamfile, bammate, chrom, mutpos, mutpos+del_ln+1, mutpos_list, avoid=avoid, mutid_list=[mutid], is_insertion=is_insertion, is_deletion=is_deletion, ins_seq=ins, reffile=reffile, indel_start=start, indel_end=end)
 
@@ -240,7 +241,7 @@ def makemut(args, chrom, start, end, vaf, ins, avoid, alignopts):
         outbam_muts.close()
         aligners.remap_bam(args.aligner, tmpoutbamname, args.refFasta, alignopts, threads=int(args.alignerthreads), mutid=mutid, paired=(not args.single), picardjar=args.picardjar, insane=args.insane)
 
-        outbam_muts = pysam.Samfile(tmpoutbamname,'rb')
+        outbam_muts = open_files.open_aligment_file(tmpoutbamname,'rb')
         coverwindow = 1
         incover  = countReadCoverage(bamfile,chrom,mutpos-coverwindow,mutpos+del_ln+coverwindow)
         outcover = countReadCoverage(outbam_muts,chrom,mutpos-coverwindow,mutpos+del_ln+coverwindow)
@@ -281,6 +282,7 @@ def makemut(args, chrom, start, end, vaf, ins, avoid, alignopts):
 
 def main(args):
     logger.info("starting %s called with args: %s" % (sys.argv[0], ' '.join(sys.argv)))
+    open_files.compression_threads = int(args.compressionthreads)
     bedfile = open(args.varFileName, 'r')
     reffile = pysam.Fastafile(args.refFasta)
 
@@ -301,8 +303,8 @@ def main(args):
 
     # make a temporary file to hold mutated reads
     outbam_mutsfile = "addindel." + str(uuid4()) + ".muts.bam"
-    bamfile = pysam.Samfile(args.bamFileName, 'rb')
-    outbam_muts = pysam.Samfile(outbam_mutsfile, 'wb', template=bamfile)
+    bamfile = open_files.open_aligment_file(args.bamFileName, 'rb')
+    outbam_muts = open_files.open_aligment_file(outbam_mutsfile, 'wb', template=bamfile)
     outbam_muts.close()
     bamfile.close()
     tmpbams = []
@@ -423,6 +425,7 @@ def run():
     parser.add_argument('--aligner', default='backtrack', help='supported aligners: ' + ','.join(aligners.supported_aligners_bam))
     parser.add_argument('--alignopts', default=None, help='aligner-specific options as comma delimited list of option1:value1,option2:value2,...')
     parser.add_argument('--alignerthreads', default=1, help='threads used per realignment (default = 1)')
+    parser.add_argument('--compressionthreads', default=1, help='threads used for compressing/decompressing BAM/CRAM files')
     parser.add_argument('--tagreads', action='store_true', default=False, help='add BS tag to altered reads')
     parser.add_argument('--skipmerge', action='store_true', default=False, help="final output is tmp file to be merged")
     parser.add_argument('--ignorepileup', action='store_true', default=False, help="do not check pileup depth in mutation regions")

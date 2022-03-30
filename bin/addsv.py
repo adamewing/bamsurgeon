@@ -14,6 +14,7 @@ import bamsurgeon.asmregion as ar
 import bamsurgeon.mutableseq as ms
 import bamsurgeon.aligners as aligners
 import bamsurgeon.makevcf as makevcf
+import bamsurgeon.open_files as open_files
 
 from bamsurgeon.common import *
 from uuid import uuid4
@@ -199,9 +200,9 @@ def align(qryseq, refseq):
 def replace(origbamfile, mutbamfile, outbamfile, excludefile, keepsecondary=False, seed=None, quiet=False):
     ''' open .bam file and call replacereads
     '''
-    origbam = pysam.Samfile(origbamfile, 'rb')
-    mutbam  = pysam.Samfile(mutbamfile, 'rb')
-    outbam  = pysam.Samfile(outbamfile, 'wb', template=origbam)
+    origbam = open_files.open_aligment_file(origbamfile, 'rb')
+    mutbam  = open_files.open_aligment_file(mutbamfile, 'rb')
+    outbam  = open_files.open_aligment_file(outbamfile, 'wb', template=origbam)
 
     rr.replaceReads(origbam, mutbam, outbam, excludefile=excludefile, allreads=True, keepsecondary=keepsecondary, seed=seed, quiet=quiet)
 
@@ -213,7 +214,7 @@ def replace(origbamfile, mutbamfile, outbamfile, excludefile, keepsecondary=Fals
 def discordant_fraction(bamfile, chrom, start, end):
     r = 0
     d = 0
-    bam = pysam.Samfile(bamfile, 'rb')
+    bam = open_files.open_files.open_aligment_file(bamfile, 'rb')
     for read in bam.fetch(chrom, start, end):
         r += 1
         if not read.is_proper_pair:
@@ -433,7 +434,7 @@ def makemut(args, bedline, alignopts):
 
     mutid = '_'.join(map(str, bedline.split()[:4]))
 
-    bamfile = pysam.Samfile(args.bamFileName, 'rb')
+    bamfile = open_files.open_aligment_file(args.bamFileName, 'rb')
     reffile = pysam.Fastafile(args.refFasta)
     logfn = '_'.join(map(os.path.basename, bedline.split()[:4])) + ".log"
     logfile = open('addsv_logs_' + os.path.basename(args.outBamFile) + '/' + os.path.basename(args.outBamFile) + '_' + logfn, 'w')
@@ -903,6 +904,7 @@ def makemut(args, bedline, alignopts):
 
 def main(args):
     logger.info("starting %s called with args: %s" % (sys.argv[0], ' '.join(sys.argv)))
+    open_files.compression_threads = int(args.compressionthreads)
     tmpbams = [] # temporary BAMs, each holds the realigned reads for one mutation
     exclfns = [] # 'exclude' files store reads to be removed from the original BAM due to deletions
 
@@ -1285,6 +1287,8 @@ if __name__ == '__main__':
                         help='aligner-specific options as comma delimited list of option1:value1,option2:value2,...')
     parser.add_argument('--alignerthreads', default=1,
                         help='threads used per realignment (default = 1)')
+    parser.add_argument('--compressionthreads', default=1,
+                        help='threads used for compressing/decompressing BAM/CRAM files')
     parser.add_argument('--tagreads', action='store_true', default=False,
                         help='add BS tag to altered reads')
     parser.add_argument('--skipmerge', action='store_true', default=False,

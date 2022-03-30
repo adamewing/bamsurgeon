@@ -10,6 +10,7 @@ import bamsurgeon.replacereads as rr
 import bamsurgeon.aligners as aligners
 import bamsurgeon.mutation as mutation
 import bamsurgeon.makevcf as makevcf
+import bamsurgeon.open_files as open_files
 
 from operator import itemgetter
 from bamsurgeon.common import *
@@ -74,9 +75,9 @@ def countReadCoverage(bam,chrom,start,end):
 def replace(origbamfile, mutbamfile, outbamfile, seed=None):
     ''' open .bam file and call replacereads
     '''
-    origbam = pysam.Samfile(origbamfile, 'rb')
-    mutbam  = pysam.Samfile(mutbamfile, 'rb')
-    outbam  = pysam.Samfile(outbamfile, 'wb', template=origbam)
+    origbam = open_files.open_aligment_file(origbamfile, 'rb')
+    mutbam  = open_files.open_aligment_file(mutbamfile, 'rb')
+    outbam  = open_files.open_aligment_file(outbamfile, 'wb', template=origbam)
 
     rr.replaceReads(origbam, mutbam, outbam, keepqual=True, seed=seed)
 
@@ -95,8 +96,8 @@ def makemut(args, hc, avoid, alignopts):
 
     if args.seed is not None: random.seed(int(args.seed) + int(hc[0]['start']))
 
-    bamfile = pysam.Samfile(args.bamFileName, 'rb')
-    bammate = pysam.Samfile(args.bamFileName, 'rb') # use for mates to avoid iterator problems
+    bamfile = open_files.open_files.open_aligment_file(args.bamFileName, 'rb')
+    bammate = open_files.open_files.open_aligment_file(args.bamFileName, 'rb') # use for mates to avoid iterator problems
     reffile = pysam.Fastafile(args.refFasta)
     tmpbams = []
 
@@ -157,7 +158,7 @@ def makemut(args, hc, avoid, alignopts):
 
     tmpoutbamname = args.tmpdir + "/" + hapstr + ".tmpbam." + str(uuid4()) + ".bam"
     logger.info("%s creating tmp bam: %s" % (hapstr, tmpoutbamname))
-    outbam_muts = pysam.Samfile(tmpoutbamname, 'wb', template=bamfile)
+    outbam_muts = open_files.open_aligment_file(tmpoutbamname, 'wb', template=bamfile)
 
     mutfail, hasSNP, maxfrac, outreads, mutreads, mutmates = mutation.mutate(args, log, bamfile, bammate, chrom, min(mutpos_list), max(mutpos_list)+1, mutpos_list, avoid=avoid, mutid_list=mutid_list, is_snv=True, mutbase_list=mutbase_list, reffile=reffile)
 
@@ -281,7 +282,7 @@ def makemut(args, hc, avoid, alignopts):
 
         aligners.remap_bam(args.aligner, tmpoutbamname, args.refFasta, alignopts, threads=int(args.alignerthreads), mutid=hapstr, paired=(not args.single), picardjar=args.picardjar, insane=args.insane)
 
-        outbam_muts = pysam.Samfile(tmpoutbamname,'rb')
+        outbam_muts = open_files.open_aligment_file(tmpoutbamname,'rb')
         coverwindow = 1
         incover  = countReadCoverage(bamfile,chrom,min(mutpos_list)-coverwindow,max(mutpos_list)+coverwindow)
         outcover = countReadCoverage(outbam_muts,chrom,min(mutpos_list)-coverwindow,max(mutpos_list)+coverwindow)
@@ -319,6 +320,7 @@ def makemut(args, hc, avoid, alignopts):
 
 def main(args):
     logger.info("starting %s called with args: %s" % (sys.argv[0], ' '.join(sys.argv)))
+    open_files.compression_threads = int(args.compressionthreads)
     bedfile = open(args.varFileName, 'r')
     reffile = pysam.Fastafile(args.refFasta)
 
@@ -339,8 +341,8 @@ def main(args):
 
     # make a temporary file to hold mutated reads
     outbam_mutsfile = "addsnv." + str(uuid4()) + ".muts.bam"
-    bamfile = pysam.Samfile(args.bamFileName, 'rb')
-    outbam_muts = pysam.Samfile(outbam_mutsfile, 'wb', template=bamfile)
+    bamfile = open_files.open_aligment_file(args.bamFileName, 'rb')
+    outbam_muts = open_files.open_aligment_file(outbam_mutsfile, 'wb', template=bamfile)
     outbam_muts.close()
     bamfile.close()
     tmpbams = []
@@ -509,6 +511,7 @@ def run():
     parser.add_argument('--ignorepileup', action='store_true', default=False, help="do not check pileup depth in mutation regions")
     parser.add_argument('--aligner', default='backtrack', help='supported aligners: ' + ','.join(aligners.supported_aligners_bam))
     parser.add_argument('--alignerthreads', default=1, help='threads used per realignment (default = 1)')
+    parser.add_argument('--compressionthreads', default=1, help='threads used for compressing/decompressing BAM/CRAM files')
     parser.add_argument('--alignopts', default=None, help='aligner-specific options as comma delimited list of option1:value1,option2:value2,...')
     parser.add_argument('--tmpdir', default='addsnv.tmp', help='temporary directory (default=addsnv.tmp)')
     parser.add_argument('--seed', default=None, help='seed random number generation')
