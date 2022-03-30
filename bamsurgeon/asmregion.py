@@ -4,9 +4,9 @@
 try to do ref-directed assembly for paired reads in a region of a .bam file
 """
 import open_files
+import parseamos
 
 import pysam,argparse,subprocess,sys,shutil,os,re
-import bamsurgeon.parseamos as parseamos
 import datetime
 
 from uuid import uuid4

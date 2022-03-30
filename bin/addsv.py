@@ -9,14 +9,14 @@ import random
 import subprocess
 import argparse
 import pysam
-import bamsurgeon.replacereads as rr
-import bamsurgeon.asmregion as ar
-import bamsurgeon.mutableseq as ms
-import bamsurgeon.aligners as aligners
-import bamsurgeon.makevcf as makevcf
-import bamsurgeon.open_files as open_files
+from ..bamsurgeon import replacereads as rr
+from ..bamsurgeon import asmregion as ar
+from ..bamsurgeon import mutableseq as ms
+from ..bamsurgeon import aligners as aligners
+from ..bamsurgeon import makevcf as makevcf
+from ..bamsurgeon import open_files as open_files
+from ..bamsurgeon.common import *
 
-from bamsurgeon.common import *
 from uuid import uuid4
 from time import sleep
 from shutil import move

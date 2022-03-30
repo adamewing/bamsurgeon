@@ -6,13 +6,13 @@ import argparse
 import random
 import subprocess
 import os
-import bamsurgeon.replacereads as rr
-import bamsurgeon.aligners as aligners
-import bamsurgeon.mutation as mutation
-import bamsurgeon.makevcf as makevcf
-import bamsurgeon.open_files as open_files
+from ..bamsurgeon import replacereads as rr
+from ..bamsurgeon import aligners as aligners
+from ..bamsurgeon import mutation as mutation
+from ..bamsurgeon import makevcf as makevcf
+from ..bamsurgeon import open_files as open_files
+from ..bamsurgeon.common import *
 
-from bamsurgeon.common import *
 from uuid import uuid4
 from re import sub
 from shutil import move
