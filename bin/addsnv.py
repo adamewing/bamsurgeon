@@ -16,7 +16,7 @@ from bamsurgeon.common import *
 from uuid import uuid4
 from shutil import move
 from re import sub
-from multiprocessing import Pool
+from concurrent.futures import ProcessPoolExecutor
 from collections import defaultdict as dd
 
 import logging
@@ -356,7 +356,7 @@ def main(args):
     assert os.path.exists('addsnv_logs_' + os.path.basename(args.outBamFile)), "could not create output directory!"
     assert os.path.exists(args.tmpdir), "could not create temporary directory!"
 
-    pool = Pool(processes=int(args.procs))
+    pool = ProcessPoolExecutor(processes=int(args.procs))
     results = []
 
     ntried = 0
@@ -422,12 +422,12 @@ def main(args):
 
     for hc in haploclusters:
         # make mutation (submit job to thread pool)
-        result = pool.apply_async(makemut, [args, hc, avoid, alignopts])
+        result = pool.submit(makemut, args, hc, avoid, alignopts)
         results.append(result)
 
 
     for result in results:
-        tmpbamlist = result.get()
+        tmpbamlist = result.result()
         if tmpbamlist is not None:
             for tmpbam in tmpbamlist:
                 if os.path.exists(tmpbam):

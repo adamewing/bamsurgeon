@@ -22,7 +22,7 @@ from shutil import move
 from math import sqrt
 from collections import Counter
 from collections import defaultdict as dd
-from multiprocessing import Pool
+from concurrent.futures import ProcessPoolExecutor
 
 import logging
 FORMAT = '%(levelname)s %(asctime)s %(message)s'
@@ -928,7 +928,7 @@ def main(args):
         sys.exit(1)
 
     results = []
-    pool = Pool(processes=int(args.procs))
+    pool = ProcessPoolExecutor(processes=int(args.procs))
 
     nmuts = 0
 
@@ -1043,12 +1043,12 @@ def main(args):
 
             if len(multi_part) == 0:
                 # submit each mutation as its own thread
-                result = pool.apply_async(makemut, [args, bedline, alignopts])
+                result = pool.submit(makemut, args, bedline, alignopts)
                 results.append(result)
 
             else:
                 for bedline in multi_part:
-                    result = pool.apply_async(makemut, [args, bedline, alignopts])
+                    result = pool.submit(makemut, args, bedline, alignopts)
                     results.append(result)
 
             nmuts += 1
@@ -1061,7 +1061,7 @@ def main(args):
         tmpbam = None
         exclfn = None
 
-        tmpbam, exclfn, mutinfo = result.get()
+        tmpbam, exclfn, mutinfo = result.result()
 
         if None not in (tmpbam, exclfn) and os.path.exists(tmpbam) and os.path.exists(exclfn):
             if bamreadcount(tmpbam) > 0:
