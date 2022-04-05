@@ -318,7 +318,7 @@ def main(args):
     assert os.path.exists('addindel_logs_' + os.path.basename(args.outBamFile)), "could not create output directory!"
     assert os.path.exists(args.tmpdir), "could not create temporary directory!"
 
-    pool = ProcessPoolExecutor(processes=int(args.procs))
+    pool = ProcessPoolExecutor(max_workers=int(args.procs))
     results = []
 
     ntried = 0

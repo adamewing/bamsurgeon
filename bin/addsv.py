@@ -928,7 +928,7 @@ def main(args):
         sys.exit(1)
 
     results = []
-    pool = ProcessPoolExecutor(processes=int(args.procs))
+    pool = ProcessPoolExecutor(max_workers=int(args.procs))
 
     nmuts = 0
 
