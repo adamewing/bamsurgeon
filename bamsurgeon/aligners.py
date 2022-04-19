@@ -185,9 +185,9 @@ def remap_bwamem_bam(bamfn, threads, fastaref, picardjar, mutid='null', paired=T
     sam_cmd = []
 
     if paired:
-        sam_cmd  = ['bwa', 'mem', '-t', str(threads), '-M', '-p', fastaref, fastq] # interleaved
+        sam_cmd  = ['bwa', 'mem', '-Y', '-t', str(threads), '-M', '-p', fastaref, fastq] # interleaved
     else:
-        sam_cmd  = ['bwa', 'mem', '-t', str(threads), '-M', fastaref, fastq] # single-end
+        sam_cmd  = ['bwa', 'mem', '-Y', '-t', str(threads), '-M', fastaref, fastq] # single-end
 
     assert len(sam_cmd) > 0
 
