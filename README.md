@@ -1,22 +1,17 @@
-
+# Bamsurgeon<!-- omit in toc -->
 [![DOI](https://zenodo.org/badge/4290471.svg)](https://zenodo.org/badge/latestdoi/4290471)
 
-## Bamsurgeon:
 *tools for adding mutations to .bam files, used for testing mutation callers*
 
-#### Before using simulation-based methods, consider whether there are validated benchmarking data available for your use case
-For example the [Genome in a Bottle](https://www.nist.gov/programs-projects/genome-bottle) or the [PrecisionFDA Truth Challenge](https://precision.fda.gov/challenges/truth/results) may provide a means to test on non-simulated data.
-
 Please see doc/Manual.pdf for instructions and contact adam.ewing@gmail.com with questions.
+  
+**Before using simulation-based methods, consider whether there are validated benchmarking data available for your use case**. For example the [Genome in a Bottle](https://www.nist.gov/programs-projects/genome-bottle) or the [PrecisionFDA Truth Challenge](https://precision.fda.gov/challenges/truth/results) may provide a means to test on non-simulated data.
 
-# Installation
+## Table of contents<!-- omit in toc -->
+- [Dependencies](#dependencies)
+- [Getting started](#getting-started)
 
-```
-python setup.py build
-python setup.py install
-```
-
-# External Prerequisites:
+## Dependencies
 
 The following presumes $HOME/bin is in your $PATH
 
@@ -74,6 +69,13 @@ cp velvet_1.2.10/velveth $HOME/bin
 Pysam
 
 ```
-pip install cython
 pip install pysam
+```
+
+## Getting started
+
+It is not necessary to install BAMSurgeon. It works as any other standalone Python script. Use case example:
+
+```
+python3 bin/addsv.py -p 1 -v test_data/test_sv.txt -f test_data/testregion_realign.bam -r $REF -o test_data/testregion_sv_mut.bam --aligner mem --keepsecondary --seed 1234 --inslib test_data/test_inslib.fa
 ```
