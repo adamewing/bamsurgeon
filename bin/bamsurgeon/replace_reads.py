@@ -6,16 +6,14 @@ import argparse
 import random
 from collections import defaultdict
 
+from .common import rc
+
 import logging
 FORMAT = '%(levelname)s %(asctime)s %(message)s'
 logging.basicConfig(format=FORMAT)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-def rc(dna):
-    ''' reverse complement '''
-    complements = str.maketrans('acgtrymkbdhvACGTRYMKBDHV', 'tgcayrkmvhdbTGCAYRKMVHDB')
-    return dna.translate(complements)[::-1]
 
 def cleanup(read,orig,RG):
     '''
@@ -54,7 +52,7 @@ def cleanup(read,orig,RG):
             
     return read
 
-def getRGs(bam):
+def get_RGs(bam):
     '''return list of RG IDs'''
     RG = []
     if 'RG' in bam.header:
@@ -62,7 +60,7 @@ def getRGs(bam):
             RG.append(headRG['ID'])
     return RG
 
-def getExcludedReads(file):
+def get_excluded_reads(file):
     '''read list of excluded reads into a dictionary'''
     ex = {}
     f = open(file,'r')
@@ -78,16 +76,18 @@ def compare_ref(targetbam, donorbam):
     '''
     for ref in targetbam.references:
         if ref not in donorbam.references or donorbam.gettid(ref) != targetbam.gettid(ref):
-            sys.stderr.write("contig mismatch: %s\n" % ref)
+            logger.error("contig mismatch: %s\n" % ref)
             return False
     return True
     
 
-def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=None, allreads=False, keepqual=False, progress=False, keepsecondary=False, keepsupplementary=False, seed=None, quiet=False):
-    ''' targetbam, donorbam, and outputbam are pysam.Samfile objects
-        outputbam must be writeable and use targetbam as template
+def replace_reads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=None, allreads=False, keepqual=False, progress=False, keepsecondary=False, keepsupplementary=False, seed=None, quiet=False):
+    ''' outputbam must be writeable and use targetbam as template
         read names in excludefile will not appear in final output
     '''
+    origbam = pysam.AlignmentFile(origbamfile)
+    mutbam  = pysam.AlignmentFile(mutbamfile)
+    outbam  = pysam.AlignmentFile(outbamfile, 'wb', template=origbam)
 
     if seed is not None: random.seed(int(seed))
 
@@ -95,14 +95,14 @@ def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=No
     if not compare_ref(targetbam, donorbam):
         sys.exit("Target and donor are aligned to incompatable reference genomes!")
 
-    RG = getRGs(targetbam) # read groups
+    RG = get_RGs(targetbam) # read groups
 
     exclude = {}
     if excludefile:
-        exclude = getExcludedReads(excludefile)
+        exclude = get_excluded_reads(excludefile)
 
     # load reads from donorbam into dict 
-    sys.stdout.write("loading donor reads into dictionary...\n")
+    logger.info("loading donor reads into dictionary...\n")
 
     #rdict = defaultdict(list)
     rdict = {}
@@ -138,7 +138,7 @@ def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=No
 
     logger.info('secondary reads count:'+ str(sum([len(v) for k,v in secondary.items()])))
     logger.info('supplementary reads count:'+ str(sum([len(v) for k,v in supplementary.items()])))
-    sys.stdout.write("loaded " + str(nr) + " reads, (" + str(excount) + " excluded, " + str(nullcount) + " null or secondary or supplementary--> ignored)\n")
+    logger.info("loaded " + str(nr) + " reads, (" + str(excount) + " excluded, " + str(nullcount) + " null or secondary or supplementary--> ignored)\n")
     excount = 0
     recount = 0 # number of replaced reads
     used = {}
@@ -152,7 +152,7 @@ def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=No
 
         prog += 1
         if progress and prog % 10000000 == 0:
-            sys.stdout.write("processed " + str(prog) + " reads.\n")
+            logger.info("processed " + str(prog) + " reads.\n")
 
         if read.qname not in exclude:
             pairname = 'F' # read is first in pair
@@ -174,9 +174,9 @@ def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=No
                     try:
                         rdict[extqname].qual = read.qual
                     except ValueError as e:
-                        sys.stdout.write("error replacing quality score for read: " + str(rdict[extqname].qname) + " : " + str(e) + "\n")
-                        sys.stdout.write("donor:  " + str(rdict[extqname]) + "\n")
-                        sys.stdout.write("target: " + str(read) + "\n")
+                        logger.info("error replacing quality score for read: " + str(rdict[extqname].qname) + " : " + str(e) + "\n")
+                        logger.info("donor:  " + str(rdict[extqname]) + "\n")
+                        logger.info("target: " + str(read) + "\n")
                         sys.exit(1)
                 newReads = [rdict[extqname]]
                 used[extqname] = True
@@ -200,10 +200,10 @@ def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=No
             excount += 1
             
     if not quiet:
-        sys.stdout.write("replaced " + str(recount) + " reads (" + str(excount) + " excluded )\n")
-        sys.stdout.write("kept " + str(sum([len(v) for k,v in secondary.items()])) + " secondary reads.\n")
-        sys.stdout.write("kept " + str(sum([len(v) for k,v in supplementary.items()])) + " supplementary reads.\n") 
-        sys.stdout.write("ignored %d non-primary reads in target BAM.\n" % ignored_target) 
+        logger.info("replaced " + str(recount) + " reads (" + str(excount) + " excluded )\n")
+        logger.info("kept " + str(sum([len(v) for k,v in secondary.items()])) + " secondary reads.\n")
+        logger.info("kept " + str(sum([len(v) for k,v in supplementary.items()])) + " supplementary reads.\n") 
+        logger.info("ignored %d non-primary reads in target BAM.\n" % ignored_target) 
 
     nadded = 0
     # dump the unused reads from the donor if requested with --all
@@ -213,18 +213,12 @@ def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=No
                 rdict[extqname] = cleanup(rdict[extqname],None,RG)
                 outputbam.write(rdict[extqname])
                 nadded += 1
-        sys.stdout.write("added " + str(nadded) + " reads due to --all\n")
+        logger.info("added " + str(nadded) + " reads due to --all\n")
 
-def main(args):
-    targetbam = pysam.AlignmentFile(args.targetbam)
-    donorbam  = pysam.AlignmentFile(args.donorbam)
-    outputbam = pysam.AlignmentFile(args.outputbam, 'wb', template=targetbam)
+    origbam.close()
+    mutbam.close()
+    outbam.close()
 
-    replaceReads(targetbam, donorbam, outputbam, args.namechange, args.exclfile, args.all, args.keepqual, args.progress, args.keepsecondary,args.keepsupplementary)
-
-    targetbam.close()
-    donorbam.close()
-    outputbam.close()
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description='replaces aligned reads in bamfile1 with aligned reads from bamfile2')
@@ -239,4 +233,5 @@ if __name__=='__main__':
     parser.add_argument('--keepsecondary', action='store_true', default=False, help='keep secondary reads in final BAM')
     parser.add_argument('--keepsupplementary', action='store_true', default=False, help='keep supplementary reads in final BAM')    
     args = parser.parse_args()
-    main(args)
+
+    replace_reads(args.targetbam, args.donorbam, args.outputbam, args.namechange, args.exclfile, args.all, args.keepqual, args.progress, args.keepsecondary,args.keepsupplementary)

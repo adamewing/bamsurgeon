@@ -9,7 +9,7 @@ import random
 import subprocess
 import argparse
 import pysam
-import bamsurgeon.replacereads as rr
+import bamsurgeon.replace_reads as rr
 import bamsurgeon.asmregion as ar
 import bamsurgeon.mutableseq as ms
 import bamsurgeon.aligners as aligners
@@ -194,20 +194,6 @@ def align(qryseq, refseq):
     os.remove(qryfa)
 
     return best
-
-
-def replace(origbamfile, mutbamfile, outbamfile, excludefile, keepsecondary=False, seed=None, quiet=False):
-    ''' open .bam file and call replacereads
-    '''
-    origbam = pysam.AlignmentFile(origbamfile)
-    mutbam  = pysam.AlignmentFile(mutbamfile)
-    outbam  = pysam.AlignmentFile(outbamfile, 'wb', template=origbam)
-
-    rr.replaceReads(origbam, mutbam, outbam, excludefile=excludefile, allreads=True, keepsecondary=keepsecondary, seed=seed, quiet=quiet)
-
-    origbam.close()
-    mutbam.close()
-    outbam.close()
 
 
 def discordant_fraction(bamfile, chrom, start, end):
@@ -491,10 +477,10 @@ def makemut(args, bedline, alignopts):
         if chrom in cnv.contigs:
             for cnregion in cnv.fetch(chrom,start,end):
                 cn = float(cnregion.strip().split()[3]) # expect chrom,start,end,CN
-                sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\t" + ' '.join(("copy number in sv region:",chrom,str(start),str(end),"=",str(cn))) + "\n")
+                logger.info("INFO" + mutid + "\t" + ' '.join(("copy number in sv region:",chrom,str(start),str(end),"=",str(cn))) + "\n")
                 svfrac = svfrac/float(cn)
                 assert svfrac <= 1.0, 'copy number from %s must be at least 1: %s' % (args.cnvfile, cnregion.strip())
-                sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tadjusted default MAF: " + str(svfrac) + "\n")
+                logger.info("INFO" + mutid + "\tadjusted default MAF: " + str(svfrac) + "\n")
 
     logger.info("%s interval: %s" % (mutid, bedline))
     logger.info("%s length: %d" % (mutid, (end-start)))
@@ -854,7 +840,7 @@ def makemut(args, bedline, alignopts):
             rename_reads = False
 
         else:
-            raise ValueError("ERROR\t" + now() + "\t" + mutid + "\t: mutation not one of: INS,INV,DEL,DUP,TRN,BIGDEL,BIGINV,BIGDUP\n")
+            raise ValueError("ERROR " + mutid + "\t: mutation not one of: INS,INV,DEL,DUP,TRN,BIGDEL,BIGINV,BIGDUP\n")
 
         logfile.write(">" + chrom + ":" + str(refstart) + "-" + str(refend) +" AFTER\n" + str(mutseq) + "\n")
 
@@ -920,7 +906,6 @@ def main(args):
     except Exception:
         logger.error("failed to load insertion library %s" % args.inslib)
         traceback.print_exc(file=sys.stderr)
-        sys.stderr.write("\n")
         sys.exit(1)
 
     results = []
@@ -1212,7 +1197,7 @@ def main(args):
             logger.info("tagged reads.")
 
         logger.info("writing to %s" % args.outBamFile)
-        replace(args.bamFileName, mergedtmp, args.outBamFile, excl_merged, keepsecondary=args.keepsecondary, seed=args.seed, quiet=True)
+        rr.replace_reads(args.bamFileName, mergedtmp, args.outBamFile, excludefile=excl_merged, allreads=True, keepsecondary=args.keepsecondary, seed=args.seed, quiet=True)
 
         if not args.debug:
             os.remove(excl_merged)

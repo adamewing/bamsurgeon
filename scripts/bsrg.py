@@ -6,11 +6,11 @@ import os
 import sys
 import pysam
 from uuid import uuid4
-
+import logging
 
 def modhead(header, rgid, fn):
     if 'RG' in header:
-        sys.stderr.write("RG found in header, this script is not what you want!\n")
+        logging.error("RG found in header, this script is not what you want!\n")
         sys.exit(usage())
 
     header['RG'] = [{'SM' : fn,

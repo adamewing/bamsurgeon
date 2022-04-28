@@ -16,9 +16,6 @@ logging.basicConfig(format=FORMAT)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-def now():
-    return str(datetime.datetime.now())
-
 
 def velvetContigs(dir):
     assert os.path.exists(dir)

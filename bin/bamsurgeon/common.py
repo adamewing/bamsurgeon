@@ -18,9 +18,6 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-def now():
-    return str(datetime.datetime.now())
-
 def get_avg_coverage(alignment_file, chrom, start, end):
     split_coverage = alignment_file.count_coverage(chrom, start, end, quality_threshold=0)
     base_sum = [sum(x) for x in split_coverage]
@@ -125,7 +122,7 @@ def bamtofastq(bam, picardjar, threads=1, paired=True, twofastq=False):
         outfq = sub('bam$', 'fastq', bam)
         cmd.append('FASTQ=' + outfq)
 
-    sys.stdout.write("INFO\t" + now() + "\tconverting BAM " + bam + " to FASTQ\n")
+    logger.info("converting BAM " + bam + " to FASTQ\n")
     subprocess.check_call(cmd)
 
     if outfq is not None:

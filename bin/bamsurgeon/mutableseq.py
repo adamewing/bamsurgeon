@@ -5,12 +5,7 @@ Methods for making mutations in a sequence
 '''
 
 import operator
-
-
-def rc(dna):
-    ''' reverse complement '''
-    complements = str.maketrans('acgtrymkbdhvACGTRYMKBDHV', 'tgcayrkmvhdbTGCAYRKMVHDB')
-    return dna.translate(complements)[::-1]
+from .common import rc
 
 
 def dist(seq1, seq2):
