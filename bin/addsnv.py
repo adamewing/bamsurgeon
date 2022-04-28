@@ -241,8 +241,8 @@ def makemut(args, hc, avoid, alignopts):
         outbam_muts = pysam.AlignmentFile(tmpoutbamname)
         coverwindow = 1
 
-        avgincover = get_avg_coverage(bamfile, chrom,mutpos-coverwindow,mutpos+del_ln+coverwindow)
-        avgoutcover = get_avg_coverage(outbam_muts, chrom,mutpos-coverwindow,mutpos+del_ln+coverwindow)
+        avgincover = get_avg_coverage(bamfile, chrom,min(mutpos_list)-coverwindow,max(mutpos_list)+coverwindow)
+        avgoutcover = get_avg_coverage(outbam_muts, chrom,min(mutpos_list)-coverwindow,max(mutpos_list)+coverwindow)
 
         logger.info("%s avgincover: %f, avgoutcover: %f" % (hapstr, avgincover, avgoutcover))
 
