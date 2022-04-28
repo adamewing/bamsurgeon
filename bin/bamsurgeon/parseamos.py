@@ -25,7 +25,7 @@ class ContigReads:
 
     def addread(self,src):
         #if src in self.reads:
-        #    sys.stderr.write("AMOS PROBLEM: src already in readlist\n")
+        #    logger.error("AMOS PROBLEM: src already in readlist\n")
         self.reads[src] = Read(src)
 
     def getReadNames(self,seqs):

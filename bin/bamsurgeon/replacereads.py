@@ -52,7 +52,7 @@ def cleanup(read,orig,RG):
             
     return read
 
-def getRGs(bam):
+def get_RGs(bam):
     '''return list of RG IDs'''
     RG = []
     if 'RG' in bam.header:
@@ -60,7 +60,7 @@ def getRGs(bam):
             RG.append(headRG['ID'])
     return RG
 
-def getExcludedReads(file):
+def get_excluded_reads(file):
     '''read list of excluded reads into a dictionary'''
     ex = {}
     f = open(file,'r')
@@ -76,7 +76,7 @@ def compare_ref(targetbam, donorbam):
     '''
     for ref in targetbam.references:
         if ref not in donorbam.references or donorbam.gettid(ref) != targetbam.gettid(ref):
-            sys.stderr.write("contig mismatch: %s\n" % ref)
+            logger.error("contig mismatch: %s\n" % ref)
             return False
     return True
     
@@ -95,14 +95,14 @@ def replace_reads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=N
     if not compare_ref(targetbam, donorbam):
         sys.exit("Target and donor are aligned to incompatable reference genomes!")
 
-    RG = getRGs(targetbam) # read groups
+    RG = get_RGs(targetbam) # read groups
 
     exclude = {}
     if excludefile:
-        exclude = getExcludedReads(excludefile)
+        exclude = get_excluded_reads(excludefile)
 
     # load reads from donorbam into dict 
-    sys.stdout.write("loading donor reads into dictionary...\n")
+    logger.info("loading donor reads into dictionary...\n")
 
     #rdict = defaultdict(list)
     rdict = {}
@@ -138,7 +138,7 @@ def replace_reads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=N
 
     logger.info('secondary reads count:'+ str(sum([len(v) for k,v in secondary.items()])))
     logger.info('supplementary reads count:'+ str(sum([len(v) for k,v in supplementary.items()])))
-    sys.stdout.write("loaded " + str(nr) + " reads, (" + str(excount) + " excluded, " + str(nullcount) + " null or secondary or supplementary--> ignored)\n")
+    logger.info("loaded " + str(nr) + " reads, (" + str(excount) + " excluded, " + str(nullcount) + " null or secondary or supplementary--> ignored)\n")
     excount = 0
     recount = 0 # number of replaced reads
     used = {}
@@ -152,7 +152,7 @@ def replace_reads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=N
 
         prog += 1
         if progress and prog % 10000000 == 0:
-            sys.stdout.write("processed " + str(prog) + " reads.\n")
+            logger.info("processed " + str(prog) + " reads.\n")
 
         if read.qname not in exclude:
             pairname = 'F' # read is first in pair
@@ -174,9 +174,9 @@ def replace_reads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=N
                     try:
                         rdict[extqname].qual = read.qual
                     except ValueError as e:
-                        sys.stdout.write("error replacing quality score for read: " + str(rdict[extqname].qname) + " : " + str(e) + "\n")
-                        sys.stdout.write("donor:  " + str(rdict[extqname]) + "\n")
-                        sys.stdout.write("target: " + str(read) + "\n")
+                        logger.info("error replacing quality score for read: " + str(rdict[extqname].qname) + " : " + str(e) + "\n")
+                        logger.info("donor:  " + str(rdict[extqname]) + "\n")
+                        logger.info("target: " + str(read) + "\n")
                         sys.exit(1)
                 newReads = [rdict[extqname]]
                 used[extqname] = True
@@ -200,10 +200,10 @@ def replace_reads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=N
             excount += 1
             
     if not quiet:
-        sys.stdout.write("replaced " + str(recount) + " reads (" + str(excount) + " excluded )\n")
-        sys.stdout.write("kept " + str(sum([len(v) for k,v in secondary.items()])) + " secondary reads.\n")
-        sys.stdout.write("kept " + str(sum([len(v) for k,v in supplementary.items()])) + " supplementary reads.\n") 
-        sys.stdout.write("ignored %d non-primary reads in target BAM.\n" % ignored_target) 
+        logger.info("replaced " + str(recount) + " reads (" + str(excount) + " excluded )\n")
+        logger.info("kept " + str(sum([len(v) for k,v in secondary.items()])) + " secondary reads.\n")
+        logger.info("kept " + str(sum([len(v) for k,v in supplementary.items()])) + " supplementary reads.\n") 
+        logger.info("ignored %d non-primary reads in target BAM.\n" % ignored_target) 
 
     nadded = 0
     # dump the unused reads from the donor if requested with --all
@@ -213,7 +213,7 @@ def replace_reads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=N
                 rdict[extqname] = cleanup(rdict[extqname],None,RG)
                 outputbam.write(rdict[extqname])
                 nadded += 1
-        sys.stdout.write("added " + str(nadded) + " reads due to --all\n")
+        logger.info("added " + str(nadded) + " reads due to --all\n")
 
     origbam.close()
     mutbam.close()

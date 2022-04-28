@@ -32,7 +32,7 @@ def mut(base, altbase):
     bases = ('A','T','C','G')
     base = base.upper()
     if base not in bases or (altbase is not None and altbase not in ['A','T','G','C']):
-        raise ValueError("ERROR\t" + now() + "\tbase passed to mut(): " + str(base) + " not one of (A,T,C,G)\n")
+        raise ValueError("ERROR base passed to mut(): " + str(base) + " not one of (A,T,C,G)\n")
 
     if altbase is not None:
         return altbase
@@ -336,7 +336,7 @@ def main(args):
             # ALT is 5th column, if present
             if len(c) == 5:
                 altbase = c[4].upper()
-                assert altbase in ['A','T','C','G'], "ERROR:\t" + now() + "\tALT " + altbase + " not A, T, C, or G!\n"
+                assert altbase in ['A','T','C','G'], "ERROR: ALT " + altbase + " not A, T, C, or G!\n"
                 target['altbase'] = altbase
 
             targets.append(target)

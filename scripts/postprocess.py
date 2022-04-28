@@ -3,7 +3,7 @@
 import argparse
 import pysam
 import sys
-import datetime
+import logging
 
 from subprocess import call
 from re import sub
@@ -11,9 +11,6 @@ from os.path import basename
 from os import remove, rename
 from uuid import uuid4
 
-
-def now():
-    return str(datetime.datetime.now())
 
 
 def getRG(tags):
@@ -109,7 +106,7 @@ def samrec(read, bam, IDRG, newname=None):
 
             if tagname == 'RG':
                 if tagval not in IDRG:
-                    sys.stderr.write("ERROR:\t" + now() + "\tread group: " + tagval + " not found!\n")
+                    logging.error("ERROR: read group: " + tagval + " not found!\n")
                 assert tagval in IDRG # make sure readgroup is value (i.e. in the header)
                 tagval = IDRG[tagval]
 
@@ -123,14 +120,14 @@ def makebam(sam, fai, threads, mem):
     ''' sam --> sorted bam '''
     outbam = sub('.sam$', '.bam', sam)
     cmd = ['samtools', 'view', '-bt', fai, '-o', outbam, sam]
-    sys.stderr.write(sam + ' --> ' + outbam + ': ' + ' '.join(cmd) + '\n')
+    logging.info(sam + ' --> ' + outbam + ': ' + ' '.join(cmd) + '\n')
     call(cmd)
     #remove(sam)
 
     outsort = sub('.bam$', '.sorted.bam', outbam)
     cmd = ['samtools', 'sort', '-m', str(mem), '-@', str(threads), '-T', outsort, '-o',  outsort, outbam]
     outsort += '.bam'
-    sys.stderr.write(outbam + ' --> ' + outsort + ': ' + ' '.join(cmd) + '\n')
+    logging.info(outbam + ' --> ' + outsort + ': ' + ' '.join(cmd) + '\n')
     call(cmd)
 
     #remove(outbam)
@@ -190,9 +187,9 @@ def main(args):
         tick = int((bam.mapped + bam.unmapped) * 0.01)
         if tick == 0:
             tick = 1
-        sys.stderr.write("INFO\t" + now() + "\toutputting status every " + str(tick) + " reads (1%) ...\n")
+        logging.info("outputting status every " + str(tick) + " reads (1%) ...\n")
     except ValueError as e:
-        sys.stderr.write("INFO\t" + now() + "\tno index found, outputting status every " + str(tick) + " reads.\n")
+        logging.info("no index found, outputting status every " + str(tick) + " reads.\n")
 
     outsam = open(outsamfn, 'a')
 
@@ -275,12 +272,12 @@ def main(args):
                 w += 1
 
         if n % tick == 0:
-            sys.stderr.write('\t'.join(map(str, ('processed',n,'reads:',p,'paired',u,'unpaired',w,'written',m,'mates found.'))) + '\n')
-            sys.stderr.write('\t'.join(map(str, ('fixed strand:', fixed_strand, 'fixed RG pair:', fixed_rg_pair, 'fixed mate pos:', fixed_matepos))) + '\n')
-            sys.stderr.write('\t'.join(map(str, ('fixed unmapped flag:', fixed_unmap, 'fixed mate ref:', fixed_materef, 'fixed tlen:', fixed_tlen))) + '\n')
+            logging.info('\t'.join(map(str, ('processed',n,'reads:',p,'paired',u,'unpaired',w,'written',m,'mates found.'))) + '\n')
+            logging.info('\t'.join(map(str, ('fixed strand:', fixed_strand, 'fixed RG pair:', fixed_rg_pair, 'fixed mate pos:', fixed_matepos))) + '\n')
+            logging.info('\t'.join(map(str, ('fixed unmapped flag:', fixed_unmap, 'fixed mate ref:', fixed_materef, 'fixed tlen:', fixed_tlen))) + '\n')
 
     if len(paired.keys()) > 0:
-        sys.stderr.write("WARNING:\t" + now() + "\tfound " + str(len(list(paired.keys()))) + " orphaned paired reads that were not output!\n") 
+        logging.warn("found " + str(len(list(paired.keys()))) + " orphaned paired reads that were not output!\n") 
 
     outsam.close()
     makebam(outsamfn, args.fai, args.threads, args.mem)

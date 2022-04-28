@@ -477,10 +477,10 @@ def makemut(args, bedline, alignopts):
         if chrom in cnv.contigs:
             for cnregion in cnv.fetch(chrom,start,end):
                 cn = float(cnregion.strip().split()[3]) # expect chrom,start,end,CN
-                sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\t" + ' '.join(("copy number in sv region:",chrom,str(start),str(end),"=",str(cn))) + "\n")
+                logger.info("INFO" + mutid + "\t" + ' '.join(("copy number in sv region:",chrom,str(start),str(end),"=",str(cn))) + "\n")
                 svfrac = svfrac/float(cn)
                 assert svfrac <= 1.0, 'copy number from %s must be at least 1: %s' % (args.cnvfile, cnregion.strip())
-                sys.stdout.write("INFO\t" + now() + "\t" + mutid + "\tadjusted default MAF: " + str(svfrac) + "\n")
+                logger.info("INFO" + mutid + "\tadjusted default MAF: " + str(svfrac) + "\n")
 
     logger.info("%s interval: %s" % (mutid, bedline))
     logger.info("%s length: %d" % (mutid, (end-start)))
@@ -840,7 +840,7 @@ def makemut(args, bedline, alignopts):
             rename_reads = False
 
         else:
-            raise ValueError("ERROR\t" + now() + "\t" + mutid + "\t: mutation not one of: INS,INV,DEL,DUP,TRN,BIGDEL,BIGINV,BIGDUP\n")
+            raise ValueError("ERROR " + mutid + "\t: mutation not one of: INS,INV,DEL,DUP,TRN,BIGDEL,BIGINV,BIGDUP\n")
 
         logfile.write(">" + chrom + ":" + str(refstart) + "-" + str(refend) +" AFTER\n" + str(mutseq) + "\n")
 
@@ -906,7 +906,6 @@ def main(args):
     except Exception:
         logger.error("failed to load insertion library %s" % args.inslib)
         traceback.print_exc(file=sys.stderr)
-        sys.stderr.write("\n")
         sys.exit(1)
 
     results = []

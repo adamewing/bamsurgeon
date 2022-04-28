@@ -5,7 +5,7 @@ import os
 import sys
 import pysam
 import argparse
-
+import logging
 
 def fetchregions(infn, outfn, invcf, window=1000):
     inbam  = pysam.AlignmentFile(infn)
@@ -21,7 +21,7 @@ def fetchregions(infn, outfn, invcf, window=1000):
             end = int(rec.INFO.get('END')[0]) + window
 
         if rec.CHROM not in inbam.references:
-            sys.stderr.write("WARNING: " + rec.CHROM + " contig or chromosome not in " + infn + "\n")
+            logging.warn("WARNING: " + rec.CHROM + " contig or chromosome not in " + infn + "\n")
             continue
 
         for read in inbam.fetch(rec.CHROM, start, end):

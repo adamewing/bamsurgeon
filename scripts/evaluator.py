@@ -11,6 +11,7 @@ import vcf
 import argparse
 import pysam
 from collections import OrderedDict
+import logging
 
 
 def match(subrec, trurec, vtype='SNV'):
@@ -54,7 +55,7 @@ def expand_sv_ends(rec):
                 endpos += ci[0]
 
     except TypeError as e:
-        sys.stderr.write("error expanding sv interval: " + str(e) + " for record: " + str(rec) + "\n")
+        logger.error("error expanding sv interval: " + str(e) + " for record: " + str(rec) + "\n")
 
     if startpos > endpos:
         endpos, startpos = startpos, endpos
@@ -143,7 +144,7 @@ def have_identical_haplotypes(v1, v2, ref):
 
     if len(seq) != end-start:
         # FIXME how to handle?
-        sys.stderr.write("WARN: Couldn't fetch full sequence window. Skipping"
+        logger.warn("WARN: Couldn't fetch full sequence window. Skipping"
                      " allele-aware comparison, otherwise indices would"
                      " be off\n")
         raise NotImplementedError
@@ -249,7 +250,7 @@ def evaluate(submission, truth, vtype='SNV', reffa=None, ignorechroms=None, igno
                 used_truth[str(trurec)] = True
                     
         except ValueError as e:
-            sys.stderr.write("Warning: " + str(e) + "\n")
+            logger.error("Warning: " + str(e) + "\n")
 
         if matched:
             tpcount += 1
@@ -292,18 +293,18 @@ def main(args):
         chromlist = args.chromlist.split(',')
 
     if not args.subvcf.endswith('.vcf') and not args.subvcf.endswith('.vcf.gz'):
-        sys.stderr.write("submission VCF filename does not end in .vcf or .vcf.gz\n")
+        logger.error("submission VCF filename does not end in .vcf or .vcf.gz\n")
         sys.exit(1)
 
     if not os.path.exists(args.truvcf):
-        sys.stderr.write("truth VCF does not exist.\n")
+        logger.error("truth VCF does not exist.\n")
         sys.exit(1)
     if not os.path.exists(args.truvcf + '.tbi'):
-        sys.stderr.write("truth VCF does not appear to be indexed. bgzip + tabix index required.\n")
+        logger.error("truth VCF does not appear to be indexed. bgzip + tabix index required.\n")
         sys.exit(1)
 
     if args.mutype not in ('SV', 'SNV', 'INDEL'):
-        sys.stderr.write("-m/--mutype must be either SV, SNV, or INDEL\n")
+        logger.error("-m/--mutype must be either SV, SNV, or INDEL\n")
         sys.exit(1)
 
     result = evaluate(args.subvcf, args.truvcf, vtype=args.mutype, 
