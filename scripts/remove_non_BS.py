@@ -16,7 +16,7 @@ if len(sys.argv) == 2:
 
     logger.info('outputting reads with BS flag to %s' % outfn)
 
-    inbam  = pysam.AlignmentFile(sys.argv[1], 'rb')
+    inbam  = pysam.AlignmentFile(sys.argv[1])
     outbam = pysam.AlignmentFile(outfn, 'wb', template=inbam)
 
 

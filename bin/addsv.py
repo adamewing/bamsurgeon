@@ -213,7 +213,7 @@ def replace(origbamfile, mutbamfile, outbamfile, excludefile, keepsecondary=Fals
 def discordant_fraction(bamfile, chrom, start, end):
     r = 0
     d = 0
-    bam = pysam.AlignmentFile(bamfile, 'rb')
+    bam = pysam.AlignmentFile(bamfile)
     for read in bam.fetch(chrom, start, end):
         r += 1
         if not read.is_proper_pair:
@@ -382,7 +382,7 @@ def add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right
 
 
 def fetch_read_names(args, chrom, start, end, svfrac=1.0):
-    bamfile = pysam.AlignmentFile(args.bamFileName, 'rb')
+    bamfile = pysam.AlignmentFile(args.bamFileName)
 
     names = []
 
