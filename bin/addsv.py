@@ -272,15 +272,8 @@ def locate_contig_pos(refstart, refend, user_start, user_end, contig_len, maxlib
 
 
 
-def add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right_bnd, buf=200):
+def add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right_bnd, bdup_svfrac, buf=200):
     assert bdup_left_bnd < bdup_right_bnd, '%s: bdup_left_bnd > bdup_right_bnd' % mutid
-
-    donorbam = pysam.AlignmentFile(args.donorbam)
-
-    tmpbam = pysam.AlignmentFile(tmpbamfn)
-
-    outbamfn = '%s/%s.%s.bigdup.merged.bam' % (args.tmpdir, mutid, str(uuid4()))
-    outbam = pysam.AlignmentFile(outbamfn, 'wb', template=tmpbam)
 
     # identify zero coverage region
 
@@ -292,11 +285,11 @@ def add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right
 
     region = '%s:%d-%d' % (bdup_chrom, bdup_left_bnd+buf, bdup_right_bnd-buf)
 
-    args = ['samtools', 'mpileup', '-r', region, '-a', tmpbamfn]
+    samtools_args = ['samtools', 'mpileup', '-r', region, '-a', tmpbamfn]
 
     FNULL = open(os.devnull, 'w')
 
-    p = subprocess.Popen(args,stdout=subprocess.PIPE,stderr=FNULL)
+    p = subprocess.Popen(samtools_args,stdout=subprocess.PIPE,stderr=FNULL)
 
     for line in p.stdout:
         line = line.decode()
@@ -331,21 +324,22 @@ def add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right
 
     assert left_zero < right_zero, 'left_zero: %d, right_zero: %d' % (left_zero, right_zero)
 
-    count_left  = tmpbam.count(reference=bdup_chrom, start=left_cover, end=left_zero)
-    count_right = tmpbam.count(reference=bdup_chrom, start=right_zero, end=right_cover)
+    tmpbam = pysam.AlignmentFile(tmpbamfn)
 
-    cover_donor = donorbam.count(region=region) / float(bdup_right_bnd-bdup_left_bnd)
-
-    tmpbam.reset()
-    donorbam.reset()
-
-    cover_tmp = float(count_left+count_right) / float((left_zero-left_cover)+(right_cover-right_zero))
-
+    outbamfn = '%s/%s.%s.bigdup.merged.bam' % (args.tmpdir, mutid, str(uuid4()))
+    outbam = pysam.AlignmentFile(outbamfn, 'wb', template=tmpbam)
     for read in tmpbam.fetch(until_eof=True):
         outbam.write(read)
 
-    #donor_norm_factor = min(cover_tmp,cover_donor)/max(cover_tmp,cover_donor)
-    donor_norm_factor = 1.0 # FIXME 
+    # Calculate donor norm factor
+    with pysam.AlignmentFile(args.donorbam) as donorbam:
+        cover_donor = donorbam.count(region=region) / float(bdup_right_bnd-bdup_left_bnd)
+    with pysam.AlignmentFile(args.bamFileName) as origbam:
+        cover_orig = origbam.count(region=region) / float(bdup_right_bnd-bdup_left_bnd)
+
+    donor_norm_factor = cover_orig * bdup_svfrac / cover_donor
+    if donor_norm_factor > 1.0:
+        logger.warning('%s: donor_norm_factor %f > 1.0. This means donor bam has less coverage than required.' % (mutid, donor_norm_factor))
 
     logger.info('%s: BIGDUP donor coverage normalisation factor: %f' % (mutid, donor_norm_factor))
 
@@ -355,6 +349,7 @@ def add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right
 
     paircount = 0
 
+    donorbam = pysam.AlignmentFile(args.donorbam)
     for read in donorbam.fetch(bdup_chrom, bdup_left_bnd, bdup_right_bnd):
         if not read.is_duplicate and not read.is_secondary and not read.is_supplementary:
             if (read.pos > left_zero and read.pos < right_zero) or (read.next_reference_start > left_zero and read.next_reference_start < right_zero):
@@ -995,12 +990,13 @@ def main(args):
 
             # rewrite bigdup coords as translocation
             if mut_type == 'BIGDUP':
-                bdup_svfrac = 1.0 # BIGDUP VAF is determined by donor bam
+                bdup_svfrac = float(args.svfrac)
+                if len(bedline.split()) == 6:
+                    bdup_svfrac = float(bedline.split()[-1])
 
                 if args.donorbam is None:
                     logger.warning('%s: using BIGDUP requires specifying a --donorbam and none was provided, using %s' % (bedline, args.bamFileName))
                     args.donorbam = args.bamFileName
-                    continue
 
                 bdup_chrom, bdup_start, bdup_end = bedline.split()[:3]
                 bdup_start = int(bdup_start)
@@ -1105,7 +1101,7 @@ def main(args):
             bdup_left_bnd = int((int(mutinfo.split()[7])+int(mutinfo.split()[8]))/2)
             bdup_right_bnd = int((int(mutinfo.split()[2])+int(mutinfo.split()[3]))/2)
 
-            bigdup_add[mutid] = (bdup_chrom, bdup_left_bnd, bdup_right_bnd)
+            bigdup_add[mutid] = (bdup_chrom, bdup_left_bnd, bdup_right_bnd, bdup_svfrac)
 
 
     biginv_pairs = dd(list)
@@ -1121,7 +1117,7 @@ def main(args):
         elif mutid.endswith('BIGDUP'):
             #print 'bigdup testing mutid:', mutid
             #print 'bigdup testing known mutids:', bigdup_add.keys()
-            bdup_chrom, bdup_left_bnd, bdup_right_bnd = bigdup_add[mutid]
+            bdup_chrom, bdup_left_bnd, bdup_right_bnd, bdup_svfrac = bigdup_add[mutid]
 
             bdup_left_bnd  = int(bdup_left_bnd)
             bdup_right_bnd = int(bdup_right_bnd)
@@ -1129,7 +1125,7 @@ def main(args):
             if bdup_left_bnd > bdup_right_bnd:
                 bdup_left_bnd, bdup_right_bnd = bdup_right_bnd, bdup_left_bnd
 
-            merged_bdup = add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right_bnd)
+            merged_bdup = add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right_bnd, bdup_svfrac)
 
             new_tmpbams.append(merged_bdup) # TODO merge bigdup reads
 
