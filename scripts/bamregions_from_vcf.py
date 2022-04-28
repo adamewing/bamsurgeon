@@ -8,8 +8,8 @@ import argparse
 
 
 def fetchregions(infn, outfn, invcf, window=1000):
-    inbam  = pysam.Samfile(infn, 'rb')
-    outbam = pysam.Samfile(outfn, 'wb', template=inbam)
+    inbam  = pysam.AlignmentFile(infn)
+    outbam = pysam.AlignmentFile(outfn, 'wb', template=inbam)
 
     vcfh = vcf.Reader(filename=invcf)
 

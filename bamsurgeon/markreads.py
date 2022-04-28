@@ -5,7 +5,7 @@ import sys
 
 
 def markreads(bamfn, outfn):
-    bam = pysam.AlignmentFile(bamfn, 'rb')
+    bam = pysam.AlignmentFile(bamfn)
     out = pysam.AlignmentFile(outfn, 'wb', template=bam)
 
     for read in bam.fetch(until_eof=True):

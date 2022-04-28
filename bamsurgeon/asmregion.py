@@ -181,8 +181,8 @@ class ReadPair:
 
 
 def asm(chrom, start, end, bamfilename, reffile, kmersize, tmpdir, mutid='null', debug=False):
-    bamfile  = pysam.Samfile(bamfilename,'rb')
-    matefile = pysam.Samfile(bamfilename,'rb')
+    bamfile  = pysam.AlignmentFile(bamfilename)
+    matefile = pysam.AlignmentFile(bamfilename)
 
     readpairs = {}
     nreads = 0

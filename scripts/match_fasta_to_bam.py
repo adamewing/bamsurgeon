@@ -18,7 +18,7 @@ def main(args):
     assert os.path.exists(args.fasta + '.fai'), 'please run samtools faidx %s' % args.fasta
 
     fa  = pysam.FastaFile(args.fasta)
-    bam = pysam.AlignmentFile(args.bam, 'rb')
+    bam = pysam.AlignmentFile(args.bam)
 
     bam_reflen = od([(ref, length) for ref, length in zip(bam.references, bam.lengths)])
 

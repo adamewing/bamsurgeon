@@ -141,7 +141,7 @@ def fastqreadcount(fastqfile):
 
 
 def bamreadcount(bamfile):
-    bam = pysam.Samfile(bamfile, 'rb')
+    bam = pysam.AlignmentFile(bamfile)
     if os.path.exists(bamfile + '.bai'):
         return bam.mapped + bam.unmapped
     else:

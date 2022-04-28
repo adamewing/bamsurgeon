@@ -199,9 +199,9 @@ def align(qryseq, refseq):
 def replace(origbamfile, mutbamfile, outbamfile, excludefile, keepsecondary=False, seed=None, quiet=False):
     ''' open .bam file and call replacereads
     '''
-    origbam = pysam.Samfile(origbamfile, 'rb')
-    mutbam  = pysam.Samfile(mutbamfile, 'rb')
-    outbam  = pysam.Samfile(outbamfile, 'wb', template=origbam)
+    origbam = pysam.AlignmentFile(origbamfile)
+    mutbam  = pysam.AlignmentFile(mutbamfile)
+    outbam  = pysam.AlignmentFile(outbamfile, 'wb', template=origbam)
 
     rr.replaceReads(origbam, mutbam, outbam, excludefile=excludefile, allreads=True, keepsecondary=keepsecondary, seed=seed, quiet=quiet)
 
@@ -213,7 +213,7 @@ def replace(origbamfile, mutbamfile, outbamfile, excludefile, keepsecondary=Fals
 def discordant_fraction(bamfile, chrom, start, end):
     r = 0
     d = 0
-    bam = pysam.Samfile(bamfile, 'rb')
+    bam = pysam.AlignmentFile(bamfile)
     for read in bam.fetch(chrom, start, end):
         r += 1
         if not read.is_proper_pair:
@@ -382,7 +382,7 @@ def add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right
 
 
 def fetch_read_names(args, chrom, start, end, svfrac=1.0):
-    bamfile = pysam.AlignmentFile(args.bamFileName, 'rb')
+    bamfile = pysam.AlignmentFile(args.bamFileName)
 
     names = []
 
@@ -433,7 +433,7 @@ def makemut(args, bedline, alignopts):
 
     mutid = '_'.join(map(str, bedline.split()[:4]))
 
-    bamfile = pysam.Samfile(args.bamFileName, 'rb')
+    bamfile = pysam.AlignmentFile(args.bamFileName)
     reffile = pysam.Fastafile(args.refFasta)
     logfn = '_'.join(map(os.path.basename, bedline.split()[:4])) + ".log"
     logfile = open('addsv_logs_' + os.path.basename(args.outBamFile) + '/' + os.path.basename(args.outBamFile) + '_' + logfn, 'w')
@@ -906,8 +906,9 @@ def main(args):
     tmpbams = [] # temporary BAMs, each holds the realigned reads for one mutation
     exclfns = [] # 'exclude' files store reads to be removed from the original BAM due to deletions
 
-    if not os.path.exists(args.bamFileName + '.bai'):
-        logger.error("input bam must be indexed, not .bai file found for %s" % args.bamFileName)
+    if (args.bamFileName.endswith('.bam') and not os.path.exists(args.bamFileName + '.bai')) or \
+        (args.bamFileName.endswith('.cram') and not os.path.exists(args.bamFileName + '.crai')):
+        logger.error("input file must be indexed, not .bai or .crai file found for %s" % args.bamFileName)
         sys.exit(1)
 
     alignopts = {}

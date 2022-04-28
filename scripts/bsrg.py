@@ -33,8 +33,8 @@ if len(sys.argv) == 2:
     outbamfn = sys.argv[1].replace('.bam', '.BSRG.bam')
     rgid = str(uuid4())
 
-    inbam  = pysam.Samfile(sys.argv[1], 'rb')
-    outbam = pysam.Samfile(outbamfn, 'wb', header=modhead(inbam.header, rgid, os.path.basename(outbamfn)))
+    inbam  = pysam.AlignmentFile(sys.argv[1])
+    outbam = pysam.AlignmentFile(outbamfn, 'wb', header=modhead(inbam.header, rgid, os.path.basename(outbamfn)))
 
     for read in inbam.fetch(until_eof=True):
         read.tags = read.tags + [('RG', rgid)]

@@ -74,9 +74,9 @@ def countReadCoverage(bam,chrom,start,end):
 def replace(origbamfile, mutbamfile, outbamfile, seed=None):
     ''' open .bam file and call replacereads
     '''
-    origbam = pysam.Samfile(origbamfile, 'rb')
-    mutbam  = pysam.Samfile(mutbamfile, 'rb')
-    outbam  = pysam.Samfile(outbamfile, 'wb', template=origbam)
+    origbam = pysam.AlignmentFile(origbamfile)
+    mutbam  = pysam.AlignmentFile(mutbamfile)
+    outbam  = pysam.AlignmentFile(outbamfile, 'wb', template=origbam)
 
     rr.replaceReads(origbam, mutbam, outbam, keepqual=True, seed=seed)
 
@@ -95,8 +95,8 @@ def makemut(args, hc, avoid, alignopts):
 
     if args.seed is not None: random.seed(int(args.seed) + int(hc[0]['start']))
 
-    bamfile = pysam.Samfile(args.bamFileName, 'rb')
-    bammate = pysam.Samfile(args.bamFileName, 'rb') # use for mates to avoid iterator problems
+    bamfile = pysam.AlignmentFile(args.bamFileName)
+    bammate = pysam.AlignmentFile(args.bamFileName) # use for mates to avoid iterator problems
     reffile = pysam.Fastafile(args.refFasta)
     tmpbams = []
 
@@ -157,7 +157,7 @@ def makemut(args, hc, avoid, alignopts):
 
     tmpoutbamname = args.tmpdir + "/" + hapstr + ".tmpbam." + str(uuid4()) + ".bam"
     logger.info("%s creating tmp bam: %s" % (hapstr, tmpoutbamname))
-    outbam_muts = pysam.Samfile(tmpoutbamname, 'wb', template=bamfile)
+    outbam_muts = pysam.AlignmentFile(tmpoutbamname, 'wb', template=bamfile)
 
     mutfail, hasSNP, maxfrac, outreads, mutreads, mutmates = mutation.mutate(args, log, bamfile, bammate, chrom, min(mutpos_list), max(mutpos_list)+1, mutpos_list, avoid=avoid, mutid_list=mutid_list, is_snv=True, mutbase_list=mutbase_list, reffile=reffile)
 
@@ -281,7 +281,7 @@ def makemut(args, hc, avoid, alignopts):
 
         aligners.remap_bam(args.aligner, tmpoutbamname, args.refFasta, alignopts, threads=int(args.alignerthreads), mutid=hapstr, paired=(not args.single), picardjar=args.picardjar, insane=args.insane)
 
-        outbam_muts = pysam.Samfile(tmpoutbamname,'rb')
+        outbam_muts = pysam.AlignmentFile(tmpoutbamname)
         coverwindow = 1
         incover  = countReadCoverage(bamfile,chrom,min(mutpos_list)-coverwindow,max(mutpos_list)+coverwindow)
         outcover = countReadCoverage(outbam_muts,chrom,min(mutpos_list)-coverwindow,max(mutpos_list)+coverwindow)
@@ -322,8 +322,9 @@ def main(args):
     bedfile = open(args.varFileName, 'r')
     reffile = pysam.Fastafile(args.refFasta)
 
-    if not os.path.exists(args.bamFileName + '.bai'):
-        logger.error("input bam must be indexed, not .bai file found for %s" % args.bamFileName)
+    if (args.bamFileName.endswith('.bam') and not os.path.exists(args.bamFileName + '.bai')) or \
+        (args.bamFileName.endswith('.cram') and not os.path.exists(args.bamFileName + '.crai')):
+        logger.error("input file must be indexed, not .bai or .crai file found for %s" % args.bamFileName)
         sys.exit(1)
 
     alignopts = {}
@@ -339,8 +340,8 @@ def main(args):
 
     # make a temporary file to hold mutated reads
     outbam_mutsfile = "addsnv." + str(uuid4()) + ".muts.bam"
-    bamfile = pysam.Samfile(args.bamFileName, 'rb')
-    outbam_muts = pysam.Samfile(outbam_mutsfile, 'wb', template=bamfile)
+    bamfile = pysam.AlignmentFile(args.bamFileName)
+    outbam_muts = pysam.AlignmentFile(outbam_mutsfile, 'wb', template=bamfile)
     outbam_muts.close()
     bamfile.close()
     tmpbams = []

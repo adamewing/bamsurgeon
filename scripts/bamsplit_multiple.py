@@ -86,7 +86,7 @@ if len(sys.argv) == 5:
     percents = error_check(outbams, percents)
 
     # file handles
-    inbam_fh = pysam.Samfile(sys.argv[1], 'rb')
+    inbam_fh = pysam.AlignmentFile(sys.argv[1])
     outbams_fh = {}
 
     all_reads = {}              # hash of read name -> outbam
@@ -94,7 +94,7 @@ if len(sys.argv) == 5:
     # initialize some hashes
     for idx in range(len(outbams)):
         bam_percents[outbams[idx]] = percents[idx]
-        outbams_fh[outbams[idx]] = pysam.Samfile(outdir+'/'+outbams[idx], 'wb', template=inbam_fh)
+        outbams_fh[outbams[idx]] = pysam.AlignmentFile(outdir+'/'+outbams[idx], 'wb', template=inbam_fh)
         outbams_reads[outbams[idx]] = 0
 
     reset()
