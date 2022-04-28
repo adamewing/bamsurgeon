@@ -29,14 +29,6 @@ def get_mutstr(chrom, start, end, ins, ref):
     return 'FIX get_mutstr'
 
 
-def dictlist(fn):
-    d = {}
-    with open(fn, 'r') as inlist:
-        for name in inlist:
-            d[name.strip()] = True
-    return d
-
-
 def makemut(args, chrom, start, end, vaf, ins, avoid, alignopts):
     ''' is ins is a sequence, it will is inserted at start, otherwise delete from start to end'''
 
