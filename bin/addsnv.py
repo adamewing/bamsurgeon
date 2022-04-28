@@ -6,7 +6,7 @@ import argparse
 import random
 import subprocess
 import os
-import bamsurgeon.replacereads as rr
+import bamsurgeon.replace_reads as rr
 import bamsurgeon.aligners as aligners
 import bamsurgeon.mutation as mutation
 import bamsurgeon.makevcf as makevcf
@@ -24,10 +24,6 @@ FORMAT = '%(levelname)s %(asctime)s %(message)s'
 logging.basicConfig(format=FORMAT)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
-
-#sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)
-#sys.stderr = os.fdopen(sys.stderr.fileno(), 'w', 0)
-
 
 def mut(base, altbase):
     """ change base to something different
@@ -48,23 +44,7 @@ def mut(base, altbase):
         return alt
 
 
-def replace(origbamfile, mutbamfile, outbamfile, seed=None):
-    ''' open .bam file and call replacereads
-    '''
-    origbam = pysam.AlignmentFile(origbamfile)
-    mutbam  = pysam.AlignmentFile(mutbamfile)
-    outbam  = pysam.AlignmentFile(outbamfile, 'wb', template=origbam)
-
-    rr.replaceReads(origbam, mutbam, outbam, keepqual=True, seed=seed)
-
-    origbam.close()
-    mutbam.close()
-    outbam.close()
-
-
 def makemut(args, hc, avoid, alignopts):
-
-
     mutid_list = []
     for site in hc:
         mutid_list.append(site['chrom'] + '_' + str(site['start']) + '_' + str(site['end']) + '_' + str(site['vaf']) + '_' + str(site['altbase']))
@@ -439,7 +419,7 @@ def main(args):
             logger.info("tagged reads.")
 
         logger.info("done making mutations, merging mutations into %s --> %s" % (args.bamFileName, args.outBamFile))
-        replace(args.bamFileName, outbam_mutsfile, args.outBamFile, seed=args.seed)
+        rr.replace_reads(args.bamFileName, outbam_mutsfile, args.outBamFile, keepqual=True, seed=args.seed)
 
         #cleanup
         os.remove(outbam_mutsfile)

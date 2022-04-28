@@ -9,7 +9,7 @@ import random
 import subprocess
 import argparse
 import pysam
-import bamsurgeon.replacereads as rr
+import bamsurgeon.replace_reads as rr
 import bamsurgeon.asmregion as ar
 import bamsurgeon.mutableseq as ms
 import bamsurgeon.aligners as aligners
@@ -194,20 +194,6 @@ def align(qryseq, refseq):
     os.remove(qryfa)
 
     return best
-
-
-def replace(origbamfile, mutbamfile, outbamfile, excludefile, keepsecondary=False, seed=None, quiet=False):
-    ''' open .bam file and call replacereads
-    '''
-    origbam = pysam.AlignmentFile(origbamfile)
-    mutbam  = pysam.AlignmentFile(mutbamfile)
-    outbam  = pysam.AlignmentFile(outbamfile, 'wb', template=origbam)
-
-    rr.replaceReads(origbam, mutbam, outbam, excludefile=excludefile, allreads=True, keepsecondary=keepsecondary, seed=seed, quiet=quiet)
-
-    origbam.close()
-    mutbam.close()
-    outbam.close()
 
 
 def discordant_fraction(bamfile, chrom, start, end):
@@ -1212,7 +1198,7 @@ def main(args):
             logger.info("tagged reads.")
 
         logger.info("writing to %s" % args.outBamFile)
-        replace(args.bamFileName, mergedtmp, args.outBamFile, excl_merged, keepsecondary=args.keepsecondary, seed=args.seed, quiet=True)
+        rr.replace_reads(args.bamFileName, mergedtmp, args.outBamFile, excludefile=excl_merged, allreads=True, keepsecondary=args.keepsecondary, seed=args.seed, quiet=True)
 
         if not args.debug:
             os.remove(excl_merged)

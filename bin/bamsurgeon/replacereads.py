@@ -83,11 +83,13 @@ def compare_ref(targetbam, donorbam):
     return True
     
 
-def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=None, allreads=False, keepqual=False, progress=False, keepsecondary=False, keepsupplementary=False, seed=None, quiet=False):
-    ''' targetbam, donorbam, and outputbam are pysam.Samfile objects
-        outputbam must be writeable and use targetbam as template
+def replace_reads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=None, allreads=False, keepqual=False, progress=False, keepsecondary=False, keepsupplementary=False, seed=None, quiet=False):
+    ''' outputbam must be writeable and use targetbam as template
         read names in excludefile will not appear in final output
     '''
+    origbam = pysam.AlignmentFile(origbamfile)
+    mutbam  = pysam.AlignmentFile(mutbamfile)
+    outbam  = pysam.AlignmentFile(outbamfile, 'wb', template=origbam)
 
     if seed is not None: random.seed(int(seed))
 
@@ -215,16 +217,10 @@ def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=No
                 nadded += 1
         sys.stdout.write("added " + str(nadded) + " reads due to --all\n")
 
-def main(args):
-    targetbam = pysam.AlignmentFile(args.targetbam)
-    donorbam  = pysam.AlignmentFile(args.donorbam)
-    outputbam = pysam.AlignmentFile(args.outputbam, 'wb', template=targetbam)
+    origbam.close()
+    mutbam.close()
+    outbam.close()
 
-    replaceReads(targetbam, donorbam, outputbam, args.namechange, args.exclfile, args.all, args.keepqual, args.progress, args.keepsecondary,args.keepsupplementary)
-
-    targetbam.close()
-    donorbam.close()
-    outputbam.close()
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description='replaces aligned reads in bamfile1 with aligned reads from bamfile2')
@@ -239,4 +235,5 @@ if __name__=='__main__':
     parser.add_argument('--keepsecondary', action='store_true', default=False, help='keep secondary reads in final BAM')
     parser.add_argument('--keepsupplementary', action='store_true', default=False, help='keep supplementary reads in final BAM')    
     args = parser.parse_args()
-    main(args)
+
+    replace_reads(args.targetbam, args.donorbam, args.outputbam, args.namechange, args.exclfile, args.all, args.keepqual, args.progress, args.keepsecondary,args.keepsupplementary)

@@ -6,7 +6,7 @@ import argparse
 import random
 import subprocess
 import os
-import bamsurgeon.replacereads as rr
+import bamsurgeon.replace_reads as rr
 import bamsurgeon.aligners as aligners
 import bamsurgeon.mutation as mutation
 import bamsurgeon.makevcf as makevcf
@@ -23,46 +23,6 @@ FORMAT = '%(levelname)s %(asctime)s %(message)s'
 logging.basicConfig(format=FORMAT)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
-
-#sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)
-#sys.stderr = os.fdopen(sys.stderr.fileno(), 'w', 0)
-
-
-def countReadCoverage(bam,chrom,start,end):
-    """ calculate coverage of aligned reads over region
-    """
-    coverage = []
-    start = int(start)
-    end = int(end)
-    for i in range(end-start+1):
-        coverage.append(0.0)
-
-    i = 0
-    if chrom in bam.references:
-        for pcol in bam.pileup(chrom,start,end):
-            n = 0
-            if pcol.pos >= start and pcol.pos <= end:
-                for read in pcol.pileups:
-                    if read.alignment.mapq >= 0 and not read.alignment.is_duplicate:
-                        n += 1
-                coverage[i] = n
-                i += 1
-
-    return coverage
-
-
-def replace(origbamfile, mutbamfile, outbamfile, seed=None):
-    ''' open .bam file and call replacereads
-    '''
-    origbam = pysam.AlignmentFile(origbamfile)
-    mutbam  = pysam.AlignmentFile(mutbamfile)
-    outbam  = pysam.AlignmentFile(outbamfile, 'wb', template=origbam)
-
-    rr.replaceReads(origbam, mutbam, outbam, keepqual=True, seed=seed)
-
-    origbam.close()
-    mutbam.close()
-    outbam.close()
 
 
 def get_mutstr(chrom, start, end, ins, ref):
@@ -379,7 +339,7 @@ def main(args):
             logger.info("tagged reads.")
 
         logger.info("done making mutations, merging mutations into %s --> %s" % (args.bamFileName, args.outBamFile))
-        replace(args.bamFileName, outbam_mutsfile, args.outBamFile, seed=args.seed)
+        rr.replace_reads(args.bamFileName, outbam_mutsfile, args.outBamFile, keepqual=True, seed=args.seed)
 
         #cleanup
         os.remove(outbam_mutsfile)
