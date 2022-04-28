@@ -47,29 +47,6 @@ def mut(base, altbase):
             alt = bases[int(random.uniform(0,4))]
         return alt
 
-def countReadCoverage(bam,chrom,start,end):
-    """ calculate coverage of aligned reads over region
-    """
-
-    coverage = []
-    start = int(start)
-    end = int(end)
-    for i in range(end-start+1):
-        coverage.append(0.0)
-
-    i = 0
-    if chrom in bam.references:
-        for pcol in bam.pileup(chrom,start,end):
-            n = 0
-            if pcol.pos >= start and pcol.pos <= end:
-                for read in pcol.pileups:
-                    if read.alignment.mapq >= 0 and not read.alignment.is_duplicate:
-                        n += 1
-                coverage[i] = n
-                i += 1
-
-    return coverage
-
 
 def replace(origbamfile, mutbamfile, outbamfile, seed=None):
     ''' open .bam file and call replacereads
@@ -283,11 +260,9 @@ def makemut(args, hc, avoid, alignopts):
 
         outbam_muts = pysam.AlignmentFile(tmpoutbamname)
         coverwindow = 1
-        incover  = countReadCoverage(bamfile,chrom,min(mutpos_list)-coverwindow,max(mutpos_list)+coverwindow)
-        outcover = countReadCoverage(outbam_muts,chrom,min(mutpos_list)-coverwindow,max(mutpos_list)+coverwindow)
 
-        avgincover  = float(sum(incover))/float(len(incover)) 
-        avgoutcover = float(sum(outcover))/float(len(outcover))
+        avgincover = get_avg_coverage(bamfile, chrom,mutpos-coverwindow,mutpos+del_ln+coverwindow)
+        avgoutcover = get_avg_coverage(outbam_muts, chrom,mutpos-coverwindow,mutpos+del_ln+coverwindow)
 
         logger.info("%s avgincover: %f, avgoutcover: %f" % (hapstr, avgincover, avgoutcover))
 

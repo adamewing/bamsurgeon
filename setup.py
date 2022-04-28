@@ -134,7 +134,7 @@ setup(name='bamsurgeon',
         'scripts/match_fasta_to_bam.py'],
 	packages=find_packages(),
     install_requires = [
-        'pysam>=0.8.1',
+        'pysam>=0.11.2.2',
         'PyVCF',
     ],
 	)

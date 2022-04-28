@@ -21,6 +21,10 @@ logger.setLevel(logging.INFO)
 def now():
     return str(datetime.datetime.now())
 
+def get_avg_coverage(alignment_file, chrom, start, end):
+    split_coverage = alignment_file.count_coverage(chrom, start, end, quality_threshold=0)
+    base_sum = [sum(x) for x in split_coverage]
+    return sum(base_sum) / float(end - start)
 
 def rc(dna):
     ''' reverse complement '''

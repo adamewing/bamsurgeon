@@ -242,11 +242,8 @@ def makemut(args, chrom, start, end, vaf, ins, avoid, alignopts):
 
         outbam_muts = pysam.AlignmentFile(tmpoutbamname)
         coverwindow = 1
-        incover  = countReadCoverage(bamfile,chrom,mutpos-coverwindow,mutpos+del_ln+coverwindow)
-        outcover = countReadCoverage(outbam_muts,chrom,mutpos-coverwindow,mutpos+del_ln+coverwindow)
-
-        avgincover  = float(sum(incover))/float(len(incover)) 
-        avgoutcover = float(sum(outcover))/float(len(outcover))
+        avgincover = get_avg_coverage(bamfile, chrom,mutpos-coverwindow,mutpos+del_ln+coverwindow)
+        avgoutcover = get_avg_coverage(outbam_muts, chrom,mutpos-coverwindow,mutpos+del_ln+coverwindow)
         spikein_frac = 0.0
         if wrote > 0:
             spikein_frac = float(nmut)/float(wrote)
