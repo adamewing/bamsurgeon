@@ -17,9 +17,9 @@ if len(sys.argv) == 5:
     outbam1fn = sys.argv[3]
     outbam2fn = sys.argv[4]
 
-    inbam = pysam.Samfile(inbamfn, 'rb')
-    outbam1 = pysam.Samfile(outbam1fn, 'wb', template=inbam)
-    outbam2 = pysam.Samfile(outbam2fn, 'wb', template=inbam)
+    inbam = pysam.AlignmentFile(inbamfn)
+    outbam1 = pysam.AlignmentFile(outbam1fn, 'wb', template=inbam)
+    outbam2 = pysam.AlignmentFile(outbam2fn, 'wb', template=inbam)
 
     lastname = None
     lastread = None

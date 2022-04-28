@@ -28,9 +28,9 @@ def split(inbamfn, keep_secondary=False, keep_supplementary=False, seed=None):
     outbam1fn = sub('.bam$', '.pick1.bam', inbamfn)
     outbam2fn = sub('.bam$', '.pick2.bam', inbamfn)
 
-    inbam = pysam.Samfile(inbamfn, 'rb')
-    outbam1 = pysam.Samfile(outbam1fn, 'wb', template=inbam)
-    outbam2 = pysam.Samfile(outbam2fn, 'wb', template=inbam)
+    inbam = pysam.AlignmentFile(inbamfn)
+    outbam1 = pysam.AlignmentFile(outbam1fn, 'wb', template=inbam)
+    outbam2 = pysam.AlignmentFile(outbam2fn, 'wb', template=inbam)
 
     lastread = None
 

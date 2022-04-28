@@ -141,7 +141,7 @@ def main(args):
     assert args.fai.endswith('.fai')
     outsamfn = sub('.bam$', '.postprocessed.sam', args.bam[0])
 
-    bam = pysam.Samfile(args.bam[0], 'rb')
+    bam = pysam.AlignmentFile(args.bam[0])
 
     PURG = {}
     IDRG = {}
@@ -166,7 +166,7 @@ def main(args):
         del header['PG']
         header['PG'] = [{'ID': 'bamsurgeon', 'PN': 'bamsurgeon'}]
 
-    outsam = pysam.Samfile(outsamfn, 'wh', header=header)
+    outsam = pysam.AlignmentFile(outsamfn, 'wh', header=header)
     outsam.close()
 
     paired = {} # track read pairs

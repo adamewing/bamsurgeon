@@ -216,9 +216,9 @@ def replaceReads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=No
         sys.stdout.write("added " + str(nadded) + " reads due to --all\n")
 
 def main(args):
-    targetbam = pysam.Samfile(args.targetbam, 'rb')
-    donorbam  = pysam.Samfile(args.donorbam, 'rb')
-    outputbam = pysam.Samfile(args.outputbam, 'wb', template=targetbam)
+    targetbam = pysam.AlignmentFile(args.targetbam)
+    donorbam  = pysam.AlignmentFile(args.donorbam)
+    outputbam = pysam.AlignmentFile(args.outputbam, 'wb', template=targetbam)
 
     replaceReads(targetbam, donorbam, outputbam, args.namechange, args.exclfile, args.all, args.keepqual, args.progress, args.keepsecondary,args.keepsupplementary)
 

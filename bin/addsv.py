@@ -199,9 +199,9 @@ def align(qryseq, refseq):
 def replace(origbamfile, mutbamfile, outbamfile, excludefile, keepsecondary=False, seed=None, quiet=False):
     ''' open .bam file and call replacereads
     '''
-    origbam = pysam.Samfile(origbamfile, 'rb')
-    mutbam  = pysam.Samfile(mutbamfile, 'rb')
-    outbam  = pysam.Samfile(outbamfile, 'wb', template=origbam)
+    origbam = pysam.AlignmentFile(origbamfile)
+    mutbam  = pysam.AlignmentFile(mutbamfile)
+    outbam  = pysam.AlignmentFile(outbamfile, 'wb', template=origbam)
 
     rr.replaceReads(origbam, mutbam, outbam, excludefile=excludefile, allreads=True, keepsecondary=keepsecondary, seed=seed, quiet=quiet)
 
@@ -213,7 +213,7 @@ def replace(origbamfile, mutbamfile, outbamfile, excludefile, keepsecondary=Fals
 def discordant_fraction(bamfile, chrom, start, end):
     r = 0
     d = 0
-    bam = pysam.Samfile(bamfile, 'rb')
+    bam = pysam.AlignmentFile(bamfile, 'rb')
     for read in bam.fetch(chrom, start, end):
         r += 1
         if not read.is_proper_pair:
@@ -433,7 +433,7 @@ def makemut(args, bedline, alignopts):
 
     mutid = '_'.join(map(str, bedline.split()[:4]))
 
-    bamfile = pysam.Samfile(args.bamFileName, 'rb')
+    bamfile = pysam.AlignmentFile(args.bamFileName)
     reffile = pysam.Fastafile(args.refFasta)
     logfn = '_'.join(map(os.path.basename, bedline.split()[:4])) + ".log"
     logfile = open('addsv_logs_' + os.path.basename(args.outBamFile) + '/' + os.path.basename(args.outBamFile) + '_' + logfn, 'w')

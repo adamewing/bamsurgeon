@@ -11,8 +11,8 @@ if len(sys.argv) == 2:
     inbamfn = sys.argv[1]
     outbamfn = sub('.bam$', '.renamereads.bam', inbamfn)
 
-    inbam = pysam.Samfile(inbamfn, 'rb')
-    outbam = pysam.Samfile(outbamfn, 'wb', template=inbam)
+    inbam = pysam.AlignmentFile(inbamfn)
+    outbam = pysam.AlignmentFile(outbamfn, 'wb', template=inbam)
 
     paired = {}
 

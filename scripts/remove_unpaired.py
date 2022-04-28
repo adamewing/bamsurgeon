@@ -9,8 +9,8 @@ if len(sys.argv) == 2:
     outname = sub('bam$', 'fixed.bam', sys.argv[1])
     print("output bam: " + outname)
 
-    inbam  = pysam.Samfile(sys.argv[1], 'rb')
-    outbam = pysam.Samfile(outname, 'wb', template=inbam)
+    inbam  = pysam.AlignmentFile(sys.argv[1])
+    outbam = pysam.AlignmentFile(outname, 'wb', template=inbam)
 
     reads = {}
 
