@@ -5,7 +5,7 @@ Methods for making mutations in a sequence
 '''
 
 import operator
-from common import rc
+from .common import rc
 
 
 def dist(seq1, seq2):

@@ -6,7 +6,7 @@ import argparse
 import random
 from collections import defaultdict
 
-from common import rc
+from .common import rc
 
 import logging
 FORMAT = '%(levelname)s %(asctime)s %(message)s'
