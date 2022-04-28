@@ -15,7 +15,7 @@ from bamsurgeon.common import *
 from uuid import uuid4
 from re import sub
 from shutil import move
-from multiprocessing import Pool
+from concurrent.futures import ProcessPoolExecutor
 from collections import defaultdict as dd
 
 import logging
@@ -318,7 +318,7 @@ def main(args):
     assert os.path.exists('addindel_logs_' + os.path.basename(args.outBamFile)), "could not create output directory!"
     assert os.path.exists(args.tmpdir), "could not create temporary directory!"
 
-    pool = Pool(processes=int(args.procs))
+    pool = ProcessPoolExecutor(max_workers=int(args.procs))
     results = []
 
     ntried = 0
@@ -337,12 +337,12 @@ def main(args):
                 ins = c[5]
 
             # make mutation (submit job to thread pool)
-            result = pool.apply_async(makemut, [args, chrom, start, end, vaf, ins, avoid, alignopts])
+            result = pool.submit(makemut, args, chrom, start, end, vaf, ins, avoid, alignopts)
             results.append(result)
             ntried += 1
 
     for result in results:
-        tmpbamlist = result.get()
+        tmpbamlist = result.result()
         if tmpbamlist is not None:
             for tmpbam in tmpbamlist:
                 if os.path.exists(tmpbam):
