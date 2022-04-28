@@ -322,8 +322,9 @@ def main(args):
     bedfile = open(args.varFileName, 'r')
     reffile = pysam.Fastafile(args.refFasta)
 
-    if not os.path.exists(args.bamFileName + '.bai'):
-        logger.error("input bam must be indexed, not .bai file found for %s" % args.bamFileName)
+    if (args.bamFileName.endswith('.bam') and not os.path.exists(args.bamFileName + '.bai')) or \
+        (args.bamFileName.endswith('.cram') and not os.path.exists(args.bamFileName + '.crai')):
+        logger.error("input file must be indexed, not .bai or .crai file found for %s" % args.bamFileName)
         sys.exit(1)
 
     alignopts = {}
