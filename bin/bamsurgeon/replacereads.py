@@ -6,16 +6,14 @@ import argparse
 import random
 from collections import defaultdict
 
+from common import rc
+
 import logging
 FORMAT = '%(levelname)s %(asctime)s %(message)s'
 logging.basicConfig(format=FORMAT)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-def rc(dna):
-    ''' reverse complement '''
-    complements = str.maketrans('acgtrymkbdhvACGTRYMKBDHV', 'tgcayrkmvhdbTGCAYRKMVHDB')
-    return dna.translate(complements)[::-1]
 
 def cleanup(read,orig,RG):
     '''
