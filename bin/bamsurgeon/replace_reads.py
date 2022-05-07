@@ -6,7 +6,7 @@ import argparse
 import random
 from collections import defaultdict
 
-from .common import rc
+from bamsurgeon.common import rc
 
 import logging
 FORMAT = '%(levelname)s %(asctime)s %(message)s'
@@ -81,13 +81,13 @@ def compare_ref(targetbam, donorbam):
     return True
     
 
-def replace_reads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=None, allreads=False, keepqual=False, progress=False, keepsecondary=False, keepsupplementary=False, seed=None, quiet=False):
+def replace_reads(origbamfile, mutbamfile, outbamfile, nameprefix=None, excludefile=None, allreads=False, keepqual=False, progress=False, keepsecondary=False, keepsupplementary=False, seed=None, quiet=False):
     ''' outputbam must be writeable and use targetbam as template
         read names in excludefile will not appear in final output
     '''
-    origbam = pysam.AlignmentFile(origbamfile)
-    mutbam  = pysam.AlignmentFile(mutbamfile)
-    outbam  = pysam.AlignmentFile(outbamfile, 'wb', template=origbam)
+    targetbam = pysam.AlignmentFile(origbamfile)
+    donorbam  = pysam.AlignmentFile(mutbamfile)
+    outputbam  = pysam.AlignmentFile(outbamfile, 'wb', template=targetbam)
 
     if seed is not None: random.seed(int(seed))
 
@@ -215,9 +215,9 @@ def replace_reads(targetbam, donorbam, outputbam, nameprefix=None, excludefile=N
                 nadded += 1
         logger.info("added " + str(nadded) + " reads due to --all\n")
 
-    origbam.close()
-    mutbam.close()
-    outbam.close()
+    targetbam.close()
+    donorbam.close()
+    outputbam.close()
 
 
 if __name__=='__main__':
