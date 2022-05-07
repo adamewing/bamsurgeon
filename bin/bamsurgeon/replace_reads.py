@@ -61,13 +61,11 @@ def get_RGs(bam):
     return RG
 
 def get_excluded_reads(file):
-    '''read list of excluded reads into a dictionary'''
-    ex = {}
-    f = open(file,'r')
-    for line in f:
-        line = line.strip()
-        ex[line] = True
-    f.close()
+    '''read list of excluded reads into a set'''
+    ex = set()
+    with open(file) as f:
+        for line in f:
+            ex.add(line.strip())
     return ex
 
 def compare_ref(targetbam, donorbam):
@@ -87,7 +85,8 @@ def replace_reads(origbamfile, mutbamfile, outbamfile, nameprefix=None, excludef
     '''
     targetbam = pysam.AlignmentFile(origbamfile)
     donorbam  = pysam.AlignmentFile(mutbamfile)
-    outputbam  = pysam.AlignmentFile(outbamfile, 'wb', template=targetbam)
+    write_mode = 'wc' if origbamfile.endswith('.cram') else 'wb'
+    outputbam  = pysam.AlignmentFile(outbamfile, write_mode, template=targetbam)
 
     if seed is not None: random.seed(int(seed))
 
@@ -112,36 +111,34 @@ def replace_reads(origbamfile, mutbamfile, outbamfile, nameprefix=None, excludef
     nullcount = 0 # number of null reads
     nr = 0
     for read in donorbam.fetch(until_eof=True):
-        if read.seq is not None:
-            if read.qname not in exclude:
-                pairname = 'F' # read is first in pair
-                if read.is_read2:
-                    pairname = 'S' # read is second in pair
-                if not read.is_paired:
-                    pairname = 'U' # read is unpaired
-                if nameprefix:
-                    qual = read.qual # temp
-                    read.qname = nameprefix + read.qname # must set name _before_ setting quality (see pysam docs)
-                    read.qual = qual
-                extqname = ','.join((read.qname,pairname))
-                if not read.is_secondary and not read.is_supplementary:
-                    rdict[extqname] = read
-                    nr += 1
-                elif read.is_secondary and keepsecondary:
-                    secondary[extqname].append(read)
-                elif read.is_supplementary and keepsupplementary:
-                    supplementary[extqname].append(read)
-            else: # no seq!
-                excount += 1
-        else:
+        if read.seq is None:
+            # skip unmapped reads
             nullcount += 1
+            continue
+        if read.qname in exclude:
+            excount += 1
+            continue
+        if nameprefix:
+            qual = read.qual # temp
+            read.qname = nameprefix + read.qname # must set name _before_ setting quality (see pysam docs)
+            read.qual = qual
+        extqname = read.qname
+        if not read.is_secondary and not read.is_supplementary:
+            rdict[extqname] = read
+            nr += 1
+        elif keepsecondary and read.is_secondary:
+            secondary[extqname].append(read)
+        elif keepsupplementary and read.is_supplementary:
+            supplementary[extqname].append(read)
+        else:
+            excount += 1
 
     logger.info('secondary reads count:'+ str(sum([len(v) for k,v in secondary.items()])))
     logger.info('supplementary reads count:'+ str(sum([len(v) for k,v in supplementary.items()])))
     logger.info("loaded " + str(nr) + " reads, (" + str(excount) + " excluded, " + str(nullcount) + " null or secondary or supplementary--> ignored)\n")
     excount = 0
     recount = 0 # number of replaced reads
-    used = {}
+    used = set() # set of used reads
     prog = 0
     ignored_target = 0 # number of supplemental / secondary reads in original
 
@@ -149,55 +146,40 @@ def replace_reads(origbamfile, mutbamfile, outbamfile, nameprefix=None, excludef
         if read.is_secondary or read.is_supplementary:
             ignored_target += 1
             continue
-
         prog += 1
         if progress and prog % 10000000 == 0:
             logger.info("processed " + str(prog) + " reads.\n")
-
-        if read.qname not in exclude:
-            pairname = 'F' # read is first in pair
-            if read.is_read2:
-                pairname = 'S' # read is second in pair
-            if not read.is_paired:
-                pairname = 'U' # read is unpaired
-            if nameprefix:
-                qual = read.qual # temp
-                read.qname = nameprefix + read.qname
-                read.qual = qual
-
-            extqname = ','.join((read.qname,pairname))            
-            #check if this read has been processed already. If so, skip to the next read
-            if used.get(extqname): continue
-            newReads = []
-            if extqname in rdict:
-                if keepqual:
-                    try:
-                        rdict[extqname].qual = read.qual
-                    except ValueError as e:
-                        logger.info("error replacing quality score for read: " + str(rdict[extqname].qname) + " : " + str(e) + "\n")
-                        logger.info("donor:  " + str(rdict[extqname]) + "\n")
-                        logger.info("target: " + str(read) + "\n")
-                        sys.exit(1)
-                newReads = [rdict[extqname]]
-                used[extqname] = True
-                recount += 1
-            if extqname in secondary and keepsecondary:
-                    newReads.extend(secondary[extqname])
-                    used[extqname] = True
-                    recount += len(secondary[extqname])
-            if extqname in supplementary and keepsupplementary:
-                    newReads.extend(supplementary[extqname])
-                    used[extqname] = True
-                    recount += len(supplementary[extqname])
-            #non of the above, then write the original read back
-            elif len(newReads) == 0:
-                newReads = [read]
-            assert(len(newReads) != 0)
-            for newRead in newReads:
-                newRead = cleanup(newRead,read,RG)
-                outputbam.write(newRead)
-        else:
+        if read.qname in exclude:
             excount += 1
+            continue
+        if nameprefix:
+            qual = read.qual # temp
+            read.qname = nameprefix + read.qname
+            read.qual = qual
+        extqname = read.qname
+        #check if this read has been processed already. If so, skip to the next read
+        if extqname in used: continue
+        newReads = []
+        if extqname in rdict:
+            if keepqual:
+                rdict[extqname].qual = read.qual
+            newReads = [rdict[extqname]]
+            used.add(extqname)
+            recount += 1
+        if keepsecondary and extqname in secondary:
+                newReads.extend(secondary[extqname])
+                used.add(extqname)
+                recount += len(secondary[extqname])
+        if keepsupplementary and extqname in supplementary:
+                newReads.extend(supplementary[extqname])
+                used.add(extqname)
+                recount += len(supplementary[extqname])
+        #non of the above, then write the original read back
+        elif len(newReads) == 0:
+            newReads = [read]
+        for newRead in newReads:
+            newRead = cleanup(newRead,read,RG)
+            outputbam.write(newRead)
             
     if not quiet:
         logger.info("replaced " + str(recount) + " reads (" + str(excount) + " excluded )\n")
