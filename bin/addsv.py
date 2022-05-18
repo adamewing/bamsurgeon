@@ -54,7 +54,7 @@ def getreads(bam, chrom, start, end, svfrac, readlen=150):
     return names
 
 
-def runwgsim(contig, newseq, svfrac, svtype, exclude, pemean, pesd, tmpdir, region_reads, mutid='null', err_rate=0.0, seed=None, trn_contig=None, trn_region_reads=None, rename=True):
+def runwgsim(contig, newseq, svfrac, svtype, pemean, pesd, tmpdir, region_reads, mutid='null', err_rate=0.0, seed=None, trn_contig=None, trn_region_reads=None, rename=True):
     ''' wrapper function for wgsim, could swap out to support other reads simulators (future work?) '''
 
     svfrac = float(svfrac)
@@ -105,21 +105,16 @@ def runwgsim(contig, newseq, svfrac, svtype, exclude, pemean, pesd, tmpdir, regi
         if len(qual) > maxqlen:
             maxqlen = len(qual)
 
-    args = ['wgsim','-e', str(err_rate),'-d',str(pemean),'-s',str(pesd),'-N',str(nsimreads),'-1',str(maxqlen),'-2', str(maxqlen),'-r','0','-R','0',fasta,fq1,fq2]
+    wgsim_args = ['wgsim','-e', str(err_rate),'-d',str(pemean),'-s',str(pesd),'-N',str(nsimreads),'-1',str(maxqlen),'-2', str(maxqlen),'-r','0','-R','0',fasta,fq1,fq2]
 
-    if seed is not None: args += ['-S', str(seed)]
+    seed = 1 if seed == 0 else seed # Fix for wgsim thinking 0 is no seed
+    if seed is not None: wgsim_args += ['-S', str(seed)]
 
-    logger.info(str(args))
-    subprocess.check_call(args)
+    logger.info(str(wgsim_args))
+    subprocess.check_call(wgsim_args)
 
     os.remove(fasta)
 
-    for name in region_reads:
-        exclude.write(name + "\n")
-
-    if trn_region_reads:
-        for name in region_reads:
-            exclude.write(name + "\n")
 
     return (fq1,fq2)
 
@@ -410,7 +405,7 @@ def merge_multi_trn(args, alignopts, pair, chrom, start, end, vaf):
 def makemut(args, bedline, alignopts):
     bedline = bedline.strip()
 
-    if args.seed is not None: random.seed(int(args.seed) + int(bedline.split()[1]))
+    if args.seed is not None: random.seed(args.seed + int(bedline.split()[1]))
 
     mutid = '_'.join(map(str, bedline.split()[:4]))
 
@@ -861,10 +856,10 @@ def makemut(args, bedline, alignopts):
         if trn_region_reads:
             for name in trn_region_reads:
                 exclude.write(name + "\n")
-
+    exclude.close()
 
     # simulate reads
-    (fq1, fq2) = runwgsim(maxcontig, mutseq.seq, svfrac, actions, exclude, pemean, pesd, args.tmpdir, region_reads, err_rate=float(args.simerr), mutid=mutid, seed=args.seed, trn_contig=trn_maxcontig, rename=rename_reads, trn_region_reads=trn_region_reads)
+    (fq1, fq2) = runwgsim(maxcontig, mutseq.seq, svfrac, actions, pemean, pesd, args.tmpdir, region_reads, err_rate=float(args.simerr), mutid=mutid, seed=args.seed, trn_contig=trn_maxcontig, rename=rename_reads, trn_region_reads=trn_region_reads)
 
     outreads = aligners.remap_fastq(args.aligner, fq1, fq2, args.refFasta, outbam_mutsfile, alignopts, mutid=mutid, threads=int(args.alignerthreads))
 
@@ -874,7 +869,6 @@ def makemut(args, bedline, alignopts):
 
     logger.info("%s temporary bam: %s" % (mutid, outbam_mutsfile))
 
-    exclude.close()
     bamfile.close()
 
     return outbam_mutsfile, exclfile, mutinfo
@@ -1277,7 +1271,7 @@ if __name__ == '__main__':
                         help='output read tracking info to debug file, retain all intermediates')
     parser.add_argument('--tmpdir', default='addsv.tmp',
                         help='temporary directory (default=addsv.tmp)')
-    parser.add_argument('--seed', default=None,
+    parser.add_argument('--seed', default=None, type=int,
                         help='seed random number generation')
     parser.add_argument('--allowN', action='store_true', default=False,
                         help='allow N in contigs, replace with A and warn user (default: drop mutation)')
