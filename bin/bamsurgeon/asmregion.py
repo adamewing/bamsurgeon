@@ -89,24 +89,6 @@ class Contig:
         return ">" + self.name + "\n" + self.seq
 
 
-def median(list):
-    list.sort()
-    i = len(list)/2
-    if len(list) % 2 == 0:
-        return (list[i] + list[i+1])/2
-    else:
-        return list[i]
-
-
-def n50(contigs):
-    ln = map(lambda x: x.len, contigs)
-    nlist = []
-    for n in ln:
-        for i in range(n):
-            nlist.append(n)
-    return median(nlist)
-
-
 def runVelvet(reads,refseqname,refseq,kmer,addsv_tmpdir,isPaired=True,long=False,cov_cutoff=False,mutid='null',debug=False):
     """
     reads is either a dictionary of ReadPair objects, kmer is an odd int
@@ -179,43 +161,61 @@ class ReadPair:
 
 def asm(chrom, start, end, bamfilename, reffile, kmersize, tmpdir, mutid='null', debug=False):
     bamfile  = pysam.AlignmentFile(bamfilename)
-    matefile = pysam.AlignmentFile(bamfilename)
 
     readpairs = {}
     nreads = 0
     ndisc  = 0 # track discordant reads
     rquals = []
     mquals = []
+    pending_reads = dict()
 
+    # Performance: find as much reads as possible without using .mate()
+    for read in bamfile.fetch(chrom, start, end):
+        if read.mate_is_unmapped or read.is_unmapped or not read.is_paired:
+            continue
+        if not read.is_proper_pair:
+            ndisc += 1
+        mate = pending_reads.pop(read.qname, None)
+        nreads += 1
+        if mate is None:
+            pending_reads[read.qname] = read
+            continue
+        readpairs[read.qname] = ReadPair(read, mate)
+        if read.is_read1:
+            if read.is_reverse:
+                rquals.append(read.qual[::-1])
+                mquals.append(mate.qual)
+            else:
+                rquals.append(read.qual)
+                mquals.append(mate.qual[::-1])
+        else:
+            if read.is_reverse:
+                rquals.append(mate.qual)
+                mquals.append(read.qual[::-1])
+            else:
+                rquals.append(mate.qual[::-1])
+                mquals.append(read.qual)
 
-    for read in bamfile.fetch(chrom,start,end):
-        if not read.mate_is_unmapped and read.is_paired:
-            try:
-                mate = matefile.mate(read)
-                readpairs[read.qname] = ReadPair(read,mate)
-                nreads += 1
-                if not read.is_proper_pair:
-                    ndisc  += 1
-                if nreads % 1000 == 0:
-                    logger.info("found mates for %d reads, %.2f discordant." % (nreads, float(ndisc)/float(nreads)))
-                if read.is_read1:
-                    if read.is_reverse:
-                        rquals.append(read.qual[::-1])
-                        mquals.append(mate.qual)
-                    else:
-                        rquals.append(read.qual)
-                        mquals.append(mate.qual[::-1])
-                else:
-                    if read.is_reverse:
-                        rquals.append(mate.qual)
-                        mquals.append(read.qual[::-1])
-                    else:
-                        rquals.append(mate.qual[::-1])
-                        mquals.append(read.qual)
-            except ValueError:
-                logger.warning("cannot find mate for read marked paired: " + read.qname)
+    # Find the remaining reads using .mate()
+    for read in pending_reads.values():
+        mate = bamfile.mate(read)
+        if read.is_read1:
+            if read.is_reverse:
+                rquals.append(read.qual[::-1])
+                mquals.append(mate.qual)
+            else:
+                rquals.append(read.qual)
+                mquals.append(mate.qual[::-1])
+        else:
+            if read.is_reverse:
+                rquals.append(mate.qual)
+                mquals.append(read.qual[::-1])
+            else:
+                rquals.append(mate.qual[::-1])
+                mquals.append(read.qual)
+    bamfile.close()
 
-    logger.info("found " + str(nreads) + " reads in region.")
+    logger.info("found " + str(nreads) + " reads in region, " + str(float(ndisc)/float(nreads)) + " discordant.")
 
     if nreads == 0:
         return []
