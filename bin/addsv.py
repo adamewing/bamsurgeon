@@ -435,6 +435,16 @@ def makemut(args, bedline, alignopts):
     user_start = start
     user_end   = end
 
+    # Check if has sufficient depth
+    user_start_depth = bamfile.count(chrom, user_start-1, user_start)
+    user_end_depth   = bamfile.count(chrom, user_end-1, user_end)
+    if user_start_depth < args.mindepth or user_end_depth < args.mindepth:
+        logger.warning('%s skipping due to insufficient depth %d %d' % (mutid, user_start_depth, user_end_depth))
+        return None, None, None
+    elif user_start_depth > args.maxdepth or user_end_depth > args.maxdepth:
+        logger.warning('%s skipping due to excessive depth %d %d' % (mutid, user_start_depth, user_end_depth))
+        return None, None, None
+
     # translocation specific
     trn_chrom = None
     trn_start = None
@@ -454,6 +464,16 @@ def makemut(args, bedline, alignopts):
         trn_chrom = c[4]
         user_trn_start = int(c[5])
         user_trn_end   = int(c[6])
+
+        # Check for sufficient depth
+        user_trn_start_depth = bamfile.count(trn_chrom, user_trn_start-1, user_trn_start)
+        user_trn_end_depth   = bamfile.count(trn_chrom, user_trn_end-1, user_trn_end)
+        if user_trn_start_depth < args.mindepth or user_trn_end_depth < args.mindepth:
+            logger.warning('%s skipping due to insufficient depth %d %d' % (mutid, user_trn_start_depth, user_trn_end_depth))
+            return None, None, None
+        elif user_trn_start_depth > args.maxdepth or user_trn_end_depth > args.maxdepth:
+            logger.warning('%s skipping due to excessive depth %d %d' % (mutid, user_trn_start_depth, user_trn_end_depth))
+            return None, None, None
 
         trn_start = int(c[5]) - int(args.minctglen)
         trn_end   = int(c[6]) + int(args.minctglen)
@@ -497,9 +517,8 @@ def makemut(args, bedline, alignopts):
     dfrac = discordant_fraction(args.bamFileName, chrom, start, end)
     logger.info("%s discordant fraction: %f" % (mutid, dfrac))
 
-    maxdfrac = 0.1 # FIXME make a parameter
-    if dfrac > .1: 
-        logger.warning("%s discordant fraction > %f aborting mutation!\n" % (mutid, maxdfrac))
+    if dfrac > args.maxdfrac:
+        logger.warning("%s discordant fraction %f > %f aborting mutation!\n" % (mutid, dfrac, args.maxdfrac))
         return None, None, None
 
     contigs = ar.asm(chrom, start, end, args.bamFileName, reffile, int(args.kmersize), args.tmpdir, mutid=mutid, debug=args.debug)
@@ -1053,7 +1072,7 @@ def main(args):
 
     if len(tmpbams) == 0:
         logger.error("no succesful mutations")
-        sys.exit()
+        sys.exit(1)
 
     success_mutids = [os.path.basename(tmpbam).split('.')[0] for tmpbam in tmpbams]
 
@@ -1237,6 +1256,12 @@ if __name__ == '__main__':
                         help="allele fraction of variant (default = 1.0)")
     parser.add_argument('--require_exact', default=False, action='store_true',
                         help="drop mutation if breakpoints cannot be made exactly as input")
+    parser.add_argument('--mindepth', default=10, type=int,
+                        help='minimum read depth in the breakend position to make mutation (default = 10)')
+    parser.add_argument('--maxdepth', default=2000, type=int,
+                        help='maximum read depth in the breakend position to make mutation (default = 2000)')
+    parser.add_argument('--maxdfrac', default=0.1, type=float,
+                        help='maximum discordant fraction (is_proper_pair / is_pair) of reads (default = 0.1)')
     parser.add_argument('--minctglen', dest='minctglen', default=4000,
                         help="minimum length for contig generation, also used to pad assembly (default=4000)")
     parser.add_argument('-n', dest='maxmuts', default=None,
