@@ -301,7 +301,7 @@ def main(args):
 
     if len(tmpbams) == 0:
         logger.error("no succesful mutations")
-        sys.exit()
+        sys.exit(1)
 
     tmpbams.sort()
 

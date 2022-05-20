@@ -391,7 +391,7 @@ def main(args):
 
     if len(tmpbams) == 0:
         logger.error("no succesful mutations")
-        sys.exit()        
+        sys.exit(1)        
 
     # merge tmp bams
     if len(tmpbams) == 1:
