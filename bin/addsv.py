@@ -8,8 +8,6 @@ import sys
 import random
 import subprocess
 import argparse
-import hashlib
-import string
 import pysam
 import bamsurgeon.replace_reads as rr
 import bamsurgeon.asmregion as ar
@@ -30,27 +28,16 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-def getreads(bam, chrom, start, end, svfrac, readlen=150):
-    samplefrac = 1-float(svfrac)
-    names = []
-    namecounter = dd(int)
-
-    buffer=readlen/2
-
-    for read in bam.fetch(chrom, start+buffer, end-buffer):
-        if read.is_secondary or read.is_supplementary or read.is_duplicate:
+def get_reads(bam, chrom, start, end, svfrac):
+    for read in bam.fetch(chrom, start, end):
+        if read.is_duplicate or read.is_secondary or read.is_supplementary or \
+                read.next_reference_start > end or read.reference_start < start or \
+                read.pos > end or read.reference_end < start:
             continue
-
-        namecounter[read.query_name] += 1
-
-    for name, count in namecounter.items():
-        if count == 2:
-            if random.uniform(0,1) > samplefrac:
-                names.append(name)
-
-    logger.info('fetched %d read pairs from %s:%d-%d, downsample factor: %f' % (len(names), chrom, start, end, samplefrac))
-
-    return names
+        
+        read_random_factor = read_hash_fraction(read.query_name)
+        if read_random_factor <= svfrac:
+            yield read
 
 
 def runwgsim(contig, newseq, svfrac, svtype, pemean, pesd, tmpdir, region_reads, mutid='null', err_rate=0.0, seed=None, trn_contig=None, trn_region_reads=None, rename=True):
@@ -275,40 +262,19 @@ def add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right
 
     logger.info('%s: fetch donor reads from %s-%d-%d' % (mutid, bdup_chrom, bdup_left_bnd, bdup_right_bnd))
 
-    random_salt = ''.join(random.choice(string.ascii_lowercase + string.ascii_uppercase + string.digits) for i in range(100))
     nreads = 0
 
     donorbam = pysam.AlignmentFile(args.donorbam)
-    for read in donorbam.fetch(bdup_chrom, bdup_left_bnd, bdup_right_bnd):
-        if read.is_duplicate or read.is_secondary or read.is_supplementary or \
-                read.next_reference_start > bdup_right_bnd or read.reference_start < bdup_left_bnd or \
-                read.pos > bdup_right_bnd or read.reference_end < bdup_left_bnd:
-            continue
-        read_hash = int(hashlib.md5((random_salt + read.query_name).encode()).hexdigest(), 16)
-        read_random_factor = (read_hash % 1000000) / 1000000.0
-        if read_random_factor <= donor_norm_factor:
-            read.query_name = read.query_name + '_donor'
-            outbam.write(read)
-            nreads += 1
+    for read in get_reads(donorbam, bdup_chrom, bdup_left_bnd, bdup_right_bnd, donor_norm_factor):
+        read.query_name = read.query_name + '_donor'
+        outbam.write(read)
+        nreads += 1
 
     outbam.close()
 
-    logger.info('%s: using %d donor reads' % (mutid, nreads))
+    logger.info('%s: using %d donor reads from %s' % (mutid, nreads, args.donorbam))
 
     return outbamfn
-
-
-def fetch_read_names(args, chrom, start, end, svfrac=1.0):
-    bamfile = pysam.AlignmentFile(args.bamFileName)
-
-    names = []
-
-    for read in bamfile.fetch(chrom, start, end):
-        if random.random() <= svfrac:
-            names.append(read.query_name)
-
-    return names
-
 
 def merge_multi_trn(args, alignopts, pair, chrom, start, end, vaf):
     assert len(pair) == 2
@@ -803,19 +769,19 @@ def makemut(args, bedline, alignopts):
     logger.info("%s set paired end mean distance: %f" % (mutid, pemean))
     logger.info("%s set paired end distance stddev: %f" % (mutid, pesd))
 
-    region_reads = getreads(bamfile, chrom, refstart, refend, svfrac)
+    region_reads = list(get_reads(bamfile, chrom, refstart, refend, float(svfrac)))
 
-    for name in region_reads:
-        exclude.write(name + "\n")
+    for read in region_reads:
+        exclude.write(read.query_name + "\n")
 
     trn_region_reads = None
 
     if is_transloc:
-        trn_region_reads = getreads(bamfile, trn_chrom, trn_refstart, trn_refend, svfrac)
+        trn_region_reads = list(get_reads(bamfile, trn_chrom, trn_refstart, trn_refend, float(svfrac)))
 
         if trn_region_reads:
-            for name in trn_region_reads:
-                exclude.write(name + "\n")
+            for read in trn_region_reads:
+                exclude.write(read.query_name + "\n")
     exclude.close()
 
     # simulate reads
@@ -1032,8 +998,9 @@ def main(args):
             if bdel_left_bnd > bdel_right_bnd:
                 bdel_left_bnd, bdel_right_bnd, bdel_right_bnd, bdel_left_bnd
 
-            bigdel_excl[mutid] = fetch_read_names(args, bdel_chrom, bdel_left_bnd, bdel_right_bnd, svfrac=bdel_svfrac)
-
+            bamfile_alignment = pysam.AlignmentFile(args.bamFileName)
+            bigdel_excl[mutid] = [read.query_name for read in get_reads(bamfile_alignment, bdel_chrom, bdel_left_bnd, bdel_right_bnd, bdel_svfrac)]
+            bamfile_alignment.close()
         if mutinfo.startswith('bigdup'):
             bdup_chrom, bdup_start, bdup_end, bdup_svfrac = bigdups[mutid]
 
