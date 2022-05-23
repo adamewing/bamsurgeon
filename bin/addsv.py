@@ -8,6 +8,8 @@ import sys
 import random
 import subprocess
 import argparse
+import hashlib
+import string
 import pysam
 import bamsurgeon.replace_reads as rr
 import bamsurgeon.asmregion as ar
@@ -17,10 +19,7 @@ import bamsurgeon.makevcf as makevcf
 
 from bamsurgeon.common import *
 from uuid import uuid4
-from time import sleep
 from shutil import move
-from math import sqrt
-from collections import Counter
 from collections import defaultdict as dd
 from concurrent.futures import ProcessPoolExecutor
 
@@ -255,56 +254,6 @@ def locate_contig_pos(refstart, refend, user_start, user_end, contig_len, maxlib
 
 def add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right_bnd, bdup_svfrac, buf=200):
     assert bdup_left_bnd < bdup_right_bnd, '%s: bdup_left_bnd > bdup_right_bnd' % mutid
-
-    # identify zero coverage region
-
-    left_zero  = None
-    right_zero = None
-
-    left_cover  = None
-    right_cover = None
-
-    region = '%s:%d-%d' % (bdup_chrom, bdup_left_bnd+buf, bdup_right_bnd-buf)
-
-    samtools_args = ['samtools', 'mpileup', '-r', region, '-a', tmpbamfn]
-
-    FNULL = open(os.devnull, 'w')
-
-    p = subprocess.Popen(samtools_args,stdout=subprocess.PIPE,stderr=FNULL)
-
-    for line in p.stdout:
-        line = line.decode()
-        c = line.strip().split()
-        pos   = int(c[1])
-        depth = int(c[3])
-
-        if left_zero is None and depth == 0:
-            left_zero = pos
-
-        if left_cover is None and depth > 0:
-            left_cover = pos
-
-        if left_zero is not None and depth == 0:
-            right_zero = pos
-
-        if depth > 0 and right_zero is not None:
-            right_cover = pos
-
-    if right_cover is None:
-        right_cover = right_zero+1
-
-    logger.info('%s: left_zero=%d, left_cover=%d, right_zero=%d, right_cover=%d' % (mutid, left_zero, left_cover, right_zero, right_cover))
-
-    if left_cover > left_zero:
-       logger.warning('%s: left_cover > left_zero' % mutid)
-       left_cover, left_zero = left_zero, left_cover
-
-    if right_cover < right_zero:
-       logger.warning('%s: right_cover < right_zero' % mutid)
-       right_cover, right_zero = right_zero, right_cover
-
-    assert left_zero < right_zero, 'left_zero: %d, right_zero: %d' % (left_zero, right_zero)
-
     tmpbam = pysam.AlignmentFile(tmpbamfn)
 
     outbamfn = '%s/%s.%s.bigdup.merged.bam' % (args.tmpdir, mutid, str(uuid4()))
@@ -314,9 +263,9 @@ def add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right
 
     # Calculate donor norm factor
     with pysam.AlignmentFile(args.donorbam) as donorbam:
-        cover_donor = donorbam.count(region=region) / float(bdup_right_bnd-bdup_left_bnd)
+        cover_donor = donorbam.count(contig=bdup_chrom, start=bdup_left_bnd, end=bdup_right_bnd) / float(bdup_right_bnd-bdup_left_bnd)
     with pysam.AlignmentFile(args.bamFileName) as origbam:
-        cover_orig = origbam.count(region=region) / float(bdup_right_bnd-bdup_left_bnd)
+        cover_orig = origbam.count(contig=bdup_chrom, start=bdup_left_bnd, end=bdup_right_bnd) / float(bdup_right_bnd-bdup_left_bnd)
 
     donor_norm_factor = cover_orig * bdup_svfrac / cover_donor
     if donor_norm_factor > 1.0:
@@ -324,35 +273,27 @@ def add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right
 
     logger.info('%s: BIGDUP donor coverage normalisation factor: %f' % (mutid, donor_norm_factor))
 
-    matepairs = {}
-
     logger.info('%s: fetch donor reads from %s-%d-%d' % (mutid, bdup_chrom, bdup_left_bnd, bdup_right_bnd))
 
-    paircount = 0
+    random_salt = ''.join(random.choice(string.ascii_lowercase + string.ascii_uppercase + string.digits) for i in range(100))
+    nreads = 0
 
     donorbam = pysam.AlignmentFile(args.donorbam)
     for read in donorbam.fetch(bdup_chrom, bdup_left_bnd, bdup_right_bnd):
-        if not read.is_duplicate and not read.is_secondary and not read.is_supplementary:
-            if (read.pos > left_zero and read.pos < right_zero) or (read.next_reference_start > left_zero and read.next_reference_start < right_zero):
-                if read.query_name not in matepairs:
-                    matepairs[read.query_name] = read
-                    
-                else:
-                    newname = str(uuid4())
-
-                    mate = matepairs[read.query_name]
-
-                    mate.query_name = newname
-                    read.query_name = newname
-
-                    if random.random() <= donor_norm_factor:
-                        outbam.write(mate)
-                        outbam.write(read)
-                        paircount += 1
+        if read.is_duplicate or read.is_secondary or read.is_supplementary or \
+                read.next_reference_start > bdup_right_bnd or read.reference_start < bdup_left_bnd or \
+                read.pos > bdup_right_bnd or read.reference_end < bdup_left_bnd:
+            continue
+        read_hash = int(hashlib.md5((random_salt + read.query_name).encode()).hexdigest(), 16)
+        read_random_factor = (read_hash % 1000000) / 1000000.0
+        if read_random_factor <= donor_norm_factor:
+            read.query_name = read.query_name + '_donor'
+            outbam.write(read)
+            nreads += 1
 
     outbam.close()
 
-    logger.info('%s: using %d donor read pairs' % (mutid, paircount))
+    logger.info('%s: using %d donor reads' % (mutid, nreads))
 
     return outbamfn
 
