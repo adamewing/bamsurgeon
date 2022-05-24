@@ -993,7 +993,6 @@ def main(args):
                 bdel_left_bnd, bdel_right_bnd, bdel_right_bnd, bdel_left_bnd
 
             bigdel_excl[mutid] = [read.query_name for read in get_reads(args.bamFileName, bdel_chrom, bdel_left_bnd, bdel_right_bnd, bdel_svfrac)]
-            bamfile_alignment.close()
         if mutinfo.startswith('bigdup'):
             bdup_chrom, bdup_start, bdup_end, bdup_svfrac = bigdups[mutid]
 
