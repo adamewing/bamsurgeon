@@ -263,7 +263,7 @@ def add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right
     nreads = 0
 
     for read in get_reads(args.donorbam, bdup_chrom, bdup_left_bnd, bdup_right_bnd, donor_norm_factor):
-        read.query_name = read.query_name + '_donor'
+        read.query_name = read.query_name + '_donor_' + mutid
         outbam.write(read)
         nreads += 1
 
