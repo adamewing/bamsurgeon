@@ -28,7 +28,8 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-def get_reads(bam, chrom, start, end, svfrac):
+def get_reads(bam_file, chrom, start, end, svfrac):
+    bam = pysam.AlignmentFile(bam_file)
     for read in bam.fetch(chrom, start, end):
         if read.is_duplicate or read.is_secondary or read.is_supplementary or \
                 read.next_reference_start > end or read.reference_start < start or \
@@ -38,12 +39,26 @@ def get_reads(bam, chrom, start, end, svfrac):
         read_random_factor = read_hash_fraction(read.query_name)
         if read_random_factor <= svfrac:
             yield read
+    bam.close()
+
+def get_trn_reads(bam_file, chrom, region_start, region_end, svfrac, flip, buffer):
+    mutseq_len = region_end - region_start
+    if flip:
+        affected_end = region_start + mutseq_len // 2 + buffer
+        affected_start = region_start + int(buffer*0.3)
+    else:
+        affected_start = region_start + mutseq_len // 2 - buffer
+        affected_end = region_end - int(buffer*0.3)
+
+    print('.-------.')
+    print(f'Original: {flip} {chrom}:{region_start}-{region_end}')
+    print(f'{flip} {chrom}:{affected_start}-{affected_end}')
+
+    return get_reads(bam_file, chrom, affected_start, affected_end, svfrac)
 
 
-def runwgsim(contig, newseq, svfrac, svtype, pemean, pesd, tmpdir, region_reads, mutid='null', err_rate=0.0, seed=None, trn_contig=None, trn_region_reads=None, rename=True):
+def runwgsim(contig, newseq, svtype, pemean, pesd, tmpdir, nsimreads, mutid='null', err_rate=0.0, seed=None, trn_contig=None, rename=True):
     ''' wrapper function for wgsim, could swap out to support other reads simulators (future work?) '''
-
-    svfrac = float(svfrac)
 
     basefn = tmpdir + '/' + mutid + ".wgsimtmp." + str(uuid4())
     fasta = basefn + ".fasta"
@@ -58,21 +73,8 @@ def runwgsim(contig, newseq, svfrac, svtype, pemean, pesd, tmpdir, region_reads,
     if trn_contig: ctg_len += len(trn_contig)
 
     # # adjustment factor for length of new contig vs. old contig
-    lenfrac = float(len(newseq))/float(ctg_len)
-
     logger.info("%s old ctg len: %d" % (mutid, ctg_len))
     logger.info("%s new ctg len: %d" % (mutid, len(newseq)))
-    logger.info("%s adj. factor: %f" % (mutid, lenfrac))
-    logger.info("%s VAF(svfrac): %f" % (mutid, svfrac))
-
-    # number of paried reads to simulate
-    nsimreads = len(region_reads)
-
-    if trn_region_reads:
-        nsimreads += len(trn_region_reads)
-
-    nsimreads = nsimreads*lenfrac*svfrac
-
     logger.info("%s num. sim. reads: %d" % (mutid, nsimreads))
     logger.info("%s PE mean outer distance: %f" % (mutid, pemean))
     logger.info("%s PE outer distance SD: %f" % (mutid, pesd))
@@ -264,8 +266,7 @@ def add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right
 
     nreads = 0
 
-    donorbam = pysam.AlignmentFile(args.donorbam)
-    for read in get_reads(donorbam, bdup_chrom, bdup_left_bnd, bdup_right_bnd, donor_norm_factor):
+    for read in get_reads(args.donorbam, bdup_chrom, bdup_left_bnd, bdup_right_bnd, donor_norm_factor):
         read.query_name = read.query_name + '_donor'
         outbam.write(read)
         nreads += 1
@@ -320,8 +321,6 @@ def makemut(args, bedline, alignopts):
     reffile = pysam.Fastafile(args.refFasta)
     logfn = '_'.join(map(os.path.basename, bedline.split()[:4])) + ".log"
     logfile = open('addsv_logs_' + os.path.basename(args.outBamFile) + '/' + os.path.basename(args.outBamFile) + '_' + logfn, 'w')
-    exclfile = args.tmpdir + '/' + '.'.join((mutid, 'exclude', str(uuid4()), 'txt'))
-    exclude = open(exclfile, 'w')
     mutinfo = {}
 
     # optional CNV file
@@ -610,12 +609,10 @@ def makemut(args, bedline, alignopts):
             if trn_contig_start is None:
                 logger.warning('%s contig does not cover user translocation start' % mutid)
                 exact_success = False
-                #print trn_refstart, trn_refend, user_trn_start, user_trn_end, int(args.maxlibsize)
 
             if trn_contig_end is None:
                 logger.warning('%s contig does not cover user translocation end' % mutid)
                 exact_success = False
-                #print trn_refstart, trn_refend, user_trn_start, user_trn_end, int(args.maxlibsize)
 
 
         if args.require_exact and not exact_success:
@@ -769,23 +766,24 @@ def makemut(args, bedline, alignopts):
     logger.info("%s set paired end mean distance: %f" % (mutid, pemean))
     logger.info("%s set paired end distance stddev: %f" % (mutid, pesd))
 
-    region_reads = list(get_reads(bamfile, chrom, refstart, refend, float(svfrac)))
-
-    for read in region_reads:
-        exclude.write(read.query_name + "\n")
-
-    trn_region_reads = None
+    exclfile = args.tmpdir + '/' + '.'.join((mutid, 'exclude', str(uuid4()), 'txt'))
+    exclude = open(exclfile, 'w')
 
     if is_transloc:
-        trn_region_reads = list(get_reads(bamfile, trn_chrom, trn_refstart, trn_refend, float(svfrac)))
-
-        if trn_region_reads:
-            for read in trn_region_reads:
-                exclude.write(read.query_name + "\n")
+        region_1_reads = get_trn_reads(args.bamFileName, chrom, refstart, refend, float(svfrac), not trn_left_flip, int(pemean))
+        region_2_reads = get_trn_reads(args.bamFileName, trn_chrom, trn_refstart, trn_refend, float(svfrac), trn_right_flip, int(pemean))
+        region_reads_names = set([read.query_name for read in region_1_reads] + [read.query_name for read in region_2_reads]) 
+    else:
+        region_reads = get_reads(args.bamFileName, chrom, refstart, refend, float(svfrac))
+        region_reads_names = set([read.query_name for read in region_reads])
+    
+    nsimreads = len(region_reads_names)
+    for name in region_reads_names:
+        exclude.write(name + "\n")
     exclude.close()
 
     # simulate reads
-    (fq1, fq2) = runwgsim(maxcontig, mutseq.seq, svfrac, actions, pemean, pesd, args.tmpdir, region_reads, err_rate=float(args.simerr), mutid=mutid, seed=args.seed, trn_contig=trn_maxcontig, rename=rename_reads, trn_region_reads=trn_region_reads)
+    (fq1, fq2) = runwgsim(maxcontig, mutseq.seq, actions, pemean, pesd, args.tmpdir, nsimreads, err_rate=float(args.simerr), mutid=mutid, seed=args.seed, trn_contig=trn_maxcontig, rename=rename_reads)
 
     outreads = aligners.remap_fastq(args.aligner, fq1, fq2, args.refFasta, outbam_mutsfile, alignopts, mutid=mutid, threads=int(args.alignerthreads))
 
@@ -998,8 +996,7 @@ def main(args):
             if bdel_left_bnd > bdel_right_bnd:
                 bdel_left_bnd, bdel_right_bnd, bdel_right_bnd, bdel_left_bnd
 
-            bamfile_alignment = pysam.AlignmentFile(args.bamFileName)
-            bigdel_excl[mutid] = [read.query_name for read in get_reads(bamfile_alignment, bdel_chrom, bdel_left_bnd, bdel_right_bnd, bdel_svfrac)]
+            bigdel_excl[mutid] = [read.query_name for read in get_reads(args.bamFileName, bdel_chrom, bdel_left_bnd, bdel_right_bnd, bdel_svfrac)]
             bamfile_alignment.close()
         if mutinfo.startswith('bigdup'):
             bdup_chrom, bdup_start, bdup_end, bdup_svfrac = bigdups[mutid]
