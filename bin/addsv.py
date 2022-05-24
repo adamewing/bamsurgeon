@@ -50,10 +50,6 @@ def get_trn_reads(bam_file, chrom, region_start, region_end, svfrac, flip, buffe
         affected_start = region_start + mutseq_len // 2 - buffer
         affected_end = region_end - int(buffer*0.3)
 
-    print('.-------.')
-    print(f'Original: {flip} {chrom}:{region_start}-{region_end}')
-    print(f'{flip} {chrom}:{affected_start}-{affected_end}')
-
     return get_reads(bam_file, chrom, affected_start, affected_end, svfrac)
 
 
