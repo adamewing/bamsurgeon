@@ -53,7 +53,7 @@ def get_trn_reads(bam_file, chrom, region_start, region_end, svfrac, flip, buffe
     return get_reads(bam_file, chrom, affected_start, affected_end, svfrac)
 
 
-def runwgsim(contig, newseq, svtype, pemean, pesd, tmpdir, nsimreads, mutid='null', err_rate=0.0, seed=None, trn_contig=None, rename=True):
+def runwgsim(contig, newseq, pemean, pesd, tmpdir, nsimreads, mutid='null', err_rate=0.0, seed=None, trn_contig=None, rename=True):
     ''' wrapper function for wgsim, could swap out to support other reads simulators (future work?) '''
 
     basefn = tmpdir + '/' + mutid + ".wgsimtmp." + str(uuid4())
@@ -769,17 +769,19 @@ def makemut(args, bedline, alignopts):
         region_1_reads = get_trn_reads(args.bamFileName, chrom, refstart, refend, float(svfrac), not trn_left_flip, int(pemean))
         region_2_reads = get_trn_reads(args.bamFileName, trn_chrom, trn_refstart, trn_refend, float(svfrac), trn_right_flip, int(pemean))
         region_reads_names = set([read.query_name for read in region_1_reads] + [read.query_name for read in region_2_reads]) 
+        nsimreads = len(region_reads_names)
     else:
         region_reads = get_reads(args.bamFileName, chrom, refstart, refend, float(svfrac))
         region_reads_names = set([read.query_name for read in region_reads])
-    
-    nsimreads = len(region_reads_names)
+        reads_ratio = len(mutseq.seq) / len(maxcontig.seq)
+        nsimreads = int(len(region_reads_names) * reads_ratio)
+
     for name in region_reads_names:
         exclude.write(name + "\n")
     exclude.close()
 
     # simulate reads
-    (fq1, fq2) = runwgsim(maxcontig, mutseq.seq, actions, pemean, pesd, args.tmpdir, nsimreads, err_rate=float(args.simerr), mutid=mutid, seed=args.seed, trn_contig=trn_maxcontig, rename=rename_reads)
+    (fq1, fq2) = runwgsim(maxcontig, mutseq.seq, pemean, pesd, args.tmpdir, nsimreads, err_rate=float(args.simerr), mutid=mutid, seed=args.seed, trn_contig=trn_maxcontig, rename=rename_reads)
 
     outreads = aligners.remap_fastq(args.aligner, fq1, fq2, args.refFasta, outbam_mutsfile, alignopts, mutid=mutid, threads=int(args.alignerthreads))
 
@@ -985,21 +987,10 @@ def main(args):
         # add additional excluded reads if bigdel(s) present
         if mutinfo.startswith('bigdel'):
             bdel_chrom, bdel_start, bdel_end, bdel_svfrac = bigdels[mutid]
-
-            bdel_left_bnd = int(mutinfo.split()[3])
-            bdel_right_bnd = int(mutinfo.split()[7])
-
-            if bdel_left_bnd > bdel_right_bnd:
-                bdel_left_bnd, bdel_right_bnd, bdel_right_bnd, bdel_left_bnd
-
-            bigdel_excl[mutid] = [read.query_name for read in get_reads(args.bamFileName, bdel_chrom, bdel_left_bnd, bdel_right_bnd, bdel_svfrac)]
+            bigdel_excl[mutid] = [read.query_name for read in get_reads(args.bamFileName, bdel_chrom, bdel_start, bdel_end, bdel_svfrac)]
         if mutinfo.startswith('bigdup'):
             bdup_chrom, bdup_start, bdup_end, bdup_svfrac = bigdups[mutid]
-
-            bdup_left_bnd = int((int(mutinfo.split()[7])+int(mutinfo.split()[8]))/2)
-            bdup_right_bnd = int((int(mutinfo.split()[2])+int(mutinfo.split()[3]))/2)
-
-            bigdup_add[mutid] = (bdup_chrom, bdup_left_bnd, bdup_right_bnd, bdup_svfrac)
+            bigdup_add[mutid] = (bdup_chrom, bdup_start, bdup_end, bdup_svfrac)
 
 
     biginv_pairs = dd(list)
@@ -1013,8 +1004,6 @@ def main(args):
             biginv_pairs[mutid].append(tmpbamfn)
         
         elif mutid.endswith('BIGDUP'):
-            #print 'bigdup testing mutid:', mutid
-            #print 'bigdup testing known mutids:', bigdup_add.keys()
             bdup_chrom, bdup_left_bnd, bdup_right_bnd, bdup_svfrac = bigdup_add[mutid]
 
             bdup_left_bnd  = int(bdup_left_bnd)

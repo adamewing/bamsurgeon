@@ -20,9 +20,12 @@ logging.basicConfig(format=FORMAT)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
+random_salt = None
 
 def read_hash_fraction(query_name):
-    random_salt = ''.join(random.choice(string.ascii_lowercase + string.ascii_uppercase + string.digits) for i in range(10))
+    global random_salt
+    if random_salt is None:
+        random_salt = ''.join(random.choice(string.ascii_lowercase + string.ascii_uppercase + string.digits) for i in range(10))
     read_hash = int(hashlib.md5((random_salt + query_name).encode()).hexdigest(), 16)
     read_random_factor = (read_hash % 1000000) / 1000000.0
     return read_random_factor
