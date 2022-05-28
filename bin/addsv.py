@@ -766,8 +766,8 @@ def makemut(args, bedline, alignopts):
     exclude = open(exclfile, 'w')
 
     if is_transloc:
-        region_1_reads = get_trn_reads(args.bamFileName, chrom, refstart, refend, float(svfrac), not trn_left_flip, int(pemean))
-        region_2_reads = get_trn_reads(args.bamFileName, trn_chrom, trn_refstart, trn_refend, float(svfrac), trn_right_flip, int(pemean))
+        region_1_reads = get_trn_reads(args.bamFileName, chrom, refstart, refend, float(svfrac), not trn_left_flip, int(pemean / 2))
+        region_2_reads = get_trn_reads(args.bamFileName, trn_chrom, trn_refstart, trn_refend, float(svfrac), trn_right_flip, int(pemean / 2))
         region_reads_names = set([read.query_name for read in region_1_reads] + [read.query_name for read in region_2_reads]) 
         nsimreads = len(region_reads_names)
     else:
