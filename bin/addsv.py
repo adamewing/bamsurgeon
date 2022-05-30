@@ -41,17 +41,6 @@ def get_reads(bam_file, chrom, start, end, svfrac):
             yield read
     bam.close()
 
-def get_trn_reads(bam_file, chrom, region_start, region_end, svfrac, flip, buffer):
-    mutseq_len = region_end - region_start
-    if flip:
-        affected_end = region_start + mutseq_len // 2 + buffer
-        affected_start = region_start + int(buffer*0.3)
-    else:
-        affected_start = region_start + mutseq_len // 2 - buffer
-        affected_end = region_end - int(buffer*0.3)
-
-    return get_reads(bam_file, chrom, affected_start, affected_end, svfrac)
-
 
 def runwgsim(contig, newseq, pemean, pesd, tmpdir, nsimreads, mutid='null', err_rate=0.0, seed=None, trn_contig=None, rename=True):
     ''' wrapper function for wgsim, could swap out to support other reads simulators (future work?) '''
@@ -767,8 +756,10 @@ def makemut(args, bedline, alignopts):
     exclude = open(exclfile, 'w')
 
     if is_transloc:
-        region_1_reads = get_trn_reads(args.bamFileName, chrom, refstart, refend, float(svfrac), not trn_left_flip, int(pemean / 2))
-        region_2_reads = get_trn_reads(args.bamFileName, trn_chrom, trn_refstart, trn_refend, float(svfrac), trn_right_flip, int(pemean / 2))
+        region_1_start, region_1_end = (refstart + trnpoint_1, refend) if trn_left_flip else (refstart, refstart + trnpoint_1)
+        region_2_start, region_2_end = (trn_refstart + trnpoint_2, trn_refend) if not trn_right_flip else (trn_refstart, trn_refstart + trnpoint_2)
+        region_1_reads = get_reads(args.bamFileName, chrom, region_1_start, region_1_end, float(svfrac))
+        region_2_reads = get_reads(args.bamFileName, trn_chrom, region_2_start, region_2_end, float(svfrac))
         region_reads_names = set([read.query_name for read in region_1_reads] + [read.query_name for read in region_2_reads]) 
         nsimreads = len(region_reads_names)
     else:
