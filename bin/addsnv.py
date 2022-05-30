@@ -429,7 +429,7 @@ def main(args):
 
     vcf_fn = bam_basename + '.addsnv.' + var_basename + '.vcf'
 
-    makevcf.write_vcf_snv('addsnv_logs_' + os.path.basename(args.outBamFile), vcf_fn)
+    makevcf.write_vcf_snv('addsnv_logs_' + os.path.basename(args.outBamFile), args.refFasta, vcf_fn)
 
     logger.info('vcf output written to ' + vcf_fn)
 
