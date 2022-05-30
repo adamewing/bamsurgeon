@@ -748,7 +748,8 @@ def makemut(args, bedline, alignopts):
             else: # seq is input
                 mutseq.insertion(inspoint, insseq, tsdlen)
 
-            mutinfo[mutid] = "\t".join(('ins',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(inspoint),str(insseqfile),str(tsdlen),str(svfrac)))
+            ins_len = len(mutseq.seq) - len(maxcontig.seq)
+            mutinfo[mutid] = "\t".join(('ins',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(inspoint),str(insseqfile),str(tsdlen),str(ins_len),str(svfrac)))
             logfile.write(mutinfo[mutid] + "\n")
 
         elif action == 'INV':
@@ -802,7 +803,7 @@ def makemut(args, bedline, alignopts):
 
             mutseq.fusion(trnpoint_1, trn_mutseq, trnpoint_2, flip1=trn_left_flip, flip2=trn_right_flip)
 
-            mutinfo[mutid] = "\t".join(('trn',chrom,str(refstart),str(refend),action,str(trnpoint_1),trn_chrom,str(trn_refstart),str(trn_refend),str(trnpoint_2),str(svfrac)))
+            mutinfo[mutid] = "\t".join(('trn',chrom,str(refstart),str(refend),action,str(trnpoint_1),trn_chrom,str(trn_refstart),str(trn_refend),str(trnpoint_2),str(trn_left_flip),str(trn_right_flip),str(svfrac)))
             logfile.write(mutinfo[mutid] + "\n")
 
         elif action == 'BIGDEL':
