@@ -31,9 +31,11 @@ logger.setLevel(logging.INFO)
 def get_reads(bam_file, chrom, start, end, svfrac):
     bam = pysam.AlignmentFile(bam_file)
     for read in bam.fetch(chrom, start, end):
+        read_end = read.reference_start + read.query_length
+        pair_end = read.next_reference_start + read.query_length
         if read.is_duplicate or read.is_secondary or read.is_supplementary or \
-                read.next_reference_start > end or read.reference_start < start or \
-                read.pos > end or read.reference_end < start:
+                pair_end > end or read.next_reference_start < start or \
+                read_end > end or read.reference_start < start:
             continue
         
         read_random_factor = read_hash_fraction(read.query_name)
@@ -756,8 +758,9 @@ def makemut(args, bedline, alignopts):
     exclude = open(exclfile, 'w')
 
     if is_transloc:
-        region_1_start, region_1_end = (refstart + trnpoint_1, refend) if trn_left_flip else (refstart, refstart + trnpoint_1)
-        region_2_start, region_2_end = (trn_refstart + trnpoint_2, trn_refend) if not trn_right_flip else (trn_refstart, trn_refstart + trnpoint_2)
+        buffer = int(float(args.ismean))
+        region_1_start, region_1_end = (refstart + trnpoint_1 - buffer, refend) if trn_left_flip else (refstart, refstart + trnpoint_1 + buffer)
+        region_2_start, region_2_end = (trn_refstart + trnpoint_2 - buffer, trn_refend) if not trn_right_flip else (trn_refstart, trn_refstart + trnpoint_2 + buffer)
         region_1_reads = get_reads(args.bamFileName, chrom, region_1_start, region_1_end, float(svfrac))
         region_2_reads = get_reads(args.bamFileName, trn_chrom, region_2_start, region_2_end, float(svfrac))
         region_reads_names = set([read.query_name for read in region_1_reads] + [read.query_name for read in region_2_reads]) 
