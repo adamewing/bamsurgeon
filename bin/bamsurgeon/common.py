@@ -4,6 +4,9 @@
 import datetime
 import subprocess
 import pysam
+import random
+import hashlib
+import string
 import os
 import sys
 
@@ -17,6 +20,15 @@ logging.basicConfig(format=FORMAT)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
+random_salt = None
+
+def read_hash_fraction(query_name):
+    global random_salt
+    if random_salt is None:
+        random_salt = ''.join(random.choice(string.ascii_lowercase + string.ascii_uppercase + string.digits) for i in range(10))
+    read_hash = int(hashlib.md5((random_salt + query_name).encode()).hexdigest(), 16)
+    read_random_factor = (read_hash % 1000000) / 1000000.0
+    return read_random_factor
 
 def get_avg_coverage(alignment_file, chrom, start, end):
     split_coverage = alignment_file.count_coverage(chrom, start, end, quality_threshold=0)

@@ -17,10 +17,7 @@ import bamsurgeon.makevcf as makevcf
 
 from bamsurgeon.common import *
 from uuid import uuid4
-from time import sleep
 from shutil import move
-from math import sqrt
-from collections import Counter
 from collections import defaultdict as dd
 from concurrent.futures import ProcessPoolExecutor
 
@@ -31,33 +28,24 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-def getreads(bam, chrom, start, end, svfrac, readlen=150):
-    samplefrac = 1-float(svfrac)
-    names = []
-    namecounter = dd(int)
-
-    buffer=readlen/2
-
-    for read in bam.fetch(chrom, start+buffer, end-buffer):
-        if read.is_secondary or read.is_supplementary or read.is_duplicate:
+def get_reads(bam_file, chrom, start, end, svfrac):
+    bam = pysam.AlignmentFile(bam_file)
+    for read in bam.fetch(chrom, start, end):
+        read_end = read.reference_start + read.query_length
+        pair_end = read.next_reference_start + read.query_length
+        if read.is_duplicate or read.is_secondary or read.is_supplementary or \
+                pair_end > end or read.next_reference_start < start or \
+                read_end > end or read.reference_start < start:
             continue
-
-        namecounter[read.query_name] += 1
-
-    for name, count in namecounter.items():
-        if count == 2:
-            if random.uniform(0,1) > samplefrac:
-                names.append(name)
-
-    logger.info('fetched %d read pairs from %s:%d-%d, downsample factor: %f' % (len(names), chrom, start, end, samplefrac))
-
-    return names
+        
+        read_random_factor = read_hash_fraction(read.query_name)
+        if read_random_factor <= svfrac:
+            yield read
+    bam.close()
 
 
-def runwgsim(contig, newseq, svfrac, svtype, pemean, pesd, tmpdir, region_reads, mutid='null', err_rate=0.0, seed=None, trn_contig=None, trn_region_reads=None, rename=True):
+def runwgsim(contig, newseq, pemean, pesd, tmpdir, nsimreads, mutid='null', err_rate=0.0, seed=None, trn_contig=None, rename=True):
     ''' wrapper function for wgsim, could swap out to support other reads simulators (future work?) '''
-
-    svfrac = float(svfrac)
 
     basefn = tmpdir + '/' + mutid + ".wgsimtmp." + str(uuid4())
     fasta = basefn + ".fasta"
@@ -72,21 +60,8 @@ def runwgsim(contig, newseq, svfrac, svtype, pemean, pesd, tmpdir, region_reads,
     if trn_contig: ctg_len += len(trn_contig)
 
     # # adjustment factor for length of new contig vs. old contig
-    lenfrac = float(len(newseq))/float(ctg_len)
-
     logger.info("%s old ctg len: %d" % (mutid, ctg_len))
     logger.info("%s new ctg len: %d" % (mutid, len(newseq)))
-    logger.info("%s adj. factor: %f" % (mutid, lenfrac))
-    logger.info("%s VAF(svfrac): %f" % (mutid, svfrac))
-
-    # number of paried reads to simulate
-    nsimreads = len(region_reads)
-
-    if trn_region_reads:
-        nsimreads += len(trn_region_reads)
-
-    nsimreads = nsimreads*lenfrac*svfrac
-
     logger.info("%s num. sim. reads: %d" % (mutid, nsimreads))
     logger.info("%s PE mean outer distance: %f" % (mutid, pemean))
     logger.info("%s PE outer distance SD: %f" % (mutid, pesd))
@@ -253,58 +228,7 @@ def locate_contig_pos(refstart, refend, user_start, user_end, contig_len, maxlib
 
 
 
-def add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right_bnd, bdup_svfrac, buf=200):
-    assert bdup_left_bnd < bdup_right_bnd, '%s: bdup_left_bnd > bdup_right_bnd' % mutid
-
-    # identify zero coverage region
-
-    left_zero  = None
-    right_zero = None
-
-    left_cover  = None
-    right_cover = None
-
-    region = '%s:%d-%d' % (bdup_chrom, bdup_left_bnd+buf, bdup_right_bnd-buf)
-
-    samtools_args = ['samtools', 'mpileup', '-r', region, '-a', tmpbamfn]
-
-    FNULL = open(os.devnull, 'w')
-
-    p = subprocess.Popen(samtools_args,stdout=subprocess.PIPE,stderr=FNULL)
-
-    for line in p.stdout:
-        line = line.decode()
-        c = line.strip().split()
-        pos   = int(c[1])
-        depth = int(c[3])
-
-        if left_zero is None and depth == 0:
-            left_zero = pos
-
-        if left_cover is None and depth > 0:
-            left_cover = pos
-
-        if left_zero is not None and depth == 0:
-            right_zero = pos
-
-        if depth > 0 and right_zero is not None:
-            right_cover = pos
-
-    if right_cover is None:
-        right_cover = right_zero+1
-
-    logger.info('%s: left_zero=%d, left_cover=%d, right_zero=%d, right_cover=%d' % (mutid, left_zero, left_cover, right_zero, right_cover))
-
-    if left_cover > left_zero:
-       logger.warning('%s: left_cover > left_zero' % mutid)
-       left_cover, left_zero = left_zero, left_cover
-
-    if right_cover < right_zero:
-       logger.warning('%s: right_cover < right_zero' % mutid)
-       right_cover, right_zero = right_zero, right_cover
-
-    assert left_zero < right_zero, 'left_zero: %d, right_zero: %d' % (left_zero, right_zero)
-
+def add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right_bnd, bdup_svfrac):
     tmpbam = pysam.AlignmentFile(tmpbamfn)
 
     outbamfn = '%s/%s.%s.bigdup.merged.bam' % (args.tmpdir, mutid, str(uuid4()))
@@ -314,9 +238,9 @@ def add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right
 
     # Calculate donor norm factor
     with pysam.AlignmentFile(args.donorbam) as donorbam:
-        cover_donor = donorbam.count(region=region) / float(bdup_right_bnd-bdup_left_bnd)
+        cover_donor = donorbam.count(contig=bdup_chrom, start=bdup_left_bnd, end=bdup_right_bnd) / float(bdup_right_bnd-bdup_left_bnd)
     with pysam.AlignmentFile(args.bamFileName) as origbam:
-        cover_orig = origbam.count(region=region) / float(bdup_right_bnd-bdup_left_bnd)
+        cover_orig = origbam.count(contig=bdup_chrom, start=bdup_left_bnd, end=bdup_right_bnd) / float(bdup_right_bnd-bdup_left_bnd)
 
     donor_norm_factor = cover_orig * bdup_svfrac / cover_donor
     if donor_norm_factor > 1.0:
@@ -324,50 +248,20 @@ def add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right
 
     logger.info('%s: BIGDUP donor coverage normalisation factor: %f' % (mutid, donor_norm_factor))
 
-    matepairs = {}
-
     logger.info('%s: fetch donor reads from %s-%d-%d' % (mutid, bdup_chrom, bdup_left_bnd, bdup_right_bnd))
 
-    paircount = 0
+    nreads = 0
 
-    donorbam = pysam.AlignmentFile(args.donorbam)
-    for read in donorbam.fetch(bdup_chrom, bdup_left_bnd, bdup_right_bnd):
-        if not read.is_duplicate and not read.is_secondary and not read.is_supplementary:
-            if (read.pos > left_zero and read.pos < right_zero) or (read.next_reference_start > left_zero and read.next_reference_start < right_zero):
-                if read.query_name not in matepairs:
-                    matepairs[read.query_name] = read
-                    
-                else:
-                    newname = str(uuid4())
-
-                    mate = matepairs[read.query_name]
-
-                    mate.query_name = newname
-                    read.query_name = newname
-
-                    if random.random() <= donor_norm_factor:
-                        outbam.write(mate)
-                        outbam.write(read)
-                        paircount += 1
+    for read in get_reads(args.donorbam, bdup_chrom, bdup_left_bnd, bdup_right_bnd, donor_norm_factor):
+        read.query_name = read.query_name + '_donor_' + mutid
+        outbam.write(read)
+        nreads += 1
 
     outbam.close()
 
-    logger.info('%s: using %d donor read pairs' % (mutid, paircount))
+    logger.info('%s: using %d donor reads from %s' % (mutid, nreads, args.donorbam))
 
     return outbamfn
-
-
-def fetch_read_names(args, chrom, start, end, svfrac=1.0):
-    bamfile = pysam.AlignmentFile(args.bamFileName)
-
-    names = []
-
-    for read in bamfile.fetch(chrom, start, end):
-        if random.random() <= svfrac:
-            names.append(read.query_name)
-
-    return names
-
 
 def merge_multi_trn(args, alignopts, pair, chrom, start, end, vaf):
     assert len(pair) == 2
@@ -413,8 +307,6 @@ def makemut(args, bedline, alignopts):
     reffile = pysam.Fastafile(args.refFasta)
     logfn = '_'.join(map(os.path.basename, bedline.split()[:4])) + ".log"
     logfile = open('addsv_logs_' + os.path.basename(args.outBamFile) + '/' + os.path.basename(args.outBamFile) + '_' + logfn, 'w')
-    exclfile = args.tmpdir + '/' + '.'.join((mutid, 'exclude', str(uuid4()), 'txt'))
-    exclude = open(exclfile, 'w')
     mutinfo = {}
 
     # optional CNV file
@@ -703,12 +595,10 @@ def makemut(args, bedline, alignopts):
             if trn_contig_start is None:
                 logger.warning('%s contig does not cover user translocation start' % mutid)
                 exact_success = False
-                #print trn_refstart, trn_refend, user_trn_start, user_trn_end, int(args.maxlibsize)
 
             if trn_contig_end is None:
                 logger.warning('%s contig does not cover user translocation end' % mutid)
                 exact_success = False
-                #print trn_refstart, trn_refend, user_trn_start, user_trn_end, int(args.maxlibsize)
 
 
         if args.require_exact and not exact_success:
@@ -848,8 +738,6 @@ def makemut(args, bedline, alignopts):
 
             mutseq.fusion(trnpoint_1, trn_mutseq, trnpoint_2)
 
-
-
             mutinfo[mutid] = "\t".join(('bigdup',chrom,str(refstart),str(refend),action,str(trnpoint_1),trn_chrom,str(trn_refstart),str(trn_refend),str(trnpoint_2),str(svfrac)))
             logfile.write(mutinfo[mutid] + "\n")
             rename_reads = False
@@ -863,29 +751,47 @@ def makemut(args, bedline, alignopts):
     logger.info("%s set paired end mean distance: %f" % (mutid, pemean))
     logger.info("%s set paired end distance stddev: %f" % (mutid, pesd))
 
-    region_reads = getreads(bamfile, chrom, refstart, refend, svfrac)
-
-    for name in region_reads:
-        exclude.write(name + "\n")
-
-    trn_region_reads = None
+    exclfile = args.tmpdir + '/' + '.'.join((mutid, 'exclude', str(uuid4()), 'txt'))
+    exclude = open(exclfile, 'w')
 
     if is_transloc:
-        trn_region_reads = getreads(bamfile, trn_chrom, trn_refstart, trn_refend, svfrac)
+        buffer = int(float(args.ismean))
+        region_1_start, region_1_end = (refstart + trnpoint_1 - buffer, refend) if trn_left_flip else (refstart, refstart + trnpoint_1 + buffer)
+        region_2_start, region_2_end = (trn_refstart + trnpoint_2 - buffer, trn_refend) if not trn_right_flip else (trn_refstart, trn_refstart + trnpoint_2 + buffer)
+        region_1_reads = get_reads(args.bamFileName, chrom, region_1_start, region_1_end, float(svfrac))
+        region_2_reads = get_reads(args.bamFileName, trn_chrom, region_2_start, region_2_end, float(svfrac))
+        excl_reads_names = set([read.query_name for read in region_1_reads] + [read.query_name for read in region_2_reads]) 
+        nsimreads = len(excl_reads_names)
+        # add additional excluded reads if bigdel(s) present
+        if action == 'BIGDEL':
+            bigdel_region_reads = get_reads(args.bamFileName, chrom, region_1_start, region_2_end, float(svfrac))
+            excl_reads_names = set([read.query_name for read in bigdel_region_reads])
+    else:
+        region_reads = get_reads(args.bamFileName, chrom, refstart, refend, float(svfrac))
+        excl_reads_names = set([read.query_name for read in region_reads])
+        reads_ratio = len(mutseq.seq) / len(maxcontig.seq)
+        nsimreads = int(len(excl_reads_names) * reads_ratio)
 
-        if trn_region_reads:
-            for name in trn_region_reads:
-                exclude.write(name + "\n")
+    for name in excl_reads_names:
+        exclude.write(name + "\n")
     exclude.close()
 
     # simulate reads
-    (fq1, fq2) = runwgsim(maxcontig, mutseq.seq, svfrac, actions, pemean, pesd, args.tmpdir, region_reads, err_rate=float(args.simerr), mutid=mutid, seed=args.seed, trn_contig=trn_maxcontig, rename=rename_reads, trn_region_reads=trn_region_reads)
+    (fq1, fq2) = runwgsim(maxcontig, mutseq.seq, pemean, pesd, args.tmpdir, nsimreads, err_rate=float(args.simerr), mutid=mutid, seed=args.seed, trn_contig=trn_maxcontig, rename=rename_reads)
 
     outreads = aligners.remap_fastq(args.aligner, fq1, fq2, args.refFasta, outbam_mutsfile, alignopts, mutid=mutid, threads=int(args.alignerthreads))
 
     if outreads == 0:
         logger.warning("%s outbam %s has no mapped reads!" % (mutid, outbam_mutsfile))
         return None, None, None
+
+    if action == 'BIGDUP':
+        bdup_left_bnd = min(region_1_start, region_2_start, region_1_end, region_2_end)
+        bdup_right_bnd = max(region_1_start, region_2_start, region_1_end, region_2_end)
+        prev_outbam_mutsfile = outbam_mutsfile
+        outbam_mutsfile = add_donor_reads(args, mutid, outbam_mutsfile, chrom, bdup_left_bnd, bdup_right_bnd, float(svfrac))
+        os.remove(prev_outbam_mutsfile)
+        os.remove(prev_outbam_mutsfile + '.bai')
 
     logger.info("%s temporary bam: %s" % (mutid, outbam_mutsfile))
 
@@ -938,9 +844,7 @@ def main(args):
     assert os.path.exists('addsv_logs_' + os.path.basename(args.outBamFile)), "could not create output directory!"
     assert os.path.exists(args.tmpdir), "could not create temporary directory!"
 
-    bigdels = {}
     biginvs = {}
-    bigdups = {}
 
     with open(args.varFileName, 'r') as varfile:
         for bedline in varfile:
@@ -984,8 +888,6 @@ def main(args):
                 bdel_right_end   = bdel_end
 
                 bedline = '%s %d %d BIGDEL %s %d %d %s %f' % (bdel_chrom, bdel_left_start, bdel_left_end, bdel_chrom, bdel_right_start, bdel_right_end, '++', bdel_svfrac)
-                bdel_mutid = '_'.join(map(str, bedline.split()[:4]))
-                bigdels[bdel_mutid] = (bdel_chrom, bdel_start, bdel_end, bdel_svfrac)
 
             # rewrite bigdup coords as translocation
             if mut_type == 'BIGDUP':
@@ -1008,8 +910,6 @@ def main(args):
                 bdup_right_end   = bdup_end
 
                 bedline = '%s %d %d BIGDUP %s %d %d %s %f' % (bdup_chrom, bdup_right_start, bdup_right_end, bdup_chrom, bdup_left_start, bdup_left_end, '++', bdup_svfrac)
-                bdup_mutid = '_'.join(map(str, bedline.split()[:4]))
-                bigdups[bdup_mutid] = (bdup_chrom, bdup_start, bdup_end, bdup_svfrac)
 
             # rewrite biginv coords as translocations
             if mut_type == 'BIGINV':
@@ -1050,9 +950,6 @@ def main(args):
             nmuts += 1
 
     ## process the results of mutation jobs
-
-    master_mutinfo = {}
-
     for result in results:
         tmpbam = None
         exclfn = None
@@ -1063,10 +960,6 @@ def main(args):
             if bamreadcount(tmpbam) > 0:
                 tmpbams.append(tmpbam)
                 exclfns.append(exclfn)
-
-                mutid = os.path.basename(tmpbam).split('.')[0]
-                master_mutinfo[mutid] = mutinfo[mutid]
-
             else:
                 os.remove(tmpbam)
                 os.remove(exclfn)
@@ -1075,59 +968,14 @@ def main(args):
         logger.error("no succesful mutations")
         sys.exit(1)
 
-    success_mutids = [os.path.basename(tmpbam).split('.')[0] for tmpbam in tmpbams]
-
-    
-    bigdel_excl = {}
-    bigdup_add  = {}
-
-    for mutid, mutinfo in master_mutinfo.items():
-        # add additional excluded reads if bigdel(s) present
-        if mutinfo.startswith('bigdel'):
-            bdel_chrom, bdel_start, bdel_end, bdel_svfrac = bigdels[mutid]
-
-            bdel_left_bnd = int(mutinfo.split()[3])
-            bdel_right_bnd = int(mutinfo.split()[7])
-
-            if bdel_left_bnd > bdel_right_bnd:
-                bdel_left_bnd, bdel_right_bnd, bdel_right_bnd, bdel_left_bnd
-
-            bigdel_excl[mutid] = fetch_read_names(args, bdel_chrom, bdel_left_bnd, bdel_right_bnd, svfrac=bdel_svfrac)
-
-        if mutinfo.startswith('bigdup'):
-            bdup_chrom, bdup_start, bdup_end, bdup_svfrac = bigdups[mutid]
-
-            bdup_left_bnd = int((int(mutinfo.split()[7])+int(mutinfo.split()[8]))/2)
-            bdup_right_bnd = int((int(mutinfo.split()[2])+int(mutinfo.split()[3]))/2)
-
-            bigdup_add[mutid] = (bdup_chrom, bdup_left_bnd, bdup_right_bnd, bdup_svfrac)
-
-
     biginv_pairs = dd(list)
 
     new_tmpbams = []
 
     for tmpbamfn in tmpbams:
         mutid = os.path.basename(tmpbamfn).split('.')[0]
-
         if mutid.endswith('BIGINV'):
             biginv_pairs[mutid].append(tmpbamfn)
-        
-        elif mutid.endswith('BIGDUP'):
-            #print 'bigdup testing mutid:', mutid
-            #print 'bigdup testing known mutids:', bigdup_add.keys()
-            bdup_chrom, bdup_left_bnd, bdup_right_bnd, bdup_svfrac = bigdup_add[mutid]
-
-            bdup_left_bnd  = int(bdup_left_bnd)
-            bdup_right_bnd = int(bdup_right_bnd)
-
-            if bdup_left_bnd > bdup_right_bnd:
-                bdup_left_bnd, bdup_right_bnd = bdup_right_bnd, bdup_left_bnd
-
-            merged_bdup = add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right_bnd, bdup_svfrac)
-
-            new_tmpbams.append(merged_bdup) # TODO merge bigdup reads
-
         else:
             new_tmpbams.append(tmpbamfn)
 
@@ -1168,19 +1016,13 @@ def main(args):
         with open(exclfn, 'r') as excl:
             for line in excl:
                 exclout.write(line)
-
-            # add reads excluded due to BIGDEL if breakpoint was successful
-            for bdel_mutid in bigdel_excl:
-                if bdel_mutid in success_mutids:
-                    for bdel_rn in bigdel_excl[bdel_mutid]:
-                        exclout.write(bdel_rn+'\n')
-
+        if not args.debug:
+            os.remove(exclfn)
     exclout.close()
 
     if len(tmpbams) == 1:
         logger.info("only one bam: %s renaming to %s" % (tmpbams[0], mergedtmp))
         os.rename(tmpbams[0], mergedtmp)
-
     elif len(tmpbams) > 1:
         logger.info("merging bams into %s" % mergedtmp)
         mergebams(tmpbams, mergedtmp, debug=args.debug)
@@ -1188,20 +1030,6 @@ def main(args):
     if args.skipmerge:
         logger.info("final merge skipped, please merge manually: %s" % mergedtmp)
         logger.info("exclude file to use: %s" % excl_merged)
-        logger.info("cleaning up...")
-
-        if not args.debug:
-            if exclfn is not None:
-                for exclfn in exclfns:
-                    if os.path.isfile(exclfn):
-                        os.remove(exclfn)
-
-            for tmpbam in tmpbams:
-                if os.path.isfile(tmpbam):
-                    os.remove(tmpbam)
-                if os.path.isfile(tmpbam + '.bai'):
-                    os.remove(tmpbam + '.bai')
-
     else:
         if args.tagreads:
             from bamsurgeon.markreads import markreads
@@ -1212,22 +1040,18 @@ def main(args):
 
         logger.info("writing to %s" % args.outBamFile)
         rr.replace_reads(args.bamFileName, mergedtmp, args.outBamFile, excludefile=excl_merged, allreads=True, keepsecondary=args.keepsecondary, seed=args.seed, quiet=True)
-
         if not args.debug:
             os.remove(excl_merged)
             os.remove(mergedtmp)
 
-            for exclfn in exclfns:
-                if os.path.isfile(exclfn):
-                    os.remove(exclfn)
-
-            for tmpbam in tmpbams:
-                if os.path.isfile(tmpbam):
-                    os.remove(tmpbam)
-                if os.path.isfile(tmpbam + '.bai'):
-                    os.remove(tmpbam + '.bai')
-
         logger.info("done.")
+
+    if not args.debug:
+        for tmpbam in tmpbams:
+            if os.path.isfile(tmpbam):
+                os.remove(tmpbam)
+            if os.path.isfile(tmpbam + '.bai'):
+                os.remove(tmpbam + '.bai')
 
     var_basename = '.'.join(os.path.basename(args.varFileName).split('.')[:-1])
     bam_basename = '.'.join(os.path.basename(args.outBamFile).split('.')[:-1])
