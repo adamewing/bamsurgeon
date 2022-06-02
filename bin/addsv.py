@@ -228,8 +228,7 @@ def locate_contig_pos(refstart, refend, user_start, user_end, contig_len, maxlib
 
 
 
-def add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right_bnd, bdup_svfrac, buf=200):
-    assert bdup_left_bnd < bdup_right_bnd, '%s: bdup_left_bnd > bdup_right_bnd' % mutid
+def add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right_bnd, bdup_svfrac):
     tmpbam = pysam.AlignmentFile(tmpbamfn)
 
     outbamfn = '%s/%s.%s.bigdup.merged.bam' % (args.tmpdir, mutid, str(uuid4()))
@@ -739,8 +738,6 @@ def makemut(args, bedline, alignopts):
 
             mutseq.fusion(trnpoint_1, trn_mutseq, trnpoint_2)
 
-
-
             mutinfo[mutid] = "\t".join(('bigdup',chrom,str(refstart),str(refend),action,str(trnpoint_1),trn_chrom,str(trn_refstart),str(trn_refend),str(trnpoint_2),str(svfrac)))
             logfile.write(mutinfo[mutid] + "\n")
             rename_reads = False
@@ -763,15 +760,19 @@ def makemut(args, bedline, alignopts):
         region_2_start, region_2_end = (trn_refstart + trnpoint_2 - buffer, trn_refend) if not trn_right_flip else (trn_refstart, trn_refstart + trnpoint_2 + buffer)
         region_1_reads = get_reads(args.bamFileName, chrom, region_1_start, region_1_end, float(svfrac))
         region_2_reads = get_reads(args.bamFileName, trn_chrom, region_2_start, region_2_end, float(svfrac))
-        region_reads_names = set([read.query_name for read in region_1_reads] + [read.query_name for read in region_2_reads]) 
-        nsimreads = len(region_reads_names)
+        excl_reads_names = set([read.query_name for read in region_1_reads] + [read.query_name for read in region_2_reads]) 
+        nsimreads = len(excl_reads_names)
+        # add additional excluded reads if bigdel(s) present
+        if action == 'BIGDEL':
+            bigdel_region_reads = get_reads(args.bamFileName, chrom, region_1_start, region_2_end, float(svfrac))
+            excl_reads_names = set([read.query_name for read in bigdel_region_reads])
     else:
         region_reads = get_reads(args.bamFileName, chrom, refstart, refend, float(svfrac))
-        region_reads_names = set([read.query_name for read in region_reads])
+        excl_reads_names = set([read.query_name for read in region_reads])
         reads_ratio = len(mutseq.seq) / len(maxcontig.seq)
-        nsimreads = int(len(region_reads_names) * reads_ratio)
+        nsimreads = int(len(excl_reads_names) * reads_ratio)
 
-    for name in region_reads_names:
+    for name in excl_reads_names:
         exclude.write(name + "\n")
     exclude.close()
 
@@ -783,6 +784,14 @@ def makemut(args, bedline, alignopts):
     if outreads == 0:
         logger.warning("%s outbam %s has no mapped reads!" % (mutid, outbam_mutsfile))
         return None, None, None
+
+    if action == 'BIGDUP':
+        bdup_left_bnd = min(region_1_start, region_2_start, region_1_end, region_2_end)
+        bdup_right_bnd = max(region_1_start, region_2_start, region_1_end, region_2_end)
+        prev_outbam_mutsfile = outbam_mutsfile
+        outbam_mutsfile = add_donor_reads(args, mutid, outbam_mutsfile, chrom, bdup_left_bnd, bdup_right_bnd, float(svfrac))
+        os.remove(prev_outbam_mutsfile)
+        os.remove(prev_outbam_mutsfile + '.bai')
 
     logger.info("%s temporary bam: %s" % (mutid, outbam_mutsfile))
 
@@ -835,9 +844,7 @@ def main(args):
     assert os.path.exists('addsv_logs_' + os.path.basename(args.outBamFile)), "could not create output directory!"
     assert os.path.exists(args.tmpdir), "could not create temporary directory!"
 
-    bigdels = {}
     biginvs = {}
-    bigdups = {}
 
     with open(args.varFileName, 'r') as varfile:
         for bedline in varfile:
@@ -881,8 +888,6 @@ def main(args):
                 bdel_right_end   = bdel_end
 
                 bedline = '%s %d %d BIGDEL %s %d %d %s %f' % (bdel_chrom, bdel_left_start, bdel_left_end, bdel_chrom, bdel_right_start, bdel_right_end, '++', bdel_svfrac)
-                bdel_mutid = '_'.join(map(str, bedline.split()[:4]))
-                bigdels[bdel_mutid] = (bdel_chrom, bdel_start, bdel_end, bdel_svfrac)
 
             # rewrite bigdup coords as translocation
             if mut_type == 'BIGDUP':
@@ -905,8 +910,6 @@ def main(args):
                 bdup_right_end   = bdup_end
 
                 bedline = '%s %d %d BIGDUP %s %d %d %s %f' % (bdup_chrom, bdup_right_start, bdup_right_end, bdup_chrom, bdup_left_start, bdup_left_end, '++', bdup_svfrac)
-                bdup_mutid = '_'.join(map(str, bedline.split()[:4]))
-                bigdups[bdup_mutid] = (bdup_chrom, bdup_start, bdup_end, bdup_svfrac)
 
             # rewrite biginv coords as translocations
             if mut_type == 'BIGINV':
@@ -947,9 +950,6 @@ def main(args):
             nmuts += 1
 
     ## process the results of mutation jobs
-
-    master_mutinfo = {}
-
     for result in results:
         tmpbam = None
         exclfn = None
@@ -960,10 +960,6 @@ def main(args):
             if bamreadcount(tmpbam) > 0:
                 tmpbams.append(tmpbam)
                 exclfns.append(exclfn)
-
-                mutid = os.path.basename(tmpbam).split('.')[0]
-                master_mutinfo[mutid] = mutinfo[mutid]
-
             else:
                 os.remove(tmpbam)
                 os.remove(exclfn)
@@ -972,45 +968,14 @@ def main(args):
         logger.error("no succesful mutations")
         sys.exit(1)
 
-    success_mutids = [os.path.basename(tmpbam).split('.')[0] for tmpbam in tmpbams]
-
-    
-    bigdel_excl = {}
-    bigdup_add  = {}
-
-    for mutid, mutinfo in master_mutinfo.items():
-        # add additional excluded reads if bigdel(s) present
-        if mutinfo.startswith('bigdel'):
-            bdel_chrom, bdel_start, bdel_end, bdel_svfrac = bigdels[mutid]
-            bigdel_excl[mutid] = [read.query_name for read in get_reads(args.bamFileName, bdel_chrom, bdel_start, bdel_end, bdel_svfrac)]
-        if mutinfo.startswith('bigdup'):
-            bdup_chrom, bdup_start, bdup_end, bdup_svfrac = bigdups[mutid]
-            bigdup_add[mutid] = (bdup_chrom, bdup_start, bdup_end, bdup_svfrac)
-
-
     biginv_pairs = dd(list)
 
     new_tmpbams = []
 
     for tmpbamfn in tmpbams:
         mutid = os.path.basename(tmpbamfn).split('.')[0]
-
         if mutid.endswith('BIGINV'):
             biginv_pairs[mutid].append(tmpbamfn)
-        
-        elif mutid.endswith('BIGDUP'):
-            bdup_chrom, bdup_left_bnd, bdup_right_bnd, bdup_svfrac = bigdup_add[mutid]
-
-            bdup_left_bnd  = int(bdup_left_bnd)
-            bdup_right_bnd = int(bdup_right_bnd)
-
-            if bdup_left_bnd > bdup_right_bnd:
-                bdup_left_bnd, bdup_right_bnd = bdup_right_bnd, bdup_left_bnd
-
-            merged_bdup = add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right_bnd, bdup_svfrac)
-
-            new_tmpbams.append(merged_bdup) # TODO merge bigdup reads
-
         else:
             new_tmpbams.append(tmpbamfn)
 
@@ -1051,19 +1016,13 @@ def main(args):
         with open(exclfn, 'r') as excl:
             for line in excl:
                 exclout.write(line)
-
-            # add reads excluded due to BIGDEL if breakpoint was successful
-            for bdel_mutid in bigdel_excl:
-                if bdel_mutid in success_mutids:
-                    for bdel_rn in bigdel_excl[bdel_mutid]:
-                        exclout.write(bdel_rn+'\n')
-
+        if not args.debug:
+            os.remove(exclfn)
     exclout.close()
 
     if len(tmpbams) == 1:
         logger.info("only one bam: %s renaming to %s" % (tmpbams[0], mergedtmp))
         os.rename(tmpbams[0], mergedtmp)
-
     elif len(tmpbams) > 1:
         logger.info("merging bams into %s" % mergedtmp)
         mergebams(tmpbams, mergedtmp, debug=args.debug)
@@ -1071,20 +1030,6 @@ def main(args):
     if args.skipmerge:
         logger.info("final merge skipped, please merge manually: %s" % mergedtmp)
         logger.info("exclude file to use: %s" % excl_merged)
-        logger.info("cleaning up...")
-
-        if not args.debug:
-            if exclfn is not None:
-                for exclfn in exclfns:
-                    if os.path.isfile(exclfn):
-                        os.remove(exclfn)
-
-            for tmpbam in tmpbams:
-                if os.path.isfile(tmpbam):
-                    os.remove(tmpbam)
-                if os.path.isfile(tmpbam + '.bai'):
-                    os.remove(tmpbam + '.bai')
-
     else:
         if args.tagreads:
             from bamsurgeon.markreads import markreads
@@ -1095,22 +1040,18 @@ def main(args):
 
         logger.info("writing to %s" % args.outBamFile)
         rr.replace_reads(args.bamFileName, mergedtmp, args.outBamFile, excludefile=excl_merged, allreads=True, keepsecondary=args.keepsecondary, seed=args.seed, quiet=True)
-
         if not args.debug:
             os.remove(excl_merged)
             os.remove(mergedtmp)
 
-            for exclfn in exclfns:
-                if os.path.isfile(exclfn):
-                    os.remove(exclfn)
-
-            for tmpbam in tmpbams:
-                if os.path.isfile(tmpbam):
-                    os.remove(tmpbam)
-                if os.path.isfile(tmpbam + '.bai'):
-                    os.remove(tmpbam + '.bai')
-
         logger.info("done.")
+
+    if not args.debug:
+        for tmpbam in tmpbams:
+            if os.path.isfile(tmpbam):
+                os.remove(tmpbam)
+            if os.path.isfile(tmpbam + '.bai'):
+                os.remove(tmpbam + '.bai')
 
     var_basename = '.'.join(os.path.basename(args.varFileName).split('.')[:-1])
     bam_basename = '.'.join(os.path.basename(args.outBamFile).split('.')[:-1])
