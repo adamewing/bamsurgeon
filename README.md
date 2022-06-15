@@ -1,7 +1,7 @@
 # Bamsurgeon<!-- omit in toc -->
 [![DOI](https://zenodo.org/badge/4290471.svg)](https://zenodo.org/badge/latestdoi/4290471)
 
-*tools for adding mutations to .bam files, used for testing mutation callers*
+*Tools (addsnv.py, addindel.py and addsv.py) for adding genomic variants to SAM/BAM/CRAM files, used for testing variant callers*
 
 Please see doc/Manual.pdf for instructions and contact adam.ewing@gmail.com with questions.
   
@@ -15,7 +15,7 @@ Please see doc/Manual.pdf for instructions and contact adam.ewing@gmail.com with
 
 The following presumes $HOME/bin is in your $PATH
 
-Samtools / BCFTools / wgsim:
+SAMtools / wgsim:
 
 ```
 git clone --recurse-submodules --remote-submodules https://github.com/samtools/htslib.git
@@ -25,10 +25,6 @@ git clone https://github.com/samtools/samtools.git
 make -C samtools
 cp samtools/samtools $HOME/bin
 cp samtools/misc/wgsim $HOME/bin
-
-git clone https://github.com/samtools/bcftools.git
-make -C bcftools
-cp bcftools/bcftools $HOME/bin
 ```
 
 BWA (or another aligner, currently supported aligners include bwa, novoalign, gsnap, bowtie2, and tmap)
@@ -70,6 +66,11 @@ Pysam
 
 ```
 pip install pysam
+```
+
+To check if all dependencies are correctly installed, you may execute the following script:
+```
+python3 -O scripts/check_dependencies.py
 ```
 
 ## Getting started

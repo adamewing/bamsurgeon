@@ -13,12 +13,11 @@ before_install:
 
 install:
     ## Python modules
-    - pip install cython
     - pip install pysam
 
     ## Picard
-    - wget https://github.com/broadinstitute/picard/releases/download/1.131/picard-tools-1.131.zip
-    - unzip picard-tools-1.131.zip
+    - wget https://github.com/broadinstitute/picard/releases/download/2.27.3/picard.jar
+    - chmod +x picard.jar
 
     ## Exonerate
     - git clone https://github.com/adamewing/exonerate.git
@@ -29,11 +28,11 @@ install:
     - cd ..
 
     # Velvet
-    - wget https://www.ebi.ac.uk/~zerbino/velvet/velvet_1.2.10.tgz
-    - tar xvzf velvet_1.2.10.tgz
-    - sudo make -C velvet_1.2.10
-    - sudo cp velvet_1.2.10/velvetg $WORKDIR/bin/
-    - sudo cp velvet_1.2.10/velveth $WORKDIR/bin/
+    - wget https://github.com/dzerbino/velvet/archive/refs/tags/v1.2.10.tar.gz
+    - tar xvzf v1.2.10.tar.gz
+    - sudo make -C velvet-1.2.10
+    - sudo cp velvet-1.2.10/velvetg $WORKDIR/bin/
+    - sudo cp velvet-1.2.10/velveth $WORKDIR/bin/
 
     ## BWA
     - git clone https://github.com/lh3/bwa.git
@@ -56,8 +55,7 @@ install:
     - sudo mv bcftools/bcftools $WORKDIR/bin
 
 script:
-    - python setup.py install
     - cd test
-    - ./test_indel.sh ../picard-tools-1.131/picard.jar 
-    - ./test_snv.sh ../picard-tools-1.131/picard.jar
+    - ./test_indel.sh ../picard.jar 
+    - ./test_snv.sh ../picard.jar
     - ./test_sv.sh
