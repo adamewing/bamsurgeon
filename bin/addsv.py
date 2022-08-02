@@ -34,6 +34,7 @@ def get_reads(bam_file, chrom, start, end, svfrac):
         read_end = read.reference_start + read.query_length
         pair_end = read.next_reference_start + read.query_length
         if read.is_duplicate or read.is_secondary or read.is_supplementary or \
+                read.is_unmapped or read.mate_is_unmapped or \
                 pair_end > end or read.next_reference_start < start or \
                 read_end > end or read.reference_start < start:
             continue
