@@ -785,6 +785,9 @@ def makemut(args, bedline, alignopts):
 
     if outreads == 0:
         logger.warning("%s outbam %s has no mapped reads!" % (mutid, outbam_mutsfile))
+        # Remove content from logfile in order to skip this mutation in the final VCF file
+        logfile.seek(0)
+        logfile.truncate()
         return None, None, None
 
     if action == 'BIGDUP':
