@@ -85,7 +85,7 @@ def replace_reads(origbamfile, mutbamfile, outbamfile, nameprefix=None, excludef
     '''
     targetbam = pysam.AlignmentFile(origbamfile)
     donorbam  = pysam.AlignmentFile(mutbamfile)
-    write_mode = 'wc' if origbamfile.endswith('.cram') else 'wb'
+    write_mode = 'wc' if outbamfile.endswith('.cram') else 'wb'
     outputbam  = pysam.AlignmentFile(outbamfile, write_mode, template=targetbam)
 
     if seed is not None: random.seed(int(seed))
@@ -103,8 +103,7 @@ def replace_reads(origbamfile, mutbamfile, outbamfile, nameprefix=None, excludef
     # load reads from donorbam into dict 
     logger.info("loading donor reads into dictionary...\n")
 
-    #rdict = defaultdict(list)
-    rdict = {}
+    rdict = defaultdict(lambda: [None, None, None])
     secondary = defaultdict(list) # track secondary alignments, if specified
     supplementary = defaultdict(list) # track supplementary alignments, if specified    
     excount = 0 # number of excluded reads
@@ -124,7 +123,9 @@ def replace_reads(origbamfile, mutbamfile, outbamfile, nameprefix=None, excludef
             read.qual = qual
         extqname = read.qname
         if not read.is_secondary and not read.is_supplementary:
-            rdict[extqname] = read
+            rlist = rdict[extqname]
+            # 0: first pair, 1: second pair, 2: unpaired
+            rlist[0 if read.is_read1 else 1 if read.is_read2 else 2] = read
             nr += 1
         elif keepsecondary and read.is_secondary:
             secondary[extqname].append(read)
@@ -157,13 +158,12 @@ def replace_reads(origbamfile, mutbamfile, outbamfile, nameprefix=None, excludef
             read.qname = nameprefix + read.qname
             read.qual = qual
         extqname = read.qname
-        #check if this read has been processed already. If so, skip to the next read
-        if extqname in used: continue
         newReads = []
         if extqname in rdict:
+            newRead = rdict[extqname][0 if read.is_read1 else 1 if read.is_read2 else 2]
             if keepqual:
-                rdict[extqname].qual = read.qual
-            newReads = [rdict[extqname]]
+                newRead.qual = read.qual
+            newReads = [newRead]
             used.add(extqname)
             recount += 1
         if keepsecondary and extqname in secondary:
@@ -192,9 +192,11 @@ def replace_reads(origbamfile, mutbamfile, outbamfile, nameprefix=None, excludef
     if allreads:
         for extqname in rdict.keys():
             if extqname not in used and extqname not in exclude:
-                rdict[extqname] = cleanup(rdict[extqname],None,RG)
-                outputbam.write(rdict[extqname])
-                nadded += 1
+                for read in rdict[extqname]:
+                    if read is None: continue
+                    read = cleanup(read,None,RG)
+                    outputbam.write(read)
+                    nadded += 1
         logger.info("added " + str(nadded) + " reads due to --all\n")
 
     targetbam.close()
