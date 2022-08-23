@@ -121,6 +121,10 @@ def makemut(args, chrom, start, end, vaf, ins, avoid, alignopts):
             logger.warning("%s dropped site with fewer reads than --minmutreads" % mutid)
             os.remove(tmpoutbamname)
             return None
+    elif lastread <= 0:
+        logger.warning("%s dropped mutation with 0 reads" % mutid)
+        os.remove(tmpoutbamname)
+        return None
 
     readtrack = dd(list)
 
