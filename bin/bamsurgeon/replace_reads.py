@@ -157,8 +157,6 @@ def replace_reads(origbamfile, mutbamfile, outbamfile, nameprefix=None, excludef
             read.qname = nameprefix + read.qname
             read.qual = qual
         extqname = read.qname
-        #check if this read has been processed already. If so, skip to the next read
-        if extqname in used: continue
         newReads = []
         if extqname in rdict:
             if keepqual:
