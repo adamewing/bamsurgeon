@@ -55,11 +55,11 @@ autoreconf -i
 Velvet
 
 ```
-wget https://www.ebi.ac.uk/~zerbino/velvet/velvet_1.2.10.tgz
-tar xvzf velvet_1.2.10.tgz
-make -C velvet_1.2.10
-cp velvet_1.2.10/velvetg $HOME/bin
-cp velvet_1.2.10/velveth $HOME/bin
+git clone https://github.com/dzerbino/velvet.git
+cd velvet
+make
+cp velvetg $HOME/bin
+cp velveth $HOME/bin
 ```
 
 Pysam
