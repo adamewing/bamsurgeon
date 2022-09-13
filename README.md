@@ -78,7 +78,7 @@ python3 -O scripts/check_dependencies.py
 It is not necessary to install BAMSurgeon. It works as any other standalone Python script. Usage example:
 
 ```
-python3 -O bin/addsv.py -p 1 -v test_data/test_sv.txt -f test_data/testregion_realign.bam -r $REF -o test_data/testregion_sv_mut.bam --aligner mem --keepsecondary --seed 1234 --inslib test_data/test_inslib.fa
+python3 -O bin/addsv.py -p 1 -v test_data/test_sv.txt -f test_data/testregion_realign.bam -r test_data/Homo_sapiens_chr22_assembly19.fasta -o test_data/testregion_sv_mut.bam --aligner mem --keepsecondary --seed 1234 --inslib test_data/test_inslib.fa
 ```
 
 **For best performance, it is strongly recommended to run all scripts with the `-O` Python parameter to skip all assertion checks.**
