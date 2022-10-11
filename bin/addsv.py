@@ -55,7 +55,7 @@ def runwgsim(contig, newseq, pemean, pesd, tmpdir, nsimreads, mutid='null', err_
     fq2 = basefn + ".2.fq"
 
     fout = open(fasta,'w')
-    fout.write(">target\n" + newseq + "\n")
+    fout.write(">" + mutid + "\n" + newseq + "\n")
     fout.close()
 
     ctg_len = len(contig)
