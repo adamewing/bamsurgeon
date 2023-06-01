@@ -285,7 +285,7 @@ usage: addsv.py [-h] -v VARFILENAME -f BAMFILENAME -r REFFASTA -o OUTBAMFILE
                 [--simerr SIMERR] [-p PROCS] [--inslib INSLIB]
                 [--aligner ALIGNER] [--alignopts ALIGNOPTS] [--tagreads]
                 [--skipmerge] [--keepsecondary] [--debug] [--tmpdir TMPDIR]
-                [--seed SEED] [--allowN]
+                [--seed SEED] [--allowN] [--vcf]
 
 adds SVs to reads, outputs modified reads as .bam along with mates
 
@@ -338,6 +338,7 @@ optional arguments:
   --seed SEED           seed random number generation
   --allowN              allow N in contigs, replace with A and warn user
                         (default: drop mutation)
+  --vcf                 output path for the VCF file
   
 \end{verbatim}
 
