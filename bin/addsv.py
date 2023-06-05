@@ -1061,7 +1061,7 @@ def main(args):
     var_basename = '.'.join(os.path.basename(args.varFileName).split('.')[:-1])
     bam_basename = '.'.join(os.path.basename(args.outBamFile).split('.')[:-1])
 
-    vcf_fn = bam_basename + '.addsv.' + var_basename + '.vcf'
+    vcf_fn = args.vcf + bam_basename + '.addsv.' + var_basename + '.vcf'
 
     makevcf.write_vcf_sv('addsv_logs_' + os.path.basename(args.outBamFile), args.refFasta, vcf_fn)
 
@@ -1130,6 +1130,8 @@ if __name__ == '__main__':
                         help='seed random number generation')
     parser.add_argument('--allowN', action='store_true', default=False,
                         help='allow N in contigs, replace with A and warn user (default: drop mutation)')
+    parser.add_argument('--vcf', default='', 
+                        help="Path for the output VCF file. If not provided, the file will be saved in the current directory.")
     args = parser.parse_args()
     main(args)
 
