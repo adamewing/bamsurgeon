@@ -49,4 +49,4 @@ if len(sys.argv) == 2:
 
     for ivl in ivl_list:
         if ivl not in dup:
-            print ivl
+            print(ivl)

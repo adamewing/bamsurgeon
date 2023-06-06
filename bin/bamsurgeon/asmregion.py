@@ -167,20 +167,37 @@ def asm(chrom, start, end, bamfilename, reffile, kmersize, tmpdir, mutid='null',
     ndisc  = 0 # track discordant reads
     rquals = []
     mquals = []
-    pending_reads = dict()
+    pending_reads = {}
 
     # Performance: find as much reads as possible without using .mate()
     for read in bamfile.fetch(chrom, start, end):
         if read.mate_is_unmapped or read.is_unmapped or not read.is_paired:
             continue
+
+        if read.is_supplementary or read.is_secondary:
+            continue
+
         if not read.is_proper_pair:
             ndisc += 1
-        mate = pending_reads.pop(read.qname, None)
+
         nreads += 1
-        if mate is None:
+
+        if read.qname in pending_reads:
+            mate = pending_reads.pop(read.qname)
+            if read.is_read1 and mate.is_read1:
+                pending_reads[read.qname] = read
+                continue
+
+            if read.is_read2 and mate.is_read2:
+                pending_reads[read.qname] = read
+                continue
+
+            readpairs[read.qname] = ReadPair(read, mate)
+
+        else:
             pending_reads[read.qname] = read
             continue
-        readpairs[read.qname] = ReadPair(read, mate)
+
         if read.is_read1:
             if read.is_reverse:
                 rquals.append(read.qual[::-1])
@@ -199,6 +216,8 @@ def asm(chrom, start, end, bamfilename, reffile, kmersize, tmpdir, mutid='null',
     # Find the remaining reads using .mate()
     for read in pending_reads.values():
         mate = bamfile.mate(read)
+        readpairs[read.qname] = ReadPair(read, mate)
+
         if read.is_read1:
             if read.is_reverse:
                 rquals.append(read.qual[::-1])
