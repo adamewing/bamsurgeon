@@ -234,10 +234,11 @@ def asm(chrom, start, end, bamfilename, reffile, kmersize, tmpdir, mutid='null',
                 mquals.append(read.qual)
     bamfile.close()
 
-    logger.info("found " + str(nreads) + " reads in region, " + str(float(ndisc)/float(nreads)) + " discordant.")
-
     if nreads == 0:
+        logger.info("found " + str(nreads) + " reads in region.")
         return []
+    
+    logger.info("found " + str(nreads) + " reads in region, " + str(float(ndisc)/float(nreads)) + " discordant.")
 
     refseq = None
     if reffile:
