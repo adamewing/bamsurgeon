@@ -52,7 +52,7 @@ usage: addsnv.py [-h] -v VARFILENAME -f BAMFILENAME -r REFFASTA -o OUTBAMFILE
                  [--ignoreref] [--force] [--insane] [--single]
                  [--maxopen MAXOPEN] [--requirepaired] [--tagreads]
                  [--skipmerge] [--ignorepileup] [--aligner ALIGNER]
-                 [--alignopts ALIGNOPTS] [--tmpdir TMPDIR] [--seed SEED]
+                 [--alignopts ALIGNOPTS] [--tmpdir TMPDIR] [--seed SEED] [--vcf]
 
 adds SNVs to reads, outputs modified reads as .bam along with mates
 
@@ -117,6 +117,7 @@ optional arguments:
                         option1:value1,option2:value2,...
   --tmpdir TMPDIR       temporary directory (default=addsnv.tmp)
   --seed SEED           seed random number generation
+  --vcf                 output path for the VCF file
 
 \end{verbatim}
 
