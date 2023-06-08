@@ -197,7 +197,7 @@ usage: addindel.py [-h] -v VARFILENAME -f BAMFILENAME -r REFFASTA -o
                    [--insane] [--single] [--maxopen MAXOPEN] [--requirepaired]
                    [--aligner ALIGNER] [--alignopts ALIGNOPTS] [--tagreads]
                    [--skipmerge] [--ignorepileup] [--tmpdir TMPDIR]
-                   [--seed SEED]
+                   [--seed SEED] [--vcf]
 
 adds INDELs to reads, outputs modified reads as .bam along with mates
 
@@ -257,6 +257,7 @@ optional arguments:
   --ignorepileup        do not check pileup depth in mutation regions
   --tmpdir TMPDIR       temporary directory (default=addindel.tmp)
   --seed SEED           seed random number generation
+  --vcf                 output path for the VCF file
 \end{verbatim}
 
 \subsection{Description}
