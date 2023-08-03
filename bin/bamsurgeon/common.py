@@ -20,6 +20,7 @@ logger.setLevel(logging.INFO)
 
 random_salt = None
 
+
 def read_hash_fraction(query_name):
     global random_salt
     if random_salt is None:
@@ -28,10 +29,12 @@ def read_hash_fraction(query_name):
     read_random_factor = (read_hash % 1000000) / 1000000.0
     return read_random_factor
 
+
 def get_avg_coverage(alignment_file, chrom, start, end):
     split_coverage = alignment_file.count_coverage(chrom, start, end, quality_threshold=0)
     base_sum = [sum(x) for x in split_coverage]
     return sum(base_sum) / float(end - start)
+
 
 def rc(dna):
     ''' reverse complement '''
@@ -84,7 +87,7 @@ def mergebams(bamlist, outbamfn, maxopen=100, debug=False):
                 move(tmpbams[0], submergefn)
                 logger.info("renamed: " + tmpbams[0] + " --> " + submergefn)
             else:
-                args = ['samtools','merge','-f',submergefn] + tmpbams 
+                args = ['samtools', 'merge', '-f', submergefn] + tmpbams
                 logger.info("merging, cmd: " + ' '.join(args))
                 subprocess.check_call(args)
 
@@ -92,7 +95,7 @@ def mergebams(bamlist, outbamfn, maxopen=100, debug=False):
             logger.info("merge finished, renaming: " + list(merge_sublists.keys())[0] + " --> " + outbamfn)
             move(list(merge_sublists.keys())[0], outbamfn)
         else:
-            args = ['samtools','merge','-f',outbamfn] + list(merge_sublists.keys())
+            args = ['samtools', 'merge', '-f', outbamfn] + list(merge_sublists.keys())
             logger.info("final merge, cmd: " + ' '.join(args))
             subprocess.check_call(args)
 
@@ -108,55 +111,72 @@ def mergebams(bamlist, outbamfn, maxopen=100, debug=False):
                 os.remove(bamfile + '.bai')
 
 
+def double_fastq_to_interleaved(fq1, fq2, outfq):
+    def get_fastq_read_iterator(fq):
+        f = open(fq, 'r')
+        while True:
+            name = f.readline()
+            if not name:
+                break
+            other = [f.readline() for i in range(3)]
+            yield [name] + other
+        f.close()
+    f_1_iter = get_fastq_read_iterator(fq1)
+    f_2_iter = get_fastq_read_iterator(fq2)
+    f_out = open(outfq, 'w')
+    while True:
+        try:
+            f_out.write(''.join(next(f_1_iter)))
+            f_out.write(''.join(next(f_2_iter)))
+        except StopIteration:
+            break
+    f_out.close()
+
+
 def bamtofastq(bam, picardjar, threads=1, paired=True, twofastq=False):
     ''' if twofastq is True output two fastq files instead of interleaved (default) for paired-end'''
-    assert os.path.exists(picardjar)
     assert bam.endswith('.bam')
 
     outfq = None
     outfq_pair = None
 
     cmd = ['java', '-XX:ParallelGCThreads=' + str(threads), '-jar', picardjar, 'SamToFastq', 'VALIDATION_STRINGENCY=SILENT', 'INPUT=' + bam]
-    cmd.append('INCLUDE_NON_PRIMARY_ALIGNMENTS=false') # in case the default ever changes
-    
+    cmd.append('INCLUDE_NON_PRIMARY_ALIGNMENTS=false')  # in case the default ever changes
+
+    logger.info("converting BAM " + bam + " to FASTQ\n")
     if paired:
-        if twofastq: # two-fastq paired end
+        if twofastq:  # two-fastq paired end
             outfq_pair = [sub('bam$', '1.fastq', bam), sub('bam$', '2.fastq', bam)]
             cmd.append('F=' + outfq_pair[0])
             cmd.append('F2=' + outfq_pair[1])
-        else: # interleaved paired-end
+            subprocess.check_call(cmd)
+            assert os.path.exists(outfq_pair[0]) and os.path.exists(outfq_pair[1])
+            return outfq_pair
+        else:  # interleaved paired-end
             outfq = sub('bam$', 'fastq', bam)
             cmd.append('FASTQ=' + outfq)
             cmd.append('INTERLEAVE=true')
+            subprocess.check_call(cmd)
+            assert os.path.exists(outfq)  # conversion failed
+            return [outfq]
     else:
         outfq = sub('bam$', 'fastq', bam)
         cmd.append('FASTQ=' + outfq)
-
-    logger.info("converting BAM " + bam + " to FASTQ\n")
-    subprocess.check_call(cmd)
-
-    if outfq is not None:
-        assert os.path.exists(outfq) # conversion failed
+        subprocess.check_call(cmd)
         return [outfq]
 
-    if outfq_pair is not None:
-        assert os.path.exists(outfq_pair[0]) and os.path.exists(outfq_pair[1])
-        return outfq_pair
 
-    return None
-
-
-def fastqreadcount(fastqfile):
-    assert not fastqfile.endswith('gz') # not supported yet
-    return sum(1 for line in open(fastqfile))/4
-
-
-def bamreadcount(bamfile, fasta_ref):
+def check_min_read_count(bamfile, fasta_ref, min_num_reads=0):
+    # Returns True if the BAM has at least min_num_reads reads
     bam = pysam.AlignmentFile(bamfile, reference_filename=fasta_ref)
+    # If the BAM is indexed, we can just check the header
     if bam.is_bam and bam.check_index():
-        return bam.mapped + bam.unmapped
-    else:
-        return bam.count(until_eof=True)
+        return bam.mapped + bam.unmapped > min_num_reads
+    # If the BAM is not indexed, we have to count the reads manually
+    for i, _ in enumerate(bam.fetch(until_eof=True)):
+        if i + 1 > min_num_reads:
+            return True
+    return False
 
 
 def dictlist(fn):

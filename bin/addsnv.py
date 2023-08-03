@@ -6,7 +6,7 @@ import argparse
 import random
 import os
 import bamsurgeon.replace_reads as rr
-import bamsurgeon.aligners as aligners
+from bamsurgeon.aligners import remap_bam, SUPPORTED_ALIGNERS
 import bamsurgeon.mutation as mutation
 import bamsurgeon.makevcf as makevcf
 
@@ -239,7 +239,7 @@ def makemut(args, hc, avoid, alignopts):
     if not hasSNP or args.force:
         outbam_muts.close()
 
-        aligners.remap_bam(args.aligner, tmpoutbamname, args.refFasta, alignopts, threads=int(args.alignerthreads), mutid=hapstr, paired=(not args.single), picardjar=args.picardjar, insane=args.insane)
+        remap_bam(args.aligner, tmpoutbamname, args.refFasta, alignopts, threads=int(args.alignerthreads), mutid=hapstr, paired=(not args.single), picardjar=args.picardjar)
 
         outbam_muts = pysam.AlignmentFile(tmpoutbamname, reference_filename=args.refFasta)
         coverwindow = 1
@@ -278,7 +278,6 @@ def makemut(args, hc, avoid, alignopts):
 def main(args):
     logger.info("starting %s called with args: %s" % (sys.argv[0], ' '.join(sys.argv)))
     bedfile = open(args.varFileName, 'r')
-    reffile = pysam.Fastafile(args.refFasta)
 
     if (args.bamFileName.endswith('.bam') and not os.path.exists(args.bamFileName + '.bai')) or \
         (args.bamFileName.endswith('.cram') and not os.path.exists(args.bamFileName + '.crai')):
@@ -289,7 +288,6 @@ def main(args):
     if args.alignopts is not None:
         alignopts = dict([o.split(':') for o in args.alignopts.split(',')])
 
-    aligners.checkoptions(args.aligner, alignopts, args.picardjar)
 
     # load readlist to avoid, if specified
     avoid = None
@@ -450,7 +448,7 @@ def run():
     parser.add_argument('-d', '--coverdiff', dest='coverdiff', default=0.9, help="allow difference in input and output coverage (default=0.9)")
     parser.add_argument('-z', '--haplosize', default=0, help='haplotype size (default = 0)')
     parser.add_argument('-p', '--procs', dest='procs', default=1, help="split into multiple processes (default=1)")
-    parser.add_argument('--picardjar', default=None, help='path to picard.jar, required for most aligners')
+    parser.add_argument('--picardjar', required=True, help='path to picard.jar, required for most aligners')
     parser.add_argument('--mindepth', default=10, help='minimum read depth to make mutation (default = 10)')
     parser.add_argument('--maxdepth', default=2000, help='maximum read depth to make mutation (default = 2000)')
     parser.add_argument('--minmutreads', default=3, help='minimum number of mutated reads to output per site')
@@ -466,7 +464,7 @@ def run():
     parser.add_argument('--tagreads', action='store_true', default=False, help='add BS tag to altered reads')
     parser.add_argument('--skipmerge', action='store_true', default=False, help="final output is tmp file to be merged")
     parser.add_argument('--ignorepileup', action='store_true', default=False, help="do not check pileup depth in mutation regions")
-    parser.add_argument('--aligner', default='backtrack', help='supported aligners: ' + ','.join(aligners.supported_aligners_bam))
+    parser.add_argument('--aligner', default='backtrack', help='supported aligners: ' + ','.join(sorted(SUPPORTED_ALIGNERS)))
     parser.add_argument('--alignerthreads', default=1, help='threads used per realignment (default = 1)')
     parser.add_argument('--alignopts', default=None, help='aligner-specific options as comma delimited list of option1:value1,option2:value2,...')
     parser.add_argument('--tmpdir', default='addsnv.tmp', help='temporary directory (default=addsnv.tmp)')

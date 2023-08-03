@@ -12,7 +12,7 @@ import pysam
 import bamsurgeon.replace_reads as rr
 import bamsurgeon.asmregion as ar
 import bamsurgeon.mutableseq as ms
-import bamsurgeon.aligners as aligners
+from bamsurgeon.aligners import remap_fastq, SUPPORTED_ALIGNERS
 import bamsurgeon.makevcf as makevcf
 
 from bamsurgeon.common import *
@@ -781,9 +781,9 @@ def makemut(args, bedline, alignopts):
     # simulate reads
     (fq1, fq2) = runwgsim(maxcontig, mutseq.seq, pemean, pesd, args.tmpdir, nsimreads, err_rate=float(args.simerr), mutid=mutid, seed=args.seed, trn_contig=trn_maxcontig, rename=rename_reads)
 
-    outreads = aligners.remap_fastq(args.aligner, fq1, fq2, args.refFasta, outbam_mutsfile, alignopts, mutid=mutid, threads=int(args.alignerthreads))
+    remap_fastq(args.aligner, fq1, args.refFasta, outbam_mutsfile, alignopts, fq2=fq2, mutid=mutid, threads=int(args.alignerthreads))
 
-    if outreads == 0:
+    if not check_min_read_count(outbam_mutsfile, args.refFasta, 0):
         logger.warning("%s outbam %s has no mapped reads!" % (mutid, outbam_mutsfile))
         # Remove content from logfile in order to skip this mutation in the final VCF file
         logfile.seek(0)
@@ -820,8 +820,6 @@ def main(args):
     alignopts = {}
     if args.alignopts is not None:
         alignopts = dict([o.split(':') for o in args.alignopts.split(',')])
-
-    aligners.checkoptions(args.aligner, alignopts, None, sv=True)
 
     # load insertion library if present
     try:
@@ -962,7 +960,7 @@ def main(args):
         tmpbam, exclfn, mutinfo = result.result()
 
         if None not in (tmpbam, exclfn) and os.path.exists(tmpbam) and os.path.exists(exclfn):
-            if bamreadcount(tmpbam, args.refFasta) > 0:
+            if check_min_read_count(tmpbam, args.refFasta, 0):
                 tmpbams.append(tmpbam)
                 exclfns.append(exclfn)
             else:
@@ -1111,7 +1109,7 @@ if __name__ == '__main__':
     parser.add_argument('--inslib', default=None,
                         help='FASTA file containing library of possible insertions, use INS RND instead of INS filename to pick one')
     parser.add_argument('--aligner', default='backtrack',
-                        help='supported aligners: ' + ','.join(aligners.supported_aligners_fastq))
+                        help='supported aligners: ' + ','.join(sorted(SUPPORTED_ALIGNERS)))
     parser.add_argument('--alignopts', default=None,
                         help='aligner-specific options as comma delimited list of option1:value1,option2:value2,...')
     parser.add_argument('--alignerthreads', default=1,

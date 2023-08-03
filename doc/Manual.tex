@@ -44,80 +44,84 @@ BAMSurgeon is under continuous development driven by suggestions and bug reports
 \subsection{Usage}
 \begin{verbatim}
 usage: addsnv.py [-h] -v VARFILENAME -f BAMFILENAME -r REFFASTA -o OUTBAMFILE
-                 [-s SNVFRAC] [-m MUTFRAC] [-n NUMSNVS] [-c CNVFILE]
-                 [-d COVERDIFF] [-z HAPLOSIZE] [-p PROCS]
-                 [--picardjar PICARDJAR] [--mindepth MINDEPTH]
-                 [--maxdepth MAXDEPTH] [--minmutreads MINMUTREADS]
-                 [--avoidreads AVOIDREADS] [--nomut] [--ignoresnps]
-                 [--ignoreref] [--force] [--insane] [--single]
-                 [--maxopen MAXOPEN] [--requirepaired] [--tagreads]
-                 [--skipmerge] [--ignorepileup] [--aligner ALIGNER]
-                 [--alignopts ALIGNOPTS] [--tmpdir TMPDIR] [--seed SEED] [--vcf]
+  [-s SNVFRAC] [-m MUTFRAC] [-n NUMSNVS] [-c CNVFILE]
+  [-d COVERDIFF] [-z HAPLOSIZE] [-p PROCS] --picardjar
+  PICARDJAR [--mindepth MINDEPTH] [--maxdepth MAXDEPTH]
+  [--minmutreads MINMUTREADS] [--avoidreads AVOIDREADS]
+  [--nomut] [--ignoresnps] [--ignoreref] [--force] [--insane]
+  [--single] [--maxopen MAXOPEN] [--requirepaired] [--tagreads]
+  [--skipmerge] [--ignorepileup] [--aligner ALIGNER]
+  [--alignerthreads ALIGNERTHREADS] [--alignopts ALIGNOPTS]
+  [--tmpdir TMPDIR] [--seed SEED] [--vcf VCF]
 
 adds SNVs to reads, outputs modified reads as .bam along with mates
 
-optional arguments:
-  -h, --help            show this help message and exit
-  -v VARFILENAME, --varfile VARFILENAME
-                        Target regions to try and add a SNV, as BED
-  -f BAMFILENAME, --bamfile BAMFILENAME
-                        sam/bam file from which to obtain reads
-  -r REFFASTA, --reference REFFASTA
-                        reference genome, fasta indexed with bwa index _and_
-                        samtools faidx
-  -o OUTBAMFILE, --outbam OUTBAMFILE
-                        .bam file name for output
-  -s SNVFRAC, --snvfrac SNVFRAC
-                        maximum allowable linked SNP MAF (for avoiding
-                        haplotypes) (default = 1)
-  -m MUTFRAC, --mutfrac MUTFRAC
-                        allelic fraction at which to make SNVs (default = 0.5)
-  -n NUMSNVS, --numsnvs NUMSNVS
-                        maximum number of mutations to try (default: entire
-                        input)
-  -c CNVFILE, --cnvfile CNVFILE
-                        tabix-indexed list of genome-wide absolute copy number
-                        values (e.g. 2 alleles = no change)
-  -d COVERDIFF, --coverdiff COVERDIFF
-                        allow difference in input and output coverage
-                        (default=0.9)
-  -z HAPLOSIZE, --haplosize HAPLOSIZE
-                        haplotype size (default = 0)
-  -p PROCS, --procs PROCS
-                        split into multiple processes (default=1)
-  --picardjar PICARDJAR
-                        path to picard.jar, required for most aligners
-  --mindepth MINDEPTH   minimum read depth to make mutation (default = 10)
-  --maxdepth MAXDEPTH   maximum read depth to make mutation (default = 2000)
-  --minmutreads MINMUTREADS
-                        minimum number of mutated reads to output per site
-  --avoidreads AVOIDREADS
-                        file of read names to avoid (mutations will be skipped
-                        if overlap)
-  --nomut               dry run
-  --ignoresnps          make mutations even if there are non-reference alleles
-                        sharing the relevant reads
-  --ignoreref           make mutations even if the mutation is back to the
-                        reference allele
-  --force               force mutation to happen regardless of nearby SNP or
-                        low coverage
-  --insane              ignore sanity check enforcing input read count =
-                        output read count in realignment
-  --single              input BAM is simgle-ended (default is paired-end)
-  --maxopen MAXOPEN     maximum number of open files during merge (default
-                        1000)
-  --requirepaired       skip mutations if unpaired reads are present
-  --tagreads            add BS tag to altered reads
-  --skipmerge           final output is tmp file to be merged
-  --ignorepileup        do not check pileup depth in mutation regions
-  --aligner ALIGNER     supported aligners:
-                        backtrack,mem,novoalign,gsnap,STAR,bowtie2,tmap,bwakit
-  --alignopts ALIGNOPTS
-                        aligner-specific options as comma delimited list of
-                        option1:value1,option2:value2,...
-  --tmpdir TMPDIR       temporary directory (default=addsnv.tmp)
-  --seed SEED           seed random number generation
-  --vcf                 output path for the VCF file
+options:
+-h, --help            show this help message and exit
+-v VARFILENAME, --varfile VARFILENAME
+         Target regions to try and add a SNV, as BED
+-f BAMFILENAME, --bamfile BAMFILENAME
+         sam/bam file from which to obtain reads
+-r REFFASTA, --reference REFFASTA
+         reference genome, fasta indexed with bwa index _and_
+         samtools faidx
+-o OUTBAMFILE, --outbam OUTBAMFILE
+         .bam file name for output
+-s SNVFRAC, --snvfrac SNVFRAC
+         maximum allowable linked SNP MAF (for avoiding
+         haplotypes) (default = 1)
+-m MUTFRAC, --mutfrac MUTFRAC
+         allelic fraction at which to make SNVs (default = 0.5)
+-n NUMSNVS, --numsnvs NUMSNVS
+         maximum number of mutations to try (default: entire
+         input)
+-c CNVFILE, --cnvfile CNVFILE
+         tabix-indexed list of genome-wide absolute copy number
+         values (e.g. 2 alleles = no change)
+-d COVERDIFF, --coverdiff COVERDIFF
+         allow difference in input and output coverage
+         (default=0.9)
+-z HAPLOSIZE, --haplosize HAPLOSIZE
+         haplotype size (default = 0)
+-p PROCS, --procs PROCS
+         split into multiple processes (default=1)
+--picardjar PICARDJAR
+         path to picard.jar, required for most aligners
+--mindepth MINDEPTH   minimum read depth to make mutation (default = 10)
+--maxdepth MAXDEPTH   maximum read depth to make mutation (default = 2000)
+--minmutreads MINMUTREADS
+         minimum number of mutated reads to output per site
+--avoidreads AVOIDREADS
+         file of read names to avoid (mutations will be skipped
+         if overlap)
+--nomut               dry run
+--ignoresnps          make mutations even if there are non-reference alleles
+         sharing the relevant reads
+--ignoreref           make mutations even if the mutation is back to the
+         reference allele
+--force               force mutation to happen regardless of nearby SNP or
+         low coverage
+--insane              ignore sanity check enforcing input read count =
+         output read count in realignment
+--single              input BAM is simgle-ended (default is paired-end)
+--maxopen MAXOPEN     maximum number of open files during merge (default
+         1000)
+--requirepaired       skip mutations if unpaired reads are present
+--tagreads            add BS tag to altered reads
+--skipmerge           final output is tmp file to be merged
+--ignorepileup        do not check pileup depth in mutation regions
+--aligner ALIGNER     supported aligners: STAR,backtrack,bowtie2,bwakit,gsna
+         p,mem,minimap2,novoalign,tmap
+--alignerthreads ALIGNERTHREADS
+         threads used per realignment (default = 1)
+--alignopts ALIGNOPTS
+         aligner-specific options as comma delimited list of
+         option1:value1,option2:value2,...
+--tmpdir TMPDIR       temporary directory (default=addsnv.tmp)
+--seed SEED           seed random number generation
+--vcf VCF             Path for the output VCF file. If not provided, the
+         file will be saved in the current directory.
+
 
 \end{verbatim}
 
@@ -189,75 +193,79 @@ Specific bases can also be specified using a fifth input column:
 \subsection{Usage}
 \begin{verbatim}
 usage: addindel.py [-h] -v VARFILENAME -f BAMFILENAME -r REFFASTA -o
-                   OUTBAMFILE [-s SNVFRAC] [-m MUTFRAC] [-n NUMSNVS]
-                   [-c CNVFILE] [-d COVERDIFF] [-p PROCS]
-                   [--picardjar PICARDJAR] [--mindepth MINDEPTH]
-                   [--maxdepth MAXDEPTH] [--minmutreads MINMUTREADS]
-                   [--avoidreads AVOIDREADS] [--nomut] [--det] [--force]
-                   [--insane] [--single] [--maxopen MAXOPEN] [--requirepaired]
-                   [--aligner ALIGNER] [--alignopts ALIGNOPTS] [--tagreads]
-                   [--skipmerge] [--ignorepileup] [--tmpdir TMPDIR]
-                   [--seed SEED] [--vcf]
+  OUTBAMFILE [-s SNVFRAC] [-m MUTFRAC] [-n NUMSNVS]
+  [-c CNVFILE] [-d COVERDIFF] [-p PROCS] --picardjar
+  PICARDJAR [--mindepth MINDEPTH] [--maxdepth MAXDEPTH]
+  [--minmutreads MINMUTREADS] [--avoidreads AVOIDREADS]
+  [--nomut] [--det] [--force] [--insane] [--single]
+  [--maxopen MAXOPEN] [--requirepaired] [--aligner ALIGNER]
+  [--alignopts ALIGNOPTS] [--alignerthreads ALIGNERTHREADS]
+  [--tagreads] [--skipmerge] [--ignorepileup]
+  [--tmpdir TMPDIR] [--seed SEED] [--vcf VCF]
 
 adds INDELs to reads, outputs modified reads as .bam along with mates
 
-optional arguments:
-  -h, --help            show this help message and exit
-  -v VARFILENAME, --varfile VARFILENAME
-                        Target regions to try and add a SNV, as BED
-  -f BAMFILENAME, --bamfile BAMFILENAME
-                        sam/bam file from which to obtain reads
-  -r REFFASTA, --reference REFFASTA
-                        reference genome, fasta indexed with bwa index _and_
-                        samtools faidx
-  -o OUTBAMFILE, --outbam OUTBAMFILE
-                        .bam file name for output
-  -s SNVFRAC, --snvfrac SNVFRAC
-                        maximum allowable linked SNP MAF (for avoiding
-                        haplotypes) (default = 1)
-  -m MUTFRAC, --mutfrac MUTFRAC
-                        allelic fraction at which to make SNVs (default = 0.5)
-  -n NUMSNVS, --numsnvs NUMSNVS
-                        maximum number of mutations to try (default: entire
-                        input)
-  -c CNVFILE, --cnvfile CNVFILE
-                        tabix-indexed list of genome-wide absolute copy number
-                        values (e.g. 2 alleles = no change)
-  -d COVERDIFF, --coverdiff COVERDIFF
-                        allow difference in input and output coverage
-                        (default=0.1)
-  -p PROCS, --procs PROCS
-                        split into multiple processes (default=1)
-  --picardjar PICARDJAR
-                        path to picard.jar
-  --mindepth MINDEPTH   minimum read depth to make mutation (default = 10)
-  --maxdepth MAXDEPTH   maximum read depth to make mutation (default = 2000)
-  --minmutreads MINMUTREADS
-                        minimum number of mutated reads to output per site
-  --avoidreads AVOIDREADS
-                        file of read names to avoid (mutations will be skipped
-                        if overlap)
-  --nomut               dry run
-  --det                 deterministic base changes: make transitions only
-  --force               force mutation to happen regardless of nearby SNP or
-                        low coverage
-  --insane              ignore sanity check enforcing input read count =
-                        output read count in realignment
-  --single              input BAM is simgle-ended (default is paired-end)
-  --maxopen MAXOPEN     maximum number of open files during merge (default
-                        1000)
-  --requirepaired       skip mutations if unpaired reads are present
-  --aligner ALIGNER     supported aligners:
-                        backtrack,mem,novoalign,gsnap,STAR,bowtie2,tmap,bwakit
-  --alignopts ALIGNOPTS
-                        aligner-specific options as comma delimited list of
-                        option1:value1,option2:value2,...
-  --tagreads            add BS tag to altered reads
-  --skipmerge           final output is tmp file to be merged
-  --ignorepileup        do not check pileup depth in mutation regions
-  --tmpdir TMPDIR       temporary directory (default=addindel.tmp)
-  --seed SEED           seed random number generation
-  --vcf                 output path for the VCF file
+options:
+-h, --help            show this help message and exit
+-v VARFILENAME, --varfile VARFILENAME
+       Target regions to try and add a SNV, as BED
+-f BAMFILENAME, --bamfile BAMFILENAME
+       sam/bam file from which to obtain reads
+-r REFFASTA, --reference REFFASTA
+       reference genome, fasta indexed with bwa index _and_
+       samtools faidx
+-o OUTBAMFILE, --outbam OUTBAMFILE
+       .bam file name for output
+-s SNVFRAC, --snvfrac SNVFRAC
+       maximum allowable linked SNP MAF (for avoiding
+       haplotypes) (default = 1)
+-m MUTFRAC, --mutfrac MUTFRAC
+       allelic fraction at which to make SNVs (default = 0.5)
+-n NUMSNVS, --numsnvs NUMSNVS
+       maximum number of mutations to try (default: entire
+       input)
+-c CNVFILE, --cnvfile CNVFILE
+       tabix-indexed list of genome-wide absolute copy number
+       values (e.g. 2 alleles = no change)
+-d COVERDIFF, --coverdiff COVERDIFF
+       allow difference in input and output coverage
+       (default=0.1)
+-p PROCS, --procs PROCS
+       split into multiple processes (default=1)
+--picardjar PICARDJAR
+       path to picard.jar
+--mindepth MINDEPTH   minimum read depth to make mutation (default = 10)
+--maxdepth MAXDEPTH   maximum read depth to make mutation (default = 2000)
+--minmutreads MINMUTREADS
+       minimum number of mutated reads to output per site
+--avoidreads AVOIDREADS
+       file of read names to avoid (mutations will be skipped
+       if overlap)
+--nomut               dry run
+--det                 deterministic base changes: make transitions only
+--force               force mutation to happen regardless of nearby SNP or
+       low coverage
+--insane              ignore sanity check enforcing input read count =
+       output read count in realignment
+--single              input BAM is simgle-ended (default is paired-end)
+--maxopen MAXOPEN     maximum number of open files during merge (default
+       1000)
+--requirepaired       skip mutations if unpaired reads are present
+--aligner ALIGNER     supported aligners: STAR,backtrack,bowtie2,bwakit,gsna
+       p,mem,minimap2,novoalign,tmap
+--alignopts ALIGNOPTS
+       aligner-specific options as comma delimited list of
+       option1:value1,option2:value2,...
+--alignerthreads ALIGNERTHREADS
+       threads used per realignment (default = 1)
+--tagreads            add BS tag to altered reads
+--skipmerge           final output is tmp file to be merged
+--ignorepileup        do not check pileup depth in mutation regions
+--tmpdir TMPDIR       temporary directory (default=addindel.tmp)
+--seed SEED           seed random number generation
+--vcf VCF             Path for the output VCF file. If not provided, the
+       file will be saved in the current directory.
+
 \end{verbatim}
 
 \subsection{Description}
@@ -281,66 +289,78 @@ For deletions, the sequence from the start to the end (columns two and three) is
 \subsection{Usage}
 \begin{verbatim}
 usage: addsv.py [-h] -v VARFILENAME -f BAMFILENAME -r REFFASTA -o OUTBAMFILE
-                [-l MAXLIBSIZE] [-k KMERSIZE] [-s SVFRAC] [--require_exact]
-                [--minctglen MINCTGLEN] [-n MAXMUTS] [-c CNVFILE]
-                [--donorbam DONORBAM] [--ismean ISMEAN] [--issd ISSD]
-                [--simerr SIMERR] [-p PROCS] [--inslib INSLIB]
-                [--aligner ALIGNER] [--alignopts ALIGNOPTS] [--tagreads]
-                [--skipmerge] [--keepsecondary] [--debug] [--tmpdir TMPDIR]
-                [--seed SEED] [--allowN] [--vcf]
+  [-l MAXLIBSIZE] [-k KMERSIZE] [-s SVFRAC] [--require_exact]
+  [--mindepth MINDEPTH] [--maxdepth MAXDEPTH]
+  [--maxdfrac MAXDFRAC] [--minctglen MINCTGLEN] [-n MAXMUTS]
+  [-c CNVFILE] [--donorbam DONORBAM] [--ismean ISMEAN]
+  [--issd ISSD] [--simerr SIMERR] [-p PROCS] [--inslib INSLIB]
+  [--aligner ALIGNER] [--alignopts ALIGNOPTS]
+  [--alignerthreads ALIGNERTHREADS] [--tagreads] [--skipmerge]
+  [--keepsecondary] [--debug] [--tmpdir TMPDIR] [--seed SEED]
+  [--allowN] [--vcf VCF]
 
 adds SVs to reads, outputs modified reads as .bam along with mates
 
-optional arguments:
-  -h, --help            show this help message and exit
-  -v VARFILENAME, --varfile VARFILENAME
-                        whitespace-delimited target regions for SV spike-in,
-                        see manual for syntax
-  -f BAMFILENAME, --bamfile BAMFILENAME
-                        sam/bam file from which to obtain reads
-  -r REFFASTA, --reference REFFASTA
-                        reference genome, fasta indexed with bwa index _and_
-                        samtools faidx
-  -o OUTBAMFILE, --outbam OUTBAMFILE
-                        .bam file name for output
-  -l MAXLIBSIZE, --maxlibsize MAXLIBSIZE
-                        maximum fragment length of seq. library
-  -k KMERSIZE, --kmer KMERSIZE
-                        kmer size for assembly (default = 31)
-  -s SVFRAC, --svfrac SVFRAC
-                        allele fraction of variant (default = 1.0)
-  --require_exact       drop mutation if breakpoints cannot be made exactly as
-                        input
-  --minctglen MINCTGLEN
-                        minimum length for contig generation, also used to pad
-                        assembly (default=4000)
-  -n MAXMUTS            maximum number of mutations to make
-  -c CNVFILE, --cnvfile CNVFILE
-                        tabix-indexed list of genome-wide absolute copy number
-                        values (e.g. 2 alleles = no change)
-  --donorbam DONORBAM   bam file for donor reads if using BIGDUP mutations
-  --ismean ISMEAN       mean insert size (default = estimate from region)
-  --issd ISSD           insert size standard deviation (default = estimate
-                        from region)
-  --simerr SIMERR       error rate for wgsim-generated reads
-  -p PROCS, --procs PROCS
-                        split into multiple processes (default=1)
-  --inslib INSLIB       FASTA file containing library of possible insertions,
-                        use INS RND instead of INS filename to pick one
-  --aligner ALIGNER     supported aligners: backtrack,mem,novoalign
-  --alignopts ALIGNOPTS
-                        aligner-specific options as comma delimited list of
-                        option1:value1,option2:value2,...
-  --tagreads            add BS tag to altered reads
-  --skipmerge           do not merge spike-in reads back into original BAM
-  --keepsecondary       keep secondary reads in final BAM
-  --debug               output read tracking info to debug file, retain all
-                        intermediates
-  --tmpdir TMPDIR       temporary directory (default=addsv.tmp)
-  --seed SEED           seed random number generation
-  --allowN              allow N in contigs, replace with A and warn user
-                        (default: drop mutation)
-  --vcf                 output path for the VCF file
+options:
+-h, --help            show this help message and exit
+-v VARFILENAME, --varfile VARFILENAME
+          whitespace-delimited target regions for SV spike-in,
+          see manual for syntax
+-f BAMFILENAME, --bamfile BAMFILENAME
+          sam/bam file from which to obtain reads
+-r REFFASTA, --reference REFFASTA
+          reference genome, fasta indexed with bwa index _and_
+          samtools faidx
+-o OUTBAMFILE, --outbam OUTBAMFILE
+          .bam file name for output
+-l MAXLIBSIZE, --maxlibsize MAXLIBSIZE
+          maximum fragment length of seq. library
+-k KMERSIZE, --kmer KMERSIZE
+          kmer size for assembly (default = 31)
+-s SVFRAC, --svfrac SVFRAC
+          allele fraction of variant (default = 1.0)
+--require_exact       drop mutation if breakpoints cannot be made exactly as
+          input
+--mindepth MINDEPTH   minimum read depth in the breakend position to make
+          mutation (default = 10)
+--maxdepth MAXDEPTH   maximum read depth in the breakend position to make
+          mutation (default = 2000)
+--maxdfrac MAXDFRAC   maximum discordant fraction (is_proper_pair / is_pair)
+          of reads (default = 0.1)
+--minctglen MINCTGLEN
+          minimum length for contig generation, also used to pad
+          assembly (default=4000)
+-n MAXMUTS            maximum number of mutations to make
+-c CNVFILE, --cnvfile CNVFILE
+          tabix-indexed list of genome-wide absolute copy number
+          values (e.g. 2 alleles = no change)
+--donorbam DONORBAM   bam file for donor reads if using BIGDUP mutations
+--ismean ISMEAN       mean insert size (default = estimate from region)
+--issd ISSD           insert size standard deviation (default = estimate
+          from region)
+--simerr SIMERR       error rate for wgsim-generated reads
+-p PROCS, --procs PROCS
+          split into multiple processes (default=1)
+--inslib INSLIB       FASTA file containing library of possible insertions,
+          use INS RND instead of INS filename to pick one
+--aligner ALIGNER     supported aligners: STAR,backtrack,bowtie2,bwakit,gsna
+          p,mem,minimap2,novoalign,tmap
+--alignopts ALIGNOPTS
+          aligner-specific options as comma delimited list of
+          option1:value1,option2:value2,...
+--alignerthreads ALIGNERTHREADS
+          threads used per realignment (default = 1)
+--tagreads            add BS tag to altered reads
+--skipmerge           do not merge spike-in reads back into original BAM
+--keepsecondary       keep secondary reads in final BAM
+--debug               output read tracking info to debug file, retain all
+          intermediates
+--tmpdir TMPDIR       temporary directory (default=addsv.tmp)
+--seed SEED           seed random number generation
+--allowN              allow N in contigs, replace with A and warn user
+          (default: drop mutation)
+--vcf VCF             Path for the output VCF file. If not provided, the
+          file will be saved in the current directory.
   
 \end{verbatim}
 
