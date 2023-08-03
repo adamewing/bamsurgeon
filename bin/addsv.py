@@ -28,8 +28,8 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-def get_reads(bam_file, chrom, start, end, svfrac):
-    bam = pysam.AlignmentFile(bam_file)
+def get_reads(bam_file, fasta_ref, chrom, start, end, svfrac):
+    bam = pysam.AlignmentFile(bam_file, reference_filename=fasta_ref)
     for read in bam.fetch(chrom, start, end):
         read_end = read.reference_start + read.query_length
         pair_end = read.next_reference_start + read.query_length
@@ -168,10 +168,10 @@ def align(qryseq, refseq):
     return best
 
 
-def discordant_fraction(bamfile, chrom, start, end):
+def discordant_fraction(bamfile, fasta_ref, chrom, start, end):
     r = 0
     d = 0
-    bam = pysam.AlignmentFile(bamfile)
+    bam = pysam.AlignmentFile(bamfile, reference_filename=fasta_ref)
     for read in bam.fetch(chrom, start, end):
         r += 1
         if not read.is_proper_pair:
@@ -231,7 +231,7 @@ def locate_contig_pos(refstart, refend, user_start, user_end, contig_len, maxlib
 
 
 def add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right_bnd, bdup_svfrac):
-    tmpbam = pysam.AlignmentFile(tmpbamfn)
+    tmpbam = pysam.AlignmentFile(tmpbamfn, reference_filename=args.refFasta)
 
     outbamfn = '%s/%s.%s.bigdup.merged.bam' % (args.tmpdir, mutid, str(uuid4()))
     outbam = pysam.AlignmentFile(outbamfn, 'wb', template=tmpbam)
@@ -239,9 +239,9 @@ def add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right
         outbam.write(read)
 
     # Calculate donor norm factor
-    with pysam.AlignmentFile(args.donorbam) as donorbam:
+    with pysam.AlignmentFile(args.donorbam, reference_filename=args.refFasta) as donorbam:
         cover_donor = donorbam.count(contig=bdup_chrom, start=bdup_left_bnd, end=bdup_right_bnd) / float(bdup_right_bnd-bdup_left_bnd)
-    with pysam.AlignmentFile(args.bamFileName) as origbam:
+    with pysam.AlignmentFile(args.bamFileName, reference_filename=args.refFasta) as origbam:
         cover_orig = origbam.count(contig=bdup_chrom, start=bdup_left_bnd, end=bdup_right_bnd) / float(bdup_right_bnd-bdup_left_bnd)
 
     donor_norm_factor = cover_orig * bdup_svfrac / cover_donor
@@ -254,7 +254,7 @@ def add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right
 
     nreads = 0
 
-    for read in get_reads(args.donorbam, bdup_chrom, bdup_left_bnd, bdup_right_bnd, donor_norm_factor):
+    for read in get_reads(args.donorbam, args.refFasta, bdup_chrom, bdup_left_bnd, bdup_right_bnd, donor_norm_factor):
         read.query_name = read.query_name + '_donor_' + mutid
         outbam.write(read)
         nreads += 1
@@ -271,7 +271,7 @@ def merge_multi_trn(args, alignopts, pair, chrom, start, end, vaf):
     mutid = os.path.basename(pair[0]).split('.')[0]
 
     outbamfn = '%s/%s.%s.merged.bam' % (args.tmpdir, mutid, str(uuid4()))
-    bams = [pysam.AlignmentFile(bam) for bam in pair]
+    bams = [pysam.AlignmentFile(bam, reference_filename=args.refFasta) for bam in pair]
     outbam = pysam.AlignmentFile(outbamfn, 'wb', template=bams[0])
 
     readbins = {} # randomly assorted reads into bam sources 0 and 1
@@ -282,7 +282,7 @@ def merge_multi_trn(args, alignopts, pair, chrom, start, end, vaf):
 
         bam.close()
 
-    bams = [pysam.AlignmentFile(bam) for bam in pair]
+    bams = [pysam.AlignmentFile(bam, reference_filename=args.refFasta) for bam in pair]
 
     for i, bam in enumerate(bams):
         for read in bam.fetch(until_eof=True):
@@ -305,7 +305,7 @@ def makemut(args, bedline, alignopts):
 
     mutid = '_'.join(map(str, bedline.split()[:4]))
 
-    bamfile = pysam.AlignmentFile(args.bamFileName)
+    bamfile = pysam.AlignmentFile(args.bamFileName, reference_filename=args.refFasta)
     reffile = pysam.Fastafile(args.refFasta)
     logfn = '_'.join(map(os.path.basename, bedline.split()[:4])) + ".log"
     logfile = open('addsv_logs_' + os.path.basename(args.outBamFile) + '/' + os.path.basename(args.outBamFile) + '_' + logfn, 'w')
@@ -408,7 +408,7 @@ def makemut(args, bedline, alignopts):
 
     #logger.info("%s note: interval size was too short, adjusted: %s:%d-%d" % (mutid, chrom, start, end))
 
-    dfrac = discordant_fraction(args.bamFileName, chrom, start, end)
+    dfrac = discordant_fraction(args.bamFileName, args.refFasta, chrom, start, end)
     logger.info("%s discordant fraction: %f" % (mutid, dfrac))
 
     if dfrac > args.maxdfrac:
@@ -760,16 +760,16 @@ def makemut(args, bedline, alignopts):
         buffer = int(float(args.ismean))
         region_1_start, region_1_end = (refstart + trnpoint_1 - buffer, refend) if trn_left_flip else (refstart, refstart + trnpoint_1 + buffer)
         region_2_start, region_2_end = (trn_refstart + trnpoint_2 - buffer, trn_refend) if not trn_right_flip else (trn_refstart, trn_refstart + trnpoint_2 + buffer)
-        region_1_reads = get_reads(args.bamFileName, chrom, region_1_start, region_1_end, float(svfrac))
-        region_2_reads = get_reads(args.bamFileName, trn_chrom, region_2_start, region_2_end, float(svfrac))
+        region_1_reads = get_reads(args.bamFileName, args.refFasta, chrom, region_1_start, region_1_end, float(svfrac))
+        region_2_reads = get_reads(args.bamFileName, args.refFasta, trn_chrom, region_2_start, region_2_end, float(svfrac))
         excl_reads_names = set([read.query_name for read in region_1_reads] + [read.query_name for read in region_2_reads]) 
         nsimreads = len(excl_reads_names)
         # add additional excluded reads if bigdel(s) present
         if action == 'BIGDEL':
-            bigdel_region_reads = get_reads(args.bamFileName, chrom, region_1_start, region_2_end, float(svfrac))
+            bigdel_region_reads = get_reads(args.bamFileName, args.refFasta, chrom, region_1_start, region_2_end, float(svfrac))
             excl_reads_names = set([read.query_name for read in bigdel_region_reads])
     else:
-        region_reads = get_reads(args.bamFileName, chrom, refstart, refend, float(svfrac))
+        region_reads = get_reads(args.bamFileName, args.refFasta, chrom, refstart, refend, float(svfrac))
         excl_reads_names = set([read.query_name for read in region_reads])
         reads_ratio = len(mutseq.seq) / len(maxcontig.seq)
         nsimreads = int(len(excl_reads_names) * reads_ratio)
@@ -962,7 +962,7 @@ def main(args):
         tmpbam, exclfn, mutinfo = result.result()
 
         if None not in (tmpbam, exclfn) and os.path.exists(tmpbam) and os.path.exists(exclfn):
-            if bamreadcount(tmpbam) > 0:
+            if bamreadcount(tmpbam, args.refFasta) > 0:
                 tmpbams.append(tmpbam)
                 exclfns.append(exclfn)
             else:
@@ -1044,7 +1044,7 @@ def main(args):
             logger.info("tagged reads.")
 
         logger.info("writing to %s" % args.outBamFile)
-        rr.replace_reads(args.bamFileName, mergedtmp, args.outBamFile, excludefile=excl_merged, allreads=True, keepsecondary=args.keepsecondary, seed=args.seed, quiet=True)
+        rr.replace_reads(args.bamFileName, mergedtmp, args.outBamFile, args.refFasta, excludefile=excl_merged, allreads=True, keepsecondary=args.keepsecondary, seed=args.seed, quiet=True)
         if not args.debug:
             os.remove(excl_merged)
             os.remove(mergedtmp)

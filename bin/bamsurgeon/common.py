@@ -1,14 +1,12 @@
 #!/usr/bin/env python
 
 
-import datetime
 import subprocess
 import pysam
 import random
 import hashlib
 import string
 import os
-import sys
 
 from collections import Counter
 from shutil import move
@@ -153,12 +151,12 @@ def fastqreadcount(fastqfile):
     return sum(1 for line in open(fastqfile))/4
 
 
-def bamreadcount(bamfile):
-    bam = pysam.AlignmentFile(bamfile)
-    if os.path.exists(bamfile + '.bai'):
+def bamreadcount(bamfile, fasta_ref):
+    bam = pysam.AlignmentFile(bamfile, reference_filename=fasta_ref)
+    if bam.is_bam and bam.check_index():
         return bam.mapped + bam.unmapped
     else:
-        return(len(list(bam.fetch(until_eof=True))))
+        return bam.count(until_eof=True)
 
 
 def dictlist(fn):

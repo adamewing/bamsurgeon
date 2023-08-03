@@ -4,7 +4,6 @@ import sys
 import pysam
 import argparse
 import random
-import subprocess
 import os
 import bamsurgeon.replace_reads as rr
 import bamsurgeon.aligners as aligners
@@ -41,8 +40,8 @@ def makemut(args, chrom, start, end, vaf, ins, avoid, alignopts):
         mutid += ':INS:' + ins
 
 
-    bamfile = pysam.AlignmentFile(args.bamFileName)
-    bammate = pysam.AlignmentFile(args.bamFileName) # use for mates to avoid iterator problems
+    bamfile = pysam.AlignmentFile(args.bamFileName, reference_filename=args.refFasta)
+    bammate = pysam.AlignmentFile(args.bamFileName, reference_filename=args.refFasta) # use for mates to avoid iterator problems
     reffile = pysam.Fastafile(args.refFasta)
     tmpbams = []
 
@@ -196,7 +195,7 @@ def makemut(args, chrom, start, end, vaf, ins, avoid, alignopts):
         outbam_muts.close()
         aligners.remap_bam(args.aligner, tmpoutbamname, args.refFasta, alignopts, threads=int(args.alignerthreads), mutid=mutid, paired=(not args.single), picardjar=args.picardjar, insane=args.insane)
 
-        outbam_muts = pysam.AlignmentFile(tmpoutbamname)
+        outbam_muts = pysam.AlignmentFile(tmpoutbamname, reference_filename=args.refFasta)
         coverwindow = 1
         avgincover = get_avg_coverage(bamfile, chrom,mutpos-coverwindow,mutpos+del_ln+coverwindow)
         avgoutcover = get_avg_coverage(outbam_muts, chrom,mutpos-coverwindow,mutpos+del_ln+coverwindow)
@@ -255,7 +254,7 @@ def main(args):
 
     # make a temporary file to hold mutated reads
     outbam_mutsfile = "addindel." + str(uuid4()) + ".muts.bam"
-    bamfile = pysam.AlignmentFile(args.bamFileName)
+    bamfile = pysam.AlignmentFile(args.bamFileName, reference_filename=args.refFasta)
     outbam_muts = pysam.AlignmentFile(outbam_mutsfile, 'wb', template=bamfile)
     outbam_muts.close()
     bamfile.close()
@@ -330,12 +329,12 @@ def main(args):
         if args.tagreads:
             from bamsurgeon.markreads import markreads
             tmp_tag_bam = 'tag.%s.bam' % str(uuid4())
-            markreads(outbam_mutsfile, tmp_tag_bam)
+            markreads(outbam_mutsfile, args.refFasta, tmp_tag_bam)
             move(tmp_tag_bam, outbam_mutsfile)
             logger.info("tagged reads.")
 
         logger.info("done making mutations, merging mutations into %s --> %s" % (args.bamFileName, args.outBamFile))
-        rr.replace_reads(args.bamFileName, outbam_mutsfile, args.outBamFile, keepqual=True, seed=args.seed)
+        rr.replace_reads(args.bamFileName, outbam_mutsfile, args.outBamFile, args.refFasta, keepqual=True, seed=args.seed)
 
         #cleanup
         os.remove(outbam_mutsfile)

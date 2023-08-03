@@ -4,7 +4,6 @@ import sys
 import pysam
 import argparse
 import random
-import subprocess
 import os
 import bamsurgeon.replace_reads as rr
 import bamsurgeon.aligners as aligners
@@ -52,8 +51,8 @@ def makemut(args, hc, avoid, alignopts):
 
     if args.seed is not None: random.seed(int(args.seed) + int(hc[0]['start']))
 
-    bamfile = pysam.AlignmentFile(args.bamFileName)
-    bammate = pysam.AlignmentFile(args.bamFileName) # use for mates to avoid iterator problems
+    bamfile = pysam.AlignmentFile(args.bamFileName, reference_filename=args.refFasta)
+    bammate = pysam.AlignmentFile(args.bamFileName, reference_filename=args.refFasta) # use for mates to avoid iterator problems
     reffile = pysam.Fastafile(args.refFasta)
     tmpbams = []
 
@@ -242,7 +241,7 @@ def makemut(args, hc, avoid, alignopts):
 
         aligners.remap_bam(args.aligner, tmpoutbamname, args.refFasta, alignopts, threads=int(args.alignerthreads), mutid=hapstr, paired=(not args.single), picardjar=args.picardjar, insane=args.insane)
 
-        outbam_muts = pysam.AlignmentFile(tmpoutbamname)
+        outbam_muts = pysam.AlignmentFile(tmpoutbamname, reference_filename=args.refFasta)
         coverwindow = 1
 
         avgincover = get_avg_coverage(bamfile, chrom,min(mutpos_list)-coverwindow,max(mutpos_list)+coverwindow)
@@ -299,7 +298,7 @@ def main(args):
 
     # make a temporary file to hold mutated reads
     outbam_mutsfile = "addsnv." + str(uuid4()) + ".muts.bam"
-    bamfile = pysam.AlignmentFile(args.bamFileName)
+    bamfile = pysam.AlignmentFile(args.bamFileName, reference_filename=args.refFasta)
     outbam_muts = pysam.AlignmentFile(outbam_mutsfile, 'wb', template=bamfile)
     outbam_muts.close()
     bamfile.close()
@@ -423,7 +422,7 @@ def main(args):
             logger.info("tagged reads.")
 
         logger.info("done making mutations, merging mutations into %s --> %s" % (args.bamFileName, args.outBamFile))
-        rr.replace_reads(args.bamFileName, outbam_mutsfile, args.outBamFile, keepqual=True, seed=args.seed)
+        rr.replace_reads(args.bamFileName, outbam_mutsfile, args.outBamFile, args.refFasta, keepqual=True, seed=args.seed)
 
         #cleanup
         os.remove(outbam_mutsfile)

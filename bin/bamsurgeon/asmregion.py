@@ -4,9 +4,8 @@
 try to do ref-directed assembly for paired reads in a region of a .bam file
 """
 
-import pysam,argparse,subprocess,sys,shutil,os,re
+import pysam,argparse,subprocess,shutil,os,re
 import bamsurgeon.parseamos as parseamos
-import datetime
 
 from uuid import uuid4
 
@@ -160,7 +159,7 @@ class ReadPair:
 
 
 def asm(chrom, start, end, bamfilename, reffile, kmersize, tmpdir, mutid='null', debug=False):
-    bamfile  = pysam.AlignmentFile(bamfilename)
+    bamfile  = pysam.AlignmentFile(bamfilename, reference_filename=reffile.filename)
 
     readpairs = {}
     nreads = 0

@@ -79,12 +79,12 @@ def compare_ref(targetbam, donorbam):
     return True
     
 
-def replace_reads(origbamfile, mutbamfile, outbamfile, nameprefix=None, excludefile=None, allreads=False, keepqual=False, progress=False, keepsecondary=False, keepsupplementary=False, seed=None, quiet=False):
+def replace_reads(origbamfile, mutbamfile, outbamfile, fasta_ref, nameprefix=None, excludefile=None, allreads=False, keepqual=False, progress=False, keepsecondary=False, keepsupplementary=False, seed=None, quiet=False):
     ''' outputbam must be writeable and use targetbam as template
         read names in excludefile will not appear in final output
     '''
-    targetbam = pysam.AlignmentFile(origbamfile)
-    donorbam  = pysam.AlignmentFile(mutbamfile)
+    targetbam = pysam.AlignmentFile(origbamfile, reference_filename=fasta_ref)
+    donorbam  = pysam.AlignmentFile(mutbamfile, reference_filename=fasta_ref)
     write_mode = 'wc' if outbamfile.endswith('.cram') else 'wb'
     outputbam  = pysam.AlignmentFile(outbamfile, write_mode, template=targetbam)
 
@@ -209,6 +209,7 @@ if __name__=='__main__':
     parser.add_argument('-b', '--bam', dest='targetbam', required=True, help='original .bam')
     parser.add_argument('-r', '--replacebam', dest='donorbam', required=True, help='.bam with reads to replace original bam')
     parser.add_argument('-o', '--outputbam', dest='outputbam', required=True, help="name for new .bam output")
+    parser.add_argument('-f', '--fasta-ref', dest='refFasta', help="Reference fasta file (required for CRAM)")
     parser.add_argument('-n', '--namechange', dest='namechange', default=None, help="change all read names by prepending string (passed as -n [string])")
     parser.add_argument('-x', '--exclude', dest='exclfile', default=None, help="file containing a list of read names to ignore (exclude from output)")
     parser.add_argument('--all', action='store_true', default=False, help="append reads that don't match target .bam")
@@ -218,4 +219,4 @@ if __name__=='__main__':
     parser.add_argument('--keepsupplementary', action='store_true', default=False, help='keep supplementary reads in final BAM')    
     args = parser.parse_args()
 
-    replace_reads(args.targetbam, args.donorbam, args.outputbam, args.namechange, args.exclfile, args.all, args.keepqual, args.progress, args.keepsecondary,args.keepsupplementary)
+    replace_reads(args.targetbam, args.donorbam, args.outputbam, args.namechange, args.refFasta, args.exclfile, args.all, args.keepqual, args.progress, args.keepsecondary,args.keepsupplementary)

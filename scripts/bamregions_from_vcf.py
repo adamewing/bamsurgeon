@@ -2,13 +2,12 @@
 
 import vcf
 import os
-import sys
 import pysam
 import argparse
 import logging
 
-def fetchregions(infn, outfn, invcf, window=1000):
-    inbam  = pysam.AlignmentFile(infn)
+def fetchregions(infn, outfn, invcf, fasta_ref, window=1000):
+    inbam  = pysam.AlignmentFile(infn, reference_filename=fasta_ref)
     outbam = pysam.AlignmentFile(outfn, 'wb', template=inbam)
 
     vcfh = vcf.Reader(filename=invcf)
@@ -38,12 +37,13 @@ def main(args):
     assert os.path.exists(args.vcf), "VCF file not found: " + args.vcf
     assert args.vcf.endswith('.vcf') or args.vcf.endswith('.vcf.gz'), "not a VCF file based on extension " + args.vcf
 
-    fetchregions(args.bam, args.out, args.vcf, window=int(args.window))
+    fetchregions(args.bam, args.out, args.vcf, args.fasta_ref, window=int(args.window))
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="grab regions from BAM based on windows around records in a VCF file")
     parser.add_argument('-b', '--bam', required=True, help="BAM input (indexed)")
+    parser.add_argument('-f', '--fasta-ref', help="FASTA reference (for CRAM)")
     parser.add_argument('-v', '--vcf', required=True, help="VCF input")
     parser.add_argument('-o', '--out', required=True, help="BAM output")
     parser.add_argument('-w', '--window', default=1000, help="window +/- VCF entry (default 1000)")

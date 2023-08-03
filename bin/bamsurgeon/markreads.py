@@ -4,8 +4,8 @@ import pysam
 import sys
 
 
-def markreads(bamfn, outfn):
-    bam = pysam.AlignmentFile(bamfn)
+def markreads(bamfn, fasta_ref, outfn):
+    bam = pysam.AlignmentFile(bamfn, reference_filename=fasta_ref)
     out = pysam.AlignmentFile(outfn, 'wb', template=bam)
 
     for read in bam.fetch(until_eof=True):
