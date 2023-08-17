@@ -170,8 +170,13 @@ def check_min_read_count(bamfile, fasta_ref, min_num_reads=0):
     # Returns True if the BAM has at least min_num_reads reads
     bam = pysam.AlignmentFile(bamfile, reference_filename=fasta_ref)
     # If the BAM is indexed, we can just check the header
-    if bam.is_bam and bam.check_index():
-        return bam.mapped + bam.unmapped > min_num_reads
+    try:
+        if bam.is_bam and bam.check_index():
+            return bam.mapped + bam.unmapped > min_num_reads
+    except AttributeError:
+        pass
+    except ValueError:
+        pass
     # If the BAM is not indexed, we have to count the reads manually
     for i, _ in enumerate(bam.fetch(until_eof=True)):
         if i + 1 > min_num_reads:
