@@ -528,18 +528,21 @@ def makemut(args, bedline, alignopts):
             assert len(a) > 1 # insertion syntax: INS <file.fa> [optional TSDlen]
             insseqfile = a[1]
             if not (os.path.exists(insseqfile) or insseqfile == 'RND' or insseqfile.startswith('INSLIB:')): # not a file... is it a sequence? (support indel ins.)
-                assert re.search('^[ATGCatgc]*$',insseqfile), "cannot determine SV type: %s" % insseqfile # make sure it's a sequence
+                assert re.search('^[ATGCURYKMSWBDHVNatgcurykmswbdhvn]*$',insseqfile), "cannot determine SV type: %s" % insseqfile # make sure it's a sequence
                 insseq = insseqfile.upper()
                 insseqfile = None
             if len(a) > 2: # field 5 for insertion is TSD Length
                 tsdlen = int(a[2])
 
-            if len(a) > 3: # field 6 for insertion is motif, format = 'NNNN^NNNN where ^ is cut site
-                ins_motif = a[3]
-                assert '^' in ins_motif, 'insertion motif specification requires cut site defined by ^'
+            if len(a) > 3:
+                try:    # field 6 for VAF in case of floating point. This is the end of the fields
+                    svfrac = float(a[3])/cn
+                except: # otherwise is insertion motif, format = 'NNNN^NNNN where ^ is cut site
+                    ins_motif = a[3]
+                    assert '^' in ins_motif, 'insertion motif specification requires cut site defined by ^'
 
-            if len(a) > 4: # field 7 is VAF
-                svfrac = float(a[4])/cn
+                    if len(a) > 4: # field 7 is VAF when field 6 is insertion motif
+                        svfrac = float(a[4])/cn
 
         if action == 'DUP':
             if len(a) > 1:

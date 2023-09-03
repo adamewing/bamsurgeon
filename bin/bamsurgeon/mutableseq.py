@@ -53,10 +53,13 @@ class MutableSeq:
         self.seq = self.seq[:start] + self.seq[end:]
 
     def insertion(self, loc, seq, tsdlen=0):
-        ''' inserts seq after position loc, adds taret site duplication (tsd) if tsdlen > 0 '''
+        ''' inserts seq after position loc, adds target site duplication (tsd) if tsdlen > 0 and deletion if tsdlen < 0'''
         loc = int(loc)
-        tsd = self.seq[loc:loc+tsdlen]
-        self.seq = self.seq[:loc] + tsd + seq + self.seq[loc:]
+        if tsdlen >= 0:
+            tsd = self.seq[loc:loc + tsdlen]
+            self.seq = self.seq[:loc] + tsd + seq + self.seq[loc:]
+        else:
+            self.seq = self.seq[:loc] + seq + self.seq[loc - tsdlen:]
 
     def inversion(self, start, end):
         ''' inverts sequence between start and end, bases at start and end positions are not affected '''
