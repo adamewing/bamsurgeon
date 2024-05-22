@@ -7,7 +7,7 @@ import random
 from collections import defaultdict
 
 from bamsurgeon.common import rc
-
+import pandas as pd
 import logging
 FORMAT = '%(levelname)s %(asctime)s %(message)s'
 logging.basicConfig(format=FORMAT)
@@ -68,16 +68,35 @@ def get_excluded_reads(file):
             ex.add(line.strip())
     return ex
 
+# Changed from loop logic to dataframe logic
+# def compare_ref(targetbam, donorbam):
+#     ''' if targetbam and donorbam are aligned to different references 
+#         and the references are in a different order it's a problem
+#     '''
+#     for ref in targetbam.references:
+#         if ref not in donorbam.references or donorbam.gettid(ref) != targetbam.gettid(ref):
+#             logger.error("contig mismatch: %s\n" % ref)
+#             return False
+#     return True
+    
+## Modified on 05/22/2024: changed loop logic to dataframe logic
 def compare_ref(targetbam, donorbam):
     ''' if targetbam and donorbam are aligned to different references 
         and the references are in a different order it's a problem
     '''
-    for ref in targetbam.references:
-        if ref not in donorbam.references or donorbam.gettid(ref) != targetbam.gettid(ref):
-            logger.error("contig mismatch: %s\n" % ref)
-            return False
-    return True
+    donor_df = pd.DataFrame({"donorbam": donorbam.references})
+    target_df = pd.DataFrame({"targetbam": targetbam.references})
+
+    mismatched_refs = donor_df[~target_df.isin(donor_df)].dropna()
     
+    if len(mismatched_refs):
+        for i in range(len(mismatched_refs)):
+            logger.error("contig mismatch: %s \n"%mismatched_refs.loc[i, "donorbam"])
+            return False
+    else:
+        return True
+
+
 
 def replace_reads(origbamfile, mutbamfile, outbamfile, fasta_ref, nameprefix=None, excludefile=None, allreads=False, keepqual=False, progress=False, keepsecondary=False, keepsupplementary=False, seed=None, quiet=False):
     ''' outputbam must be writeable and use targetbam as template
