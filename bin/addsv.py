@@ -370,7 +370,7 @@ def makemut(args, fields, alignopts):
         if trn_start < 0:
             trn_start = 0
     
-    elif len(fields) > 4:
+    elif num_fields > 4:
         var_fields = fields[3:]
 
     actions = map(lambda x: x.strip(), ' '.join(var_fields).split(';'))
