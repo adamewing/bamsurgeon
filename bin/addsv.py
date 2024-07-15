@@ -298,16 +298,14 @@ def merge_multi_trn(args, alignopts, pair, chrom, start, end, vaf):
     return outbamfn
 
 
-def makemut(args, bedline, alignopts):
-    bedline = bedline.strip()
+def makemut(args, fields, alignopts):
+    if args.seed is not None: random.seed(args.seed + fields[1])
 
-    if args.seed is not None: random.seed(args.seed + int(bedline.split()[1]))
-
-    mutid = '_'.join(map(str, bedline.split()[:4]))
+    mutid = '_'.join(map(str, fields[:4]))
 
     bamfile = pysam.AlignmentFile(args.bamFileName, reference_filename=args.refFasta)
     reffile = pysam.Fastafile(args.refFasta)
-    logfn = '_'.join(map(os.path.basename, bedline.split()[:4])) + ".log"
+    logfn = '_'.join(map(os.path.basename, fields[:4])) + ".log"
     logfile = open('addsv_logs_' + os.path.basename(args.outBamFile) + '/' + os.path.basename(args.outBamFile) + '_' + logfn, 'w')
     mutinfo = {}
 
@@ -319,11 +317,8 @@ def makemut(args, bedline, alignopts):
     # temporary file to hold mutated reads
     outbam_mutsfile = args.tmpdir + '/' + '.'.join((mutid, str(uuid4()), "muts.bam"))
 
-    c = bedline.split()
-    chrom  = c[0]
-    start  = int(c[1])
-    end    = int(c[2])
-    araw   = c[3:] # INV, DEL, INS,  DUP, TRN
+    num_fields = len(fields)
+    chrom, start, end, mut_type = fields[:4] # INV, DEL, INS, DUP, TRN
 
     # desired start/end
     user_start = start
@@ -344,20 +339,21 @@ def makemut(args, bedline, alignopts):
     trn_start = None
     trn_end   = None
 
-    is_transloc = c[3] in ('TRN', 'BIGDEL', 'BIGINV', 'BIGDUP')
+    is_transloc = mut_type in ('TRN', 'BIGDEL', 'BIGINV', 'BIGDUP')
 
     if is_transloc:
-        araw = [c[3]]
-        if len(c) > 7:
-            araw += c[7:]
+        var_fields = [mut_type]
+        if num_fields > 7:
+            var_fields.extend(fields[7:])
 
         start -= int(args.minctglen)
         end   += int(args.minctglen)
-        if start < 0: start = 0
+        if start < 0:
+            start = 0
 
-        trn_chrom = c[4]
-        user_trn_start = int(c[5])
-        user_trn_end   = int(c[6])
+        trn_chrom = fields[4]
+        user_trn_start = int(fields[5])
+        user_trn_end   = int(fields[6])
 
         # Check for sufficient depth
         user_trn_start_depth = bamfile.count(trn_chrom, user_trn_start-1, user_trn_start)
@@ -369,11 +365,15 @@ def makemut(args, bedline, alignopts):
             logger.warning('%s skipping due to excessive depth %d %d' % (mutid, user_trn_start_depth, user_trn_end_depth))
             return None, None, None
 
-        trn_start = int(c[5]) - int(args.minctglen)
-        trn_end   = int(c[6]) + int(args.minctglen)
-        if trn_start < 0: trn_start = 0
+        trn_start = int(fields[5]) - int(args.minctglen)
+        trn_end   = int(fields[6]) + int(args.minctglen)
+        if trn_start < 0:
+            trn_start = 0
+    
+    elif len(fields) > 4:
+        var_fields = fields[3:]
 
-    actions = map(lambda x: x.strip(),' '.join(araw).split(';'))
+    actions = map(lambda x: x.strip(), ' '.join(var_fields).split(';'))
 
     svfrac = float(args.svfrac) # default, can be overridden by cnv file or per-variant
 
@@ -391,7 +391,7 @@ def makemut(args, bedline, alignopts):
                 assert svfrac <= 1.0, 'copy number from %s must be at least 1: %s' % (args.cnvfile, cnregion.strip())
                 logger.info("INFO" + mutid + "\tadjusted default MAF: " + str(svfrac) + "\n")
 
-    logger.info("%s interval: %s" % (mutid, bedline))
+    logger.info("%s interval: %s" % (mutid, " ".join(str(f) for f in fields)))
     logger.info("%s length: %d" % (mutid, (end-start)))
 
    # modify start and end if interval is too short
@@ -511,8 +511,8 @@ def makemut(args, bedline, alignopts):
 
     # support for multiple mutations
     for actionstr in actions:
-        a = actionstr.split()
-        action = a[0]
+        action_fields = actionstr.split()
+        action = action_fields[0]
 
         logger.info("%s action: %s %s" % (mutid, actionstr, action))
 
@@ -525,48 +525,47 @@ def makemut(args, bedline, alignopts):
         ins_motif = None
 
         if action == 'INS':
-            assert len(a) > 1 # insertion syntax: INS <file.fa> [optional TSDlen]
-            insseqfile = a[1]
+            assert len(action_fields) > 1 # insertion syntax: INS <file.fa> [optional TSDlen]
+            insseqfile = action_fields[1]
             if not (os.path.exists(insseqfile) or insseqfile == 'RND' or insseqfile.startswith('INSLIB:')): # not a file... is it a sequence? (support indel ins.)
                 assert re.search('^[ATGCatgc]*$',insseqfile), "cannot determine SV type: %s" % insseqfile # make sure it's a sequence
                 insseq = insseqfile.upper()
                 insseqfile = None
-            if len(a) > 2: # field 5 for insertion is TSD Length
-                tsdlen = int(a[2])
+            if len(action_fields) > 2 and len(action_fields[2]) > 0: # field 5 for insertion is TSD Length
+                tsdlen = int(action_fields[2])
 
-            if len(a) > 3: # field 6 for insertion is motif, format = 'NNNN^NNNN where ^ is cut site
-                ins_motif = a[3]
+            if len(action_fields) > 3 and len(action_fields[3]) > 0: # field 6 for insertion is motif, format = 'NNNN^NNNN where ^ is cut site
+                ins_motif = action_fields[3]
                 assert '^' in ins_motif, 'insertion motif specification requires cut site defined by ^'
 
-            if len(a) > 4: # field 7 is VAF
-                svfrac = float(a[4])/cn
+            if len(action_fields) > 4: # field 7 is VAF
+                svfrac = float(action_fields[4])/cn
 
-        if action == 'DUP':
-            if len(a) > 1:
-                ndups = int(a[1])
+        elif action == 'DUP':
+            if len(action_fields) > 1:
+                ndups = int(action_fields[1])
             else:
                 ndups = 1
 
-            if len(a) > 2: # VAF
-                svfrac = float(a[2])/cn
+            if len(action_fields) > 2: # VAF
+                svfrac = float(action_fields[2])/cn
 
-        if action == 'DEL':
+        elif action == 'DEL':
             dsize = 1.0
 
-            if len(a) > 1: # VAF
-                svfrac = float(a[1])/cn
+            if len(action_fields) > 1: # VAF
+                svfrac = float(action_fields[1])/cn
 
-        if action in ('TRN', 'BIGDEL', 'BIGINV', 'BIGDUP'):
-            if len(a) > 1: # translocation end orientation ++ / +- / -+ / --
-                trn_left_flip = a[1][0] == '-'
-                trn_right_flip = a[1][1] == '-'
+        elif action in ('TRN', 'BIGDEL', 'BIGINV', 'BIGDUP'):
+            if len(action_fields) > 1: # translocation end orientation ++ / +- / -+ / --
+                trn_left_flip = action_fields[1][0] == '-'
+                trn_right_flip = action_fields[1][1] == '-'
 
-            if len(a) > 2:
-                svfrac = float(a[2])/cn
+            if len(action_fields) > 2:
+                svfrac = float(action_fields[2])/cn
 
-        if action == 'INV':
-            if len(a) > 1:
-                svfrac = float(a[1])/cn
+        elif action == 'INV' and len(action_fields) > 1:
+            svfrac = float(action_fields[1])/cn
 
 
         logger.info("%s final VAF accounting for copy number %f: %f" % (mutid, cn, svfrac))
@@ -852,104 +851,77 @@ def main(args):
     with open(args.varFileName, 'r') as varfile:
         for bedline in varfile:
             bedline = bedline.strip()
-            multi_part = []
 
-            if re.search('^#',bedline):
+            if re.search('^#', bedline):
                 continue
 
             if args.maxmuts and nmuts >= int(args.maxmuts):
                 break
-
-            mut_type = bedline.split()[3]
-            mut_len = int(bedline.split()[2]) - int(bedline.split()[1])
+            
+            fields = re.split("[\s]", bedline)
+            num_fields = len(fields)
+            if num_fields:
+                raise ValueError("Invalid varfile line: %s" % bedline)
+            
+            chrom = fields[0]
+            start = int(fields[1])
+            end = int(fields[2])
+            mut_type = fields[3]
+            mut_len = end - start
 
             if mut_type in ('DEL', 'DUP', 'INV') and mut_len > 10000:
                 logger.warning('%s is over 10kbp long: converting to use BIG%s instead.' % (bedline, mut_type))
                 mut_type = 'BIG' + mut_type
-                if mut_type == 'BIGDUP' and len(bedline.split()) == 6: # convert DUP to BIGDUP
-                    b = bedline.split()
-                    bedline = ' '.join((b[:4] + [b[-1]]))
+                if mut_type == 'BIGDUP' and num_fields == 6: # convert DUP to BIGDUP
+                    fields = fields[:4] + [fields[-1]]
 
             if mut_type.startswith('BIG') and mut_len < 5000:
                 mut_type = mut_type.replace('BIG', '')
                 logger.warning('%s is under 5kbp, "BIG" mutation types will yield unpredictable results, converting to %s' % (bedline, mut_type))
 
-            # rewrite bigdel coords as translocation
-            if mut_type == 'BIGDEL':
-                bdel_svfrac = float(args.svfrac)
-                if len(bedline.split()) == 5:
-                    bdel_svfrac = float(bedline.split()[-1])
-
-                bdel_chrom, bdel_start, bdel_end = bedline.split()[:3]
-                bdel_start = int(bdel_start)
-                bdel_end   = int(bdel_end)
-
-                bdel_left_start = bdel_start
-                bdel_left_end   = bdel_start
-
-                bdel_right_start = bdel_end
-                bdel_right_end   = bdel_end
-
-                bedline = '%s %d %d BIGDEL %s %d %d %s %f' % (bdel_chrom, bdel_left_start, bdel_left_end, bdel_chrom, bdel_right_start, bdel_right_end, '++', bdel_svfrac)
-
-            # rewrite bigdup coords as translocation
-            if mut_type == 'BIGDUP':
-                bdup_svfrac = float(args.svfrac)
-                if len(bedline.split()) == 6:
-                    bdup_svfrac = float(bedline.split()[-1])
-
-                if args.donorbam is None:
-                    logger.warning('%s: using BIGDUP requires specifying a --donorbam and none was provided, using %s' % (bedline, args.bamFileName))
-                    args.donorbam = args.bamFileName
-
-                bdup_chrom, bdup_start, bdup_end = bedline.split()[:3]
-                bdup_start = int(bdup_start)
-                bdup_end   = int(bdup_end)
-
-                bdup_left_start = bdup_start
-                bdup_left_end   = bdup_start
-
-                bdup_right_start = bdup_end
-                bdup_right_end   = bdup_end
-
-                bedline = '%s %d %d BIGDUP %s %d %d %s %f' % (bdup_chrom, bdup_right_start, bdup_right_end, bdup_chrom, bdup_left_start, bdup_left_end, '++', bdup_svfrac)
-
             # rewrite biginv coords as translocations
             if mut_type == 'BIGINV':
+                if num_fields == 5:
+                    binv_svfrac = float(fields[-1])
+                else:
+                    binv_svfrac = float(args.svfrac)
 
-                binv_svfrac = float(args.svfrac)
-                if len(bedline.split()) == 5:
-                    binv_svfrac = float(bedline.split()[-1])
+                binv_mutid = '_'.join(map(str, (chrom, start, start, 'BIGINV')))
+                biginvs[binv_mutid] = (chrom, start, end, binv_svfrac)
 
-                binv_chrom, binv_start, binv_end = bedline.split()[:3]
-                binv_start = int(binv_start)
-                binv_end = int(binv_end)
+                fields_left = [chrom, start, start, chrom, end, end, '+-', binv_svfrac]
+                results.append(pool.submit(makemut, args, fields_left, alignopts))
 
-                binv_left_start = binv_start
-                binv_left_end   = binv_start
-
-                binv_right_start = binv_end
-                binv_right_end   = binv_end
-
-                # left breakpoint
-                multi_part.append('%s %d %d BIGINV %s %d %d %s %f' % (binv_chrom, binv_left_start, binv_left_end, binv_chrom, binv_right_start, binv_right_end, '+-', binv_svfrac))
-
-                # right breakpoint
-                multi_part.append('%s %d %d BIGINV %s %d %d %s %f' % (binv_chrom, binv_left_start, binv_left_end, binv_chrom, binv_right_start, binv_right_end, '-+', binv_svfrac))
-
-                binv_mutid = '_'.join(map(str, (binv_chrom, binv_left_start, binv_left_end, 'BIGINV')))
-                biginvs[binv_mutid] = (binv_chrom, binv_start, binv_end, binv_svfrac)
-
-            if len(multi_part) == 0:
-                # submit each mutation as its own thread
-                result = pool.submit(makemut, args, bedline, alignopts)
-                results.append(result)
-
+                fields_right = [chrom, start, start, chrom, end, end, '-+', binv_svfrac]
+                results.append(pool.submit(makemut, args, fields_right, alignopts))
+            
             else:
-                for bedline in multi_part:
-                    result = pool.submit(makemut, args, bedline, alignopts)
-                    results.append(result)
+                # rewrite bigdel coords as translocation
+                if mut_type == 'BIGDEL':
+                    if num_fields == 5:
+                        bdel_svfrac = float(fields[-1])
+                    else:
+                        bdel_svfrac = float(args.svfrac)
 
+                    fields = [chrom, start, start, chrom, end, end, '++', bdel_svfrac]
+
+                # rewrite bigdup coords as translocation
+                elif mut_type == 'BIGDUP':
+                    if num_fields == 6:
+                        bdup_svfrac = float(fields[-1])
+                    else:
+                        bdup_svfrac = float(args.svfrac)
+
+                    if args.donorbam is None:
+                        logger.warning('%s: using BIGDUP requires specifying a --donorbam and none was provided, using %s' % (bedline, args.bamFileName))
+                        args.donorbam = args.bamFileName
+
+                    fields = [chrom, end, end, chrom, start, start, '++', bdup_svfrac]
+
+                # submit each mutation as its own thread
+                result = pool.submit(makemut, args, fields, alignopts)
+                results.append(result)
+            
             nmuts += 1
 
     ## process the results of mutation jobs
