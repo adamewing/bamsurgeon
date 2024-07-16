@@ -305,7 +305,7 @@ def makemut(args, fields, alignopts):
 
     bamfile = pysam.AlignmentFile(args.bamFileName, reference_filename=args.refFasta)
     reffile = pysam.Fastafile(args.refFasta)
-    logfn = '_'.join(map(os.path.basename, fields[:4])) + ".log"
+    logfn = '_'.join(map(os.path.basename, (str(f) for f in fields[:4]))) + ".log"
     logfile = open('addsv_logs_' + os.path.basename(args.outBamFile) + '/' + os.path.basename(args.outBamFile) + '_' + logfn, 'w')
     mutinfo = {}
 
@@ -373,7 +373,7 @@ def makemut(args, fields, alignopts):
     elif num_fields > 4:
         var_fields = fields[3:]
 
-    actions = map(lambda x: x.strip(), ' '.join(var_fields).split(';'))
+    actions = map(lambda x: x.strip(), ' '.join(str(f) for f in var_fields).split(';'))
 
     svfrac = float(args.svfrac) # default, can be overridden by cnv file or per-variant
 
@@ -860,7 +860,7 @@ def main(args):
             
             fields = re.split("[\s]", bedline)
             num_fields = len(fields)
-            if num_fields:
+            if num_fields < 4:
                 raise ValueError("Invalid varfile line: %s" % bedline)
             
             chrom = fields[0]
@@ -889,10 +889,10 @@ def main(args):
                 binv_mutid = '_'.join(map(str, (chrom, start, start, 'BIGINV')))
                 biginvs[binv_mutid] = (chrom, start, end, binv_svfrac)
 
-                fields_left = [chrom, start, start, chrom, end, end, '+-', binv_svfrac]
+                fields_left = [chrom, start, start, 'BIGINV', chrom, end, end, '+-', binv_svfrac]
                 results.append(pool.submit(makemut, args, fields_left, alignopts))
 
-                fields_right = [chrom, start, start, chrom, end, end, '-+', binv_svfrac]
+                fields_right = [chrom, start, start, 'BIGINV', chrom, end, end, '-+', binv_svfrac]
                 results.append(pool.submit(makemut, args, fields_right, alignopts))
             
             else:
@@ -903,7 +903,7 @@ def main(args):
                     else:
                         bdel_svfrac = float(args.svfrac)
 
-                    fields = [chrom, start, start, chrom, end, end, '++', bdel_svfrac]
+                    fields = [chrom, start, start, 'BIGDEL', chrom, end, end, '++', bdel_svfrac]
 
                 # rewrite bigdup coords as translocation
                 elif mut_type == 'BIGDUP':
@@ -916,7 +916,7 @@ def main(args):
                         logger.warning('%s: using BIGDUP requires specifying a --donorbam and none was provided, using %s' % (bedline, args.bamFileName))
                         args.donorbam = args.bamFileName
 
-                    fields = [chrom, end, end, chrom, start, start, '++', bdup_svfrac]
+                    fields = [chrom, end, end, 'BIGDUP', chrom, start, start, '++', bdup_svfrac]
 
                 # submit each mutation as its own thread
                 result = pool.submit(makemut, args, fields, alignopts)
@@ -965,9 +965,8 @@ def main(args):
 
             binv_chrom, binv_start, binv_end, binv_svfrac = biginvs[binv_mutid]
 
-            binv_left_end  = int(binv_left_end)
-            binv_right_end = int(binv_right_end)
-
+            binv_left_end = start
+            binv_right_end = end
             if binv_left_end > binv_right_end:
                 binv_left_end, binv_right_end = binv_right_end, binv_left_end
 
