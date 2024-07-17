@@ -319,6 +319,8 @@ def makemut(args, fields, alignopts):
 
     num_fields = len(fields)
     chrom, start, end, mut_type = fields[:4] # INV, DEL, INS, DUP, TRN
+    start = int(start)
+    end = int(end)
 
     # desired start/end
     user_start = start
