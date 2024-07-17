@@ -376,7 +376,6 @@ def makemut(args, fields, alignopts):
         var_fields = fields[3:]
 
     actions = map(lambda x: x.strip(), ' '.join(str(f) for f in var_fields).split(';'))
-
     svfrac = float(args.svfrac) # default, can be overridden by cnv file or per-variant
 
     cn = 1.0
@@ -510,10 +509,9 @@ def makemut(args, fields, alignopts):
         else:
             trn_mutseq = ms.MutableSeq(trn_maxcontig.seq)
 
-
     # support for multiple mutations
     for actionstr in actions:
-        action_fields = actionstr.split()
+        action_fields = re.split(r"[\s]", actionstr)
         action = action_fields[0]
 
         logger.info("%s action: %s %s" % (mutid, actionstr, action))
@@ -533,10 +531,10 @@ def makemut(args, fields, alignopts):
                 assert re.search('^[ATGCatgc]*$',insseqfile), "cannot determine SV type: %s" % insseqfile # make sure it's a sequence
                 insseq = insseqfile.upper()
                 insseqfile = None
-            if len(action_fields) > 2 and len(action_fields[2]) > 0: # field 5 for insertion is TSD Length
+            if len(action_fields) > 2 and action_fields[2] != '': # field 5 for insertion is TSD Length
                 tsdlen = int(action_fields[2])
 
-            if len(action_fields) > 3 and len(action_fields[3]) > 0: # field 6 for insertion is motif, format = 'NNNN^NNNN where ^ is cut site
+            if len(action_fields) > 3 and action_fields[3] != '': # field 6 for insertion is motif, format = 'NNNN^NNNN where ^ is cut site
                 ins_motif = action_fields[3]
                 assert '^' in ins_motif, 'insertion motif specification requires cut site defined by ^'
 
@@ -544,7 +542,7 @@ def makemut(args, fields, alignopts):
                 svfrac = float(action_fields[4])/cn
 
         elif action == 'DUP':
-            if len(action_fields) > 1:
+            if len(action_fields) > 1 and action_fields[1] != '':
                 ndups = int(action_fields[1])
             else:
                 ndups = 1
@@ -860,7 +858,7 @@ def main(args):
             if args.maxmuts and nmuts >= int(args.maxmuts):
                 break
             
-            fields = re.split("[\s]", bedline)
+            fields = re.split(r"[\s]", bedline)
             num_fields = len(fields)
             if num_fields < 4:
                 raise ValueError("Invalid varfile line: %s" % bedline)
