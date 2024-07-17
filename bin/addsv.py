@@ -299,7 +299,7 @@ def merge_multi_trn(args, alignopts, pair, chrom, start, end, vaf):
 
 
 def makemut(args, fields, alignopts):
-    if args.seed is not None: random.seed(args.seed + fields[1])
+    if args.seed is not None: random.seed(args.seed + int(fields[1]))
 
     mutid = '_'.join(map(str, fields[:4]))
 
