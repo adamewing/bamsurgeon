@@ -7,9 +7,9 @@ Please see doc/Manual.pdf for instructions and contact adam.ewing@gmail.com with
   
 **Before using simulation-based methods, consider whether there are validated benchmarking data available for your use case**. For example the [Genome in a Bottle](https://www.nist.gov/programs-projects/genome-bottle) or the [PrecisionFDA Truth Challenge](https://precision.fda.gov/challenges/truth/results) may provide a means to test on non-simulated data.
 
-## Table of contents<!-- omit in toc -->
-- [Dependencies](#dependencies)
-- [Getting started](#getting-started)
+## Installation
+
+BAMSurgeon can be installed via bioconda: [![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg?style=flat)](http://bioconda.github.io/recipes/bamsurgeon/README.html) (thanks @kubranarci!)
 
 ## Dependencies
 
@@ -75,10 +75,8 @@ python3 -O scripts/check_dependencies.py
 
 ## Getting started
 
-It is not necessary to install BAMSurgeon. It works as any other standalone Python script. Usage example:
+Alternately, it is not necessary to install BAMSurgeon. It works as any other standalone Python script. Usage example:
 
 ```
 python3 -O bin/addsv.py -p 1 -v test_data/test_sv.txt -f test_data/testregion_realign.bam -r test_data/Homo_sapiens_chr22_assembly19.fasta -o test_data/testregion_sv_mut.bam --aligner mem --keepsecondary --seed 1234 --inslib test_data/test_inslib.fa
 ```
-
-**For best performance, it is strongly recommended to run all scripts with the `-O` Python parameter to skip all assertion checks.**
