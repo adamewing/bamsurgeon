@@ -9,7 +9,7 @@ Please see doc/Manual.pdf for instructions and contact adam.ewing@gmail.com with
 
 ## Installation
 
-BAMSurgeon can be installed via bioconda: [![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg?style=flat)](http://bioconda.github.io/recipes/bamsurgeon/README.html) (thanks @kubranarci!)
+Bamsurgeon can be installed via bioconda: [![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg?style=flat)](http://bioconda.github.io/recipes/bamsurgeon/README.html) (thanks @kubranarci)
 
 ## Dependencies
 
