@@ -215,6 +215,8 @@ def asm(chrom, start, end, bamfilename, reffile, kmersize, tmpdir, mutid='null',
     # Find the remaining reads using .mate()
     for read in pending_reads.values():
         mate = bamfile.mate(read)
+        if mate.is_supplementary or mate.is_secondary:
+            continue
         readpairs[read.qname] = ReadPair(read, mate)
 
         if read.is_read1:
