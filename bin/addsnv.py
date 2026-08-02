@@ -415,7 +415,7 @@ def main(args):
         if args.tagreads:
             from bamsurgeon.markreads import markreads
             tmp_tag_bam = 'tag.%s.bam' % str(uuid4())
-            markreads(outbam_mutsfile, tmp_tag_bam)
+            markreads(outbam_mutsfile, args.refFasta, tmp_tag_bam)
             move(tmp_tag_bam, outbam_mutsfile)
             logger.info("tagged reads.")
 
