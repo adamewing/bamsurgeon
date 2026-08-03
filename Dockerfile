@@ -23,13 +23,6 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y \
 
 RUN mkdir $HOME/bin
 
-RUN wget https://github.com/dzerbino/velvet/archive/refs/tags/v1.2.10.tar.gz && tar -xvzf v1.2.10.tar.gz
-RUN make -C velvet-1.2.10
-RUN cp velvet-1.2.10/velvetg $HOME/bin && cp velvet-1.2.10/velveth $HOME/bin
-
-RUN git clone https://github.com/adamewing/exonerate.git
-RUN cd exonerate && autoreconf -fi  && ./configure && make && make install
-
 RUN wget https://github.com/broadinstitute/picard/releases/download/2.27.3/picard.jar
 RUN chmod +x picard.jar
 RUN export BAMSURGEON_PICARD_JAR=$HOME/picard.jar

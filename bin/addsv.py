@@ -1,24 +1,23 @@
 #!/usr/bin/env python
 
-#from __future__ import print_function
-
 import re
 import os
 import sys
 import random
+import traceback
 import subprocess
 import argparse
 import pysam
+
 import bamsurgeon.replace_reads as rr
-import bamsurgeon.asmregion as ar
-import bamsurgeon.mutableseq as ms
-from bamsurgeon.aligners import remap_fastq, SUPPORTED_ALIGNERS
+import bamsurgeon.svtemplate as svt
 import bamsurgeon.makevcf as makevcf
 
+from bamsurgeon.aligners import remap_fastq, SUPPORTED_ALIGNERS
+from bamsurgeon.records import MutationRecord, MutationResult
 from bamsurgeon.common import *
 from uuid import uuid4
 from shutil import move
-from collections import defaultdict as dd
 from concurrent.futures import ProcessPoolExecutor
 
 import logging
@@ -26,6 +25,14 @@ FORMAT = '%(levelname)s %(asctime)s %(message)s'
 logging.basicConfig(format=FORMAT)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+
+# BIG* used to be a parallel implementation reached by a size threshold. They
+# are accepted as spellings of the plain types now; only their argument order
+# differs, since BIGDUP never took a copy count.
+BIG_ALIASES = {'BIGDEL': 'DEL', 'BIGINV': 'INV', 'BIGDUP': 'DUP'}
+
+INTERVAL_KINDS = ('DEL', 'DUP', 'INV', 'INS')
 
 
 def _read_in_region(read, chrom, start, end):
@@ -64,7 +71,8 @@ def get_reads(bam_file, fasta_ref, chrom, start, end, svfrac, salt):
     bam.close()
 
 
-def runwgsim(contig, newseq, pemean, pesd, tmpdir, nsimreads, mutid='null', err_rate=0.0, seed=None, trn_contig=None, rename=True):
+def runwgsim(newseq, readlen, pemean, pesd, tmpdir, nsimreads, mutid='null',
+             err_rate=0.0, seed=None):
     ''' wrapper function for wgsim, could swap out to support other reads simulators (future work?) '''
 
     basefn = tmpdir + '/' + mutid + ".wgsimtmp." + str(uuid4())
@@ -72,35 +80,19 @@ def runwgsim(contig, newseq, pemean, pesd, tmpdir, nsimreads, mutid='null', err_
     fq1 = basefn + ".1.fq"
     fq2 = basefn + ".2.fq"
 
-    fout = open(fasta,'w')
-    fout.write(">" + mutid + "\n" + newseq + "\n")
-    fout.close()
+    with open(fasta, 'w') as fout:
+        fout.write(">" + mutid + "\n" + newseq + "\n")
 
-    ctg_len = len(contig)
-    if trn_contig: ctg_len += len(trn_contig)
-
-    # # adjustment factor for length of new contig vs. old contig
-    logger.info("%s old ctg len: %d" % (mutid, ctg_len))
-    logger.info("%s new ctg len: %d" % (mutid, len(newseq)))
+    logger.info("%s template len: %d" % (mutid, len(newseq)))
     logger.info("%s num. sim. reads: %d" % (mutid, nsimreads))
+    logger.info("%s read length: %d" % (mutid, readlen))
     logger.info("%s PE mean outer distance: %f" % (mutid, pemean))
     logger.info("%s PE outer distance SD: %f" % (mutid, pesd))
     logger.info("%s error rate: %f" % (mutid, err_rate))
 
-    rquals = contig.rquals
-    mquals = contig.mquals
-
-    if trn_contig:
-        rquals += trn_contig.rquals
-        mquals += trn_contig.mquals
-
-    # length of quality score comes from original read, used here to set length of read
-    maxqlen = 0
-    for qual in (rquals + mquals):
-        if len(qual) > maxqlen:
-            maxqlen = len(qual)
-
-    wgsim_args = ['wgsim','-e', str(err_rate),'-d',str(pemean),'-s',str(pesd),'-N',str(nsimreads),'-1',str(maxqlen),'-2', str(maxqlen),'-r','0','-R','0',fasta,fq1,fq2]
+    wgsim_args = ['wgsim', '-e', str(err_rate), '-d', str(pemean), '-s', str(pesd),
+                  '-N', str(nsimreads), '-1', str(readlen), '-2', str(readlen),
+                  '-r', '0', '-R', '0', fasta, fq1, fq2]
 
     seed = 1 if seed == 0 else seed # Fix for wgsim thinking 0 is no seed
     if seed is not None: wgsim_args += ['-S', str(seed)]
@@ -110,11 +102,10 @@ def runwgsim(contig, newseq, pemean, pesd, tmpdir, nsimreads, mutid='null', err_
 
     os.remove(fasta)
 
+    return (fq1, fq2)
 
-    return (fq1,fq2)
 
-
-def singleseqfa(file,mutid='null'):
+def singleseqfa(file, mutid='null'):
     with open(file, 'r') as fasta:
         header = None
         seq = ''
@@ -151,41 +142,6 @@ def load_inslib(infa):
     return seqdict
 
 
-
-def align(qryseq, refseq):
-    rnd = str(uuid4())
-    tgtfa = 'tmp.' + rnd + '.tgt.fa'
-    qryfa = 'tmp.' + rnd + '.qry.fa'
-
-    tgt = open(tgtfa, 'w')
-    qry = open(qryfa, 'w')
-
-    tgt.write('>ref' + '\n' + refseq + '\n')
-    qry.write('>qry' + '\n' + qryseq + '\n')
-
-    tgt.close()
-    qry.close()
-
-    cmd = ['exonerate', '--bestn', '1', '-m', 'ungapped', '--showalignment','0', '--ryo', 'SUMMARY\t%s\t%qab\t%qae\t%tab\t%tae\n', qryfa, tgtfa]
-    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
-    best = []
-    topscore = 0
-
-    for pline in p.stdout.readlines():
-        pline = pline.decode()
-        if pline.startswith('SUMMARY'):
-            c = pline.strip().split()
-            if int(c[1]) > topscore:
-                topscore = int(c[1])
-                best = c
-
-    os.remove(tgtfa)
-    os.remove(qryfa)
-
-    return best
-
-
 def discordant_fraction(bamfile, fasta_ref, chrom, start, end):
     r = 0
     d = 0
@@ -201,78 +157,29 @@ def discordant_fraction(bamfile, fasta_ref, chrom, start, end):
         return 0.0
 
 
-def trim_contig(mutid, chrom, start, end, contig, reffile):
-    # trim contig to get best ungapped aligned region to ref.
-
-    refseq = reffile.fetch(chrom,start,end)
-    alignstats = align(contig.seq, refseq)
-
-    if len(alignstats) < 6:
-        logger.warning("%s alignstats: %s" % (mutid, str(alignstats)))
-        logger.warning("%s No good alignment between mutated contig and original, aborting mutation!" % mutid)
-        return [None] * 9
-    
-    qrystart, qryend = map(int, alignstats[2:4])
-    tgtstart, tgtend = map(int, alignstats[4:6])
-
-    refseq = refseq[tgtstart:tgtend]
-    
-    logger.info("%s alignment result: %s" % (mutid, str(alignstats)))
-
-    contig.trimseq(qrystart, qryend)
-    logger.info("%s trimmed contig length: %d" % (mutid, contig.len))
-
-    if tgtstart > tgtend: # detect reverse complemented contig
-        contig.rc = True
-
-    refstart = start + tgtstart
-    refend = start + tgtend
-
-    if refstart > refend:
-        refstart, refend = refend, refstart
-
-
-    return contig, refseq, alignstats, refstart, refend, qrystart, qryend, tgtstart, tgtend
-
-def locate_contig_pos(refstart, refend, user_start, user_end, contig_len, maxlibsize):
-    contig_start = None
-    contig_end = None
-
-    if user_start - refstart > maxlibsize:
-        contig_start = (user_start - refstart)
-
-    if refend - user_end > maxlibsize:
-        contig_end = contig_len - (refend - user_end)
-
-    return contig_start, contig_end
-
-
-
-def add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right_bnd, bdup_svfrac):
+def add_donor_reads(args, mutid, tmpbamfn, chrom, left_bnd, right_bnd, svfrac):
+    ''' interior coverage for a duplication, taken from --donorbam '''
     tmpbam = pysam.AlignmentFile(tmpbamfn, reference_filename=args.refFasta)
 
-    outbamfn = '%s/%s.%s.bigdup.merged.bam' % (args.tmpdir, mutid, str(uuid4()))
+    outbamfn = '%s/%s.%s.dup.merged.bam' % (args.tmpdir, mutid, str(uuid4()))
     outbam = pysam.AlignmentFile(outbamfn, 'wb', template=tmpbam)
     for read in tmpbam.fetch(until_eof=True):
         outbam.write(read)
 
-    # Calculate donor norm factor
     with pysam.AlignmentFile(args.donorbam, reference_filename=args.refFasta) as donorbam:
-        cover_donor = donorbam.count(contig=bdup_chrom, start=bdup_left_bnd, end=bdup_right_bnd) / float(bdup_right_bnd-bdup_left_bnd)
+        cover_donor = donorbam.count(contig=chrom, start=left_bnd, end=right_bnd) / float(right_bnd-left_bnd)
     with pysam.AlignmentFile(args.bamFileName, reference_filename=args.refFasta) as origbam:
-        cover_orig = origbam.count(contig=bdup_chrom, start=bdup_left_bnd, end=bdup_right_bnd) / float(bdup_right_bnd-bdup_left_bnd)
+        cover_orig = origbam.count(contig=chrom, start=left_bnd, end=right_bnd) / float(right_bnd-left_bnd)
 
-    donor_norm_factor = cover_orig * bdup_svfrac / cover_donor
+    donor_norm_factor = cover_orig * svfrac / cover_donor
     if donor_norm_factor > 1.0:
         logger.warning('%s: donor_norm_factor %f > 1.0. This means donor bam has less coverage than required.' % (mutid, donor_norm_factor))
 
-    logger.info('%s: BIGDUP donor coverage normalisation factor: %f' % (mutid, donor_norm_factor))
-
-    logger.info('%s: fetch donor reads from %s-%d-%d' % (mutid, bdup_chrom, bdup_left_bnd, bdup_right_bnd))
+    logger.info('%s: DUP donor coverage normalisation factor: %f' % (mutid, donor_norm_factor))
+    logger.info('%s: fetch donor reads from %s-%d-%d' % (mutid, chrom, left_bnd, right_bnd))
 
     nreads = 0
-
-    for read in get_reads(args.donorbam, args.refFasta, bdup_chrom, bdup_left_bnd, bdup_right_bnd, donor_norm_factor, args.salt):
+    for read in get_reads(args.donorbam, args.refFasta, chrom, left_bnd, right_bnd, donor_norm_factor, args.salt):
         read.query_name = read.query_name + '_donor_' + mutid
         outbam.write(read)
         nreads += 1
@@ -283,551 +190,299 @@ def add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right
 
     return outbamfn
 
-def merge_multi_trn(args, alignopts, pair, chrom, start, end, vaf):
-    assert len(pair) == 2
 
-    mutid = os.path.basename(pair[0]).split('.')[0]
+def parse_varfile_line(bedline, default_vaf):
+    '''
+    Parse one varfile line into a request dict.
 
-    outbamfn = '%s/%s.%s.merged.bam' % (args.tmpdir, mutid, str(uuid4()))
-    bams = [pysam.AlignmentFile(bam, reference_filename=args.refFasta) for bam in pair]
-    outbam = pysam.AlignmentFile(outbamfn, 'wb', template=bams[0])
+    Split on single whitespace characters rather than runs, because empty
+    columns are meaningful: `DUP\\t\\t0.9` means "default copy count, VAF 0.9".
+    '''
+    fields = re.split(r"[\s]", bedline)
 
-    readbins = {} # randomly assorted reads into bam sources 0 and 1
+    if len(fields) < 4:
+        raise ValueError("Invalid varfile line: %s" % bedline)
 
-    for bam in bams:
-        for read in bam.fetch(until_eof=True):
-            readbins[read.query_name] = random.choice([0,1])
+    def field(i):
+        return fields[i].strip() if len(fields) > i else ''
 
-        bam.close()
+    def number(i, default):
+        v = field(i)
+        return type(default)(v) if v != '' else default
 
-    bams = [pysam.AlignmentFile(bam, reference_filename=args.refFasta) for bam in pair]
+    chrom = fields[0]
+    start = int(fields[1])
+    end = int(fields[2])
+    kind = fields[3].upper()
 
-    for i, bam in enumerate(bams):
-        for read in bam.fetch(until_eof=True):
-            if readbins[read.query_name] == i:
-                outbam.write(read)
+    req = {'chrom': chrom, 'start': start, 'end': end,
+           'vaf': default_vaf, 'ndups': 1, 'tsdlen': 0, 'ins_motif': None,
+           'insseqfile': None, 'insseq': '',
+           'mate_chrom': None, 'mate_pos': None,
+           'flip_left': False, 'flip_right': False}
 
-    outbam.close()
+    big = kind in BIG_ALIASES
+    if big:
+        logger.warning('%s is deprecated, treating as %s' % (kind, BIG_ALIASES[kind]))
+        kind = BIG_ALIASES[kind]
 
-    # cleanup
-    for fn in pair:
-        os.remove(fn)
+    req['kind'] = kind
 
-    return outbamfn
+    if kind == 'INS':
+        insspec = field(4)
+        assert insspec != '', 'insertion requires a sequence, file, RND or INSLIB: entry'
+        if os.path.exists(insspec) or insspec == 'RND' or insspec.startswith('INSLIB:'):
+            req['insseqfile'] = insspec
+        else:
+            assert re.search('^[ATGCatgc]*$', insspec), "cannot determine SV type: %s" % insspec
+            req['insseq'] = insspec.upper()
+        req['tsdlen'] = number(5, 0)
+        motif = field(6)
+        if motif:
+            assert '^' in motif, 'insertion motif specification requires cut site defined by ^'
+            req['ins_motif'] = motif
+        req['vaf'] = number(7, default_vaf)
+
+    elif kind == 'DUP':
+        # BIGDUP never took a copy count; its trailing field is the VAF
+        if big:
+            req['vaf'] = number(4, default_vaf)
+        else:
+            req['ndups'] = number(4, 1)
+            req['vaf'] = number(5, default_vaf)
+
+    elif kind in ('DEL', 'INV'):
+        req['vaf'] = number(4, default_vaf)
+
+    elif kind in ('TRN', 'BND'):
+        req['kind'] = 'BND'
+        req['mate_chrom'] = field(4)
+        req['mate_pos'] = int(field(5))
+        # fields[6] is the mate end; breakends are points, so it is unused
+        orient = field(7)
+        if orient:
+            req['flip_left'] = orient[0] == '-'
+            req['flip_right'] = orient[1] == '-'
+        req['vaf'] = number(8, default_vaf)
+
+    else:
+        raise ValueError("mutation type not one of INS,INV,DEL,DUP,TRN: %s" % kind)
+
+    return req
 
 
-def makemut(args, fields, alignopts):
-    if args.seed is not None: random.seed(args.seed + int(fields[1]))
+def resolve_insertion(args, req, mutid):
+    ''' turn the INS spec into literal sequence '''
+    spec = req['insseqfile']
 
-    mutid = '_'.join(map(str, fields[:4]))
+    if spec is None:
+        return req['insseq'], None
+
+    if spec == 'RND':
+        assert args.inslib is not None, 'INS RND requires --inslib'
+        name = random.choice(sorted(args.inslib.keys()))
+        logger.info("%s chose sequence from insertion library: %s" % (mutid, name))
+        return args.inslib[name], name
+
+    if spec.startswith('INSLIB:'):
+        assert args.inslib is not None, 'INSLIB: requires --inslib'
+        name = spec.split(':', 1)[1]
+        assert name in args.inslib, '%s not found in insertion library' % name
+        logger.info("%s specify sequence from insertion library: %s" % (mutid, name))
+        return args.inslib[name], name
+
+    return singleseqfa(spec, mutid=mutid), os.path.basename(spec)
+
+
+def check_depth(bamfile, mutid, chrom, positions, mindepth, maxdepth):
+    for pos in positions:
+        depth = bamfile.count(chrom, pos-1, pos)
+        if depth < mindepth:
+            logger.warning('%s skipping due to insufficient depth at %s:%d (%d)' % (mutid, chrom, pos, depth))
+            return False
+        if depth > maxdepth:
+            logger.warning('%s skipping due to excessive depth at %s:%d (%d)' % (mutid, chrom, pos, depth))
+            return False
+    return True
+
+
+def makemut(args, req, alignopts):
+    if args.seed is not None:
+        random.seed(args.seed + int(req['start']))
+
+    kind = req['kind']
+    chrom = req['chrom']
+    start = int(req['start'])
+    end = int(req['end'])
+    vaf = float(req['vaf'])
+
+    # the index keeps mutids unique when a varfile repeats an interval.
+    # wgsim names simulated reads after the mutid, so a collision would make
+    # two mutations' reads indistinguishable to replace_reads.
+    mutid = '_'.join(map(str, (chrom, start, end, kind, req['index'])))
 
     bamfile = pysam.AlignmentFile(args.bamFileName, reference_filename=args.refFasta)
     reffile = pysam.Fastafile(args.refFasta)
-    logfn = '_'.join(map(os.path.basename, (str(f) for f in fields[:4]))) + ".log"
-    logfile = open('addsv_logs_' + os.path.basename(args.outBamFile) + '/' + os.path.basename(args.outBamFile) + '_' + logfn, 'w')
-    mutinfo = {}
 
-    # optional CNV file
-    cnv = None
-    if (args.cnvfile):
-        cnv = pysam.Tabixfile(args.cnvfile, 'r')
-
-    # temporary file to hold mutated reads
-    outbam_mutsfile = args.tmpdir + '/' + '.'.join((mutid, str(uuid4()), "muts.bam"))
-
-    num_fields = len(fields)
-    chrom, start, end, mut_type = fields[:4] # INV, DEL, INS, DUP, TRN
-    start = int(start)
-    end = int(end)
-
-    # desired start/end
-    user_start = start
-    user_end   = end
-
-    # Check if has sufficient depth
-    user_start_depth = bamfile.count(chrom, user_start-1, user_start)
-    user_end_depth   = bamfile.count(chrom, user_end-1, user_end)
-    if user_start_depth < args.mindepth or user_end_depth < args.mindepth:
-        logger.warning('%s skipping due to insufficient depth %d %d' % (mutid, user_start_depth, user_end_depth))
-        return None, None, None
-    elif user_start_depth > args.maxdepth or user_end_depth > args.maxdepth:
-        logger.warning('%s skipping due to excessive depth %d %d' % (mutid, user_start_depth, user_end_depth))
-        return None, None, None
-
-    # translocation specific
-    trn_chrom = None
-    trn_start = None
-    trn_end   = None
-
-    is_transloc = mut_type in ('TRN', 'BIGDEL', 'BIGINV', 'BIGDUP')
-
-    if is_transloc:
-        var_fields = [mut_type]
-        if num_fields > 7:
-            var_fields.extend(fields[7:])
-
-        start -= int(args.minctglen)
-        end   += int(args.minctglen)
-        if start < 0:
-            start = 0
-
-        trn_chrom = fields[4]
-        user_trn_start = int(fields[5])
-        user_trn_end   = int(fields[6])
-
-        # Check for sufficient depth
-        user_trn_start_depth = bamfile.count(trn_chrom, user_trn_start-1, user_trn_start)
-        user_trn_end_depth   = bamfile.count(trn_chrom, user_trn_end-1, user_trn_end)
-        if user_trn_start_depth < args.mindepth or user_trn_end_depth < args.mindepth:
-            logger.warning('%s skipping due to insufficient depth %d %d' % (mutid, user_trn_start_depth, user_trn_end_depth))
-            return None, None, None
-        elif user_trn_start_depth > args.maxdepth or user_trn_end_depth > args.maxdepth:
-            logger.warning('%s skipping due to excessive depth %d %d' % (mutid, user_trn_start_depth, user_trn_end_depth))
-            return None, None, None
-
-        trn_start = int(fields[5]) - int(args.minctglen)
-        trn_end   = int(fields[6]) + int(args.minctglen)
-        if trn_start < 0:
-            trn_start = 0
-    
-    elif num_fields > 4:
-        var_fields = fields[3:]
-
-    actions = map(lambda x: x.strip(), ' '.join(str(f) for f in var_fields).split(';'))
-    svfrac = float(args.svfrac) # default, can be overridden by cnv file or per-variant
-
-    cn = 1.0
-
-    trn_left_flip  = False
-    trn_right_flip = False
-
-    if cnv: # CNV file is present
-        if chrom in cnv.contigs:
-            for cnregion in cnv.fetch(chrom,start,end):
-                cn = float(cnregion.strip().split()[3]) # expect chrom,start,end,CN
-                logger.info("INFO" + mutid + "\t" + ' '.join(("copy number in sv region:",chrom,str(start),str(end),"=",str(cn))) + "\n")
-                svfrac = svfrac/float(cn)
-                assert svfrac <= 1.0, 'copy number from %s must be at least 1: %s' % (args.cnvfile, cnregion.strip())
-                logger.info("INFO" + mutid + "\tadjusted default MAF: " + str(svfrac) + "\n")
-
-    logger.info("%s interval: %s" % (mutid, " ".join(str(f) for f in fields)))
-    logger.info("%s length: %d" % (mutid, (end-start)))
-
-   # modify start and end if interval is too short
-    minctglen = int(args.minctglen)
-
-    # adjust if minctglen is too short
-    if minctglen < 3*int(args.maxlibsize):
-        minctglen = 3*int(args.maxlibsize)
-
-    #if end-start < minctglen:
-    adj   = minctglen - (end-start)
-    start = int(start - adj/2)
-    end   = int(end + adj/2)
-
-    #logger.info("%s note: interval size was too short, adjusted: %s:%d-%d" % (mutid, chrom, start, end))
-
-    dfrac = discordant_fraction(args.bamFileName, args.refFasta, chrom, start, end)
-    logger.info("%s discordant fraction: %f" % (mutid, dfrac))
-
-    if dfrac > args.maxdfrac:
-        logger.warning("%s discordant fraction %f > %f aborting mutation!\n" % (mutid, dfrac, args.maxdfrac))
-        return None, None, None
-
-    contigs = ar.asm(chrom, start, end, args.bamFileName, reffile, int(args.kmersize), args.tmpdir, mutid=mutid, debug=args.debug)
-
-    if len(contigs) == 0:
-        logger.warning("%s generated no contigs, skipping site." % mutid)
-        return None, None, None
-
-    trn_contigs = None
-    if is_transloc:
-        logger.info("%s assemble translocation end: %s:%d-%d" % (mutid, trn_chrom, trn_start, trn_end))
-        trn_contigs = ar.asm(trn_chrom, trn_start, trn_end, args.bamFileName, reffile, int(args.kmersize), args.tmpdir, mutid=mutid, debug=args.debug)
-
-    maxcontig = sorted(contigs)[-1]
-
-    trn_maxcontig = None
-    rename_reads = True
-
-    if is_transloc:
-        if len(trn_contigs) == 0:
-            logger.warning("%s translocation partner generated no contigs, skipping site." % mutid)
-            return None, None, None
-
-        trn_maxcontig = sorted(trn_contigs)[-1]
-
-    if re.search('N', maxcontig.seq):
-        if args.allowN:
-            logger.warning("%s contig has ambiguous base (N), replaced with 'A'" % mutid)
-            maxcontig.seq = re.sub('N', 'A', maxcontig.seq)
-        else:
-            logger.warning("%s contig dropped due to ambiguous base (N), aborting mutation." % mutid)
-            return None, None, None
-
-    if is_transloc and re.search('N', trn_maxcontig.seq):
-        if args.allowN:
-            logger.warning("%s contig has ambiguous base (N), replaced with 'A'" % mutid)
-            trn_maxcontig.seq = re.sub('N', 'A', trn_maxcontig.seq)
-        else:
-            logger.warning("%s contig dropped due to ambiguous base (N), aborting mutation." % mutid)
-            return None, None, None
-
-    if maxcontig is None:
-        logger.warning("%s maxcontig has length 0, aborting mutation!" % mutid)
-        return None, None, None
-
-    if is_transloc and trn_maxcontig is None:
-        logger.warning("%s transloc maxcontig has length 0, aborting mutation!" % mutid)
-        return None, None, None
-
-    logger.info("%s best contig length: %d" % (mutid, sorted(contigs)[-1].len))
-
-    if is_transloc:
-        logger.info("%s best transloc contig length: %d" % (mutid, sorted(trn_contigs)[-1].len))
-
-    # trim contig to get best ungapped aligned region to ref.
-    maxcontig, refseq, alignstats, refstart, refend, qrystart, qryend, tgtstart, tgtend = trim_contig(mutid, chrom, start, end, maxcontig, reffile)
-
-    if maxcontig is None:
-        logger.warning("%s best contig did not have sufficent match to reference, aborting mutation." % mutid)
-        return None, None, None
-
-    logger.info("%s start: %d, end: %d, tgtstart: %d, tgtend: %d, refstart: %d, refend: %d" % (mutid, start, end, tgtstart, tgtend, refstart, refend))
-
-    if is_transloc:
-        trn_maxcontig, trn_refseq, trn_alignstats, trn_refstart, trn_refend, trn_qrystart, trn_qryend, trn_tgtstart, trn_tgtend = trim_contig(mutid, trn_chrom, trn_start, trn_end, trn_maxcontig, reffile)
-
-        if trn_maxcontig is None:
-            logger.warning("%s best contig for translocation partner did not have sufficent match to reference, aborting mutation." % mutid)
-            return None, None, None
-            
-        logger.info("%s trn_start: %d, trn_end: %d, trn_tgtstart: %d, trn_tgtend:%d , trn_refstart: %d, trn_refend: %d" % (mutid, trn_start, trn_end, trn_tgtstart, trn_tgtend, trn_refstart, trn_refend))
-
-    # is there anough room to make mutations?
-    if maxcontig.len < 3*int(args.maxlibsize):
-        logger.warning("%s best contig too short to make mutation!" % mutid)
-        return None, None, None
-
-    if is_transloc and trn_maxcontig.len < 3*int(args.maxlibsize):
-        logger.warning("%s best transloc contig too short to make mutation!" % mutid)
-        return None, None, None
-
-    # make mutation in the largest contig
-    mutseq = ms.MutableSeq(maxcontig.seq)
-
-    if maxcontig.rc:
-        mutseq = ms.MutableSeq(rc(maxcontig.seq)) 
-
-    trn_mutseq = None
-
-    if is_transloc:
-        if trn_maxcontig.rc:
-            trn_mutseq = ms.MutableSeq(rc(trn_maxcontig.seq))
-        else:
-            trn_mutseq = ms.MutableSeq(trn_maxcontig.seq)
-
-    # support for multiple mutations
-    for actionstr in actions:
-        action_fields = re.split(r"[\s]", actionstr)
-        action = action_fields[0]
-
-        logger.info("%s action: %s %s" % (mutid, actionstr, action))
-
-        insseqfile = None
-        insseq = ''
-        tsdlen = 0  # target site duplication length
-        ndups = 0   # number of tandem dups
-        dsize = 0.0 # deletion size fraction
-        dlen = 0
-        ins_motif = None
-
-        if action == 'INS':
-            assert len(action_fields) > 1 # insertion syntax: INS <file.fa> [optional TSDlen]
-            insseqfile = action_fields[1]
-            if not (os.path.exists(insseqfile) or insseqfile == 'RND' or insseqfile.startswith('INSLIB:')): # not a file... is it a sequence? (support indel ins.)
-                assert re.search('^[ATGCatgc]*$',insseqfile), "cannot determine SV type: %s" % insseqfile # make sure it's a sequence
-                insseq = insseqfile.upper()
-                insseqfile = None
-            if len(action_fields) > 2 and action_fields[2] != '': # field 5 for insertion is TSD Length
-                tsdlen = int(action_fields[2])
-
-            if len(action_fields) > 3 and action_fields[3] != '': # field 6 for insertion is motif, format = 'NNNN^NNNN where ^ is cut site
-                ins_motif = action_fields[3]
-                assert '^' in ins_motif, 'insertion motif specification requires cut site defined by ^'
-
-            if len(action_fields) > 4: # field 7 is VAF
-                svfrac = float(action_fields[4])/cn
-
-        elif action == 'DUP':
-            if len(action_fields) > 1 and action_fields[1] != '':
-                ndups = int(action_fields[1])
-            else:
-                ndups = 1
-
-            if len(action_fields) > 2: # VAF
-                svfrac = float(action_fields[2])/cn
-
-        elif action == 'DEL':
-            dsize = 1.0
-
-            if len(action_fields) > 1: # VAF
-                svfrac = float(action_fields[1])/cn
-
-        elif action in ('TRN', 'BIGDEL', 'BIGINV', 'BIGDUP'):
-            if len(action_fields) > 1: # translocation end orientation ++ / +- / -+ / --
-                trn_left_flip = action_fields[1][0] == '-'
-                trn_right_flip = action_fields[1][1] == '-'
-
-            if len(action_fields) > 2:
-                svfrac = float(action_fields[2])/cn
-
-        elif action == 'INV' and len(action_fields) > 1:
-            svfrac = float(action_fields[1])/cn
-
-
-        logger.info("%s final VAF accounting for copy number %f: %f" % (mutid, cn, svfrac))
-
-        logfile.write(">" + chrom + ":" + str(refstart) + "-" + str(refend) + " BEFORE\n" + str(mutseq) + "\n")
-
-        contig_start = None
-        contig_end = None
-        trn_contig_start = None
-        trn_contig_end = None
-        exact_success = True
-
-        contig_start, contig_end = locate_contig_pos(refstart, refend, user_start, user_end, mutseq.length(), int(args.maxlibsize))
-
-        if contig_start is None:
-            logger.warning('%s contig does not cover user start' % mutid)
-            exact_success = False
-            #print refstart, refend, user_start, user_end, int(args.maxlibsize)
-
-        if contig_end is None:
-            logger.warning('%s contig does not cover user end' % mutid)
-            exact_success = False
-            #print refstart, refend, user_start, user_end, int(args.maxlibsize)
-
-        if is_transloc:
-            trn_contig_start, trn_contig_end = locate_contig_pos(trn_refstart, trn_refend, user_trn_start, user_trn_end, trn_mutseq.length(), int(args.maxlibsize))
-
-            if trn_contig_start is None:
-                logger.warning('%s contig does not cover user translocation start' % mutid)
-                exact_success = False
-
-            if trn_contig_end is None:
-                logger.warning('%s contig does not cover user translocation end' % mutid)
-                exact_success = False
-
-
-        if args.require_exact and not exact_success:
-            logger.warning('%s dropped mutation due to --require_exact')
-            return None, None, None
-
-
-        if action == 'INS':
-            inspoint = int(mutseq.length()/2)
-            if None not in (contig_start, contig_end):
-                inspoint = int((contig_start+contig_end)/2)
-
-            if ins_motif is not None:
-                inspoint = mutseq.find_site(ins_motif, left_trim=int(args.maxlibsize), right_trim=int(args.maxlibsize))
-
-                if inspoint < int(args.maxlibsize) or inspoint > mutseq.length() - int(args.maxlibsize):
-                    logger.info("%s picked midpoint, no cutsite found" % mutid)
-                    inspoint = int(mutseq.length()/2)
-
-            if insseqfile: # seq in file
-                if insseqfile == 'RND':
-                    assert args.inslib is not None # insertion library needs to exist
-                    insseqfile = random.choice(list(args.inslib.keys()))
-                    logger.info("%s chose sequence from insertion library: %s" % (mutid, insseqfile))
-                    mutseq.insertion(inspoint, args.inslib[insseqfile], tsdlen)
-
-                elif insseqfile.startswith('INSLIB:'):
-                    assert args.inslib is not None # insertion library needs to exist
-                    insseqfile = insseqfile.split(':')[1]
-                    logger.info("%s specify sequence from insertion library: %s" % (mutid, insseqfile))
-                    assert insseqfile in args.inslib, '%s not found in insertion library' % insseqfile
-                    mutseq.insertion(inspoint, args.inslib[insseqfile], tsdlen)
-
-                else:
-                    mutseq.insertion(inspoint, singleseqfa(insseqfile, mutid=mutid), tsdlen)
-
-            else: # seq is input
-                mutseq.insertion(inspoint, insseq, tsdlen)
-
-            ins_len = len(mutseq.seq) - len(maxcontig.seq)
-            mutinfo[mutid] = "\t".join(('ins',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(inspoint),str(insseqfile),str(tsdlen),str(ins_len),str(svfrac)))
-            logfile.write(mutinfo[mutid] + "\n")
-
-        elif action == 'INV':
-            invstart = int(args.maxlibsize)
-            invend = mutseq.length() - invstart
-
-            if None not in (contig_start, contig_end):
-                invstart = contig_start
-                invend   = contig_end
-
-            mutseq.inversion(invstart,invend)
-
-            mutinfo[mutid] = "\t".join(('inv',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(invstart),str(invend),str(svfrac)))
-            logfile.write(mutinfo[mutid] + "\n")
-
-        elif action == 'DEL':
-            delstart = int(args.maxlibsize)
-            delend = mutseq.length() - delstart
-
-            if None not in (contig_start, contig_end):
-                delstart = contig_start
-                delend   = contig_end
-
-            mutseq.deletion(delstart,delend)
-
-            mutinfo[mutid] = "\t".join(('del',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(delstart),str(delend),str(dlen),str(svfrac)))
-            logfile.write(mutinfo[mutid] + "\n")
-
-        elif action == 'DUP':
-            dupstart = int(args.maxlibsize)
-            dupend = mutseq.length() - dupstart
-
-            if None not in (contig_start, contig_end):
-                dupstart = contig_start
-                dupend   = contig_end
-
-            mutseq.duplication(dupstart,dupend,ndups)
-
-            mutinfo[mutid] = "\t".join(('dup',chrom,str(refstart),str(refend),action,str(mutseq.length()),str(dupstart),str(dupend),str(ndups),str(svfrac)))
-            logfile.write(mutinfo[mutid] + "\n")
-
-        elif action == 'TRN':
-            trnpoint_1 = int(mutseq.length()/2)
-            trnpoint_2 = int(trn_mutseq.length()/2)
-
-            if None not in (contig_start, contig_end):
-                trnpoint_1 = int((contig_start + contig_end)/2)
-
-            if None not in (trn_contig_start, trn_contig_end):
-                trnpoint_2 = int((trn_contig_start + trn_contig_end)/2)
-
-            mutseq.fusion(trnpoint_1, trn_mutseq, trnpoint_2, flip1=trn_left_flip, flip2=trn_right_flip)
-
-            mutinfo[mutid] = "\t".join(('trn',chrom,str(refstart),str(refend),action,str(trnpoint_1),trn_chrom,str(trn_refstart),str(trn_refend),str(trnpoint_2),str(trn_left_flip),str(trn_right_flip),str(svfrac)))
-            logfile.write(mutinfo[mutid] + "\n")
-
-        elif action == 'BIGDEL':
-            trnpoint_1 = int(mutseq.length()/2)
-            trnpoint_2 = int(trn_mutseq.length()/2)
-
-            if None not in (contig_start, contig_end):
-                trnpoint_1 = int((contig_start + contig_end)/2)
-
-            if None not in (trn_contig_start, trn_contig_end):
-                trnpoint_2 = int((trn_contig_start + trn_contig_end)/2)
-
-            mutseq.fusion(trnpoint_1, trn_mutseq, trnpoint_2)
-
-            mutinfo[mutid] = "\t".join(('bigdel',chrom,str(refstart),str(refend),action,str(trnpoint_1),trn_chrom,str(trn_refstart),str(trn_refend),str(trnpoint_2),str(svfrac)))
-            logfile.write(mutinfo[mutid] + "\n")
-
-        elif action == 'BIGINV':
-            trnpoint_1 = int(mutseq.length()/2)
-            trnpoint_2 = int(trn_mutseq.length()/2)
-
-            if None not in (contig_start, contig_end):
-                trnpoint_1 = int((contig_start + contig_end)/2)
-
-            if None not in (trn_contig_start, trn_contig_end):
-                trnpoint_2 = int((trn_contig_start + trn_contig_end)/2)
-
-            mutseq.fusion(trnpoint_1, trn_mutseq, trnpoint_2, flip1=trn_left_flip, flip2=trn_right_flip)
-
-            mutinfo[mutid] = "\t".join(('biginv',chrom,str(refstart),str(refend),action,str(trnpoint_1),trn_chrom,str(trn_refstart),str(trn_refend),str(trnpoint_2),str(svfrac)))
-            logfile.write(mutinfo[mutid] + "\n")
-
-        elif action == 'BIGDUP':
-            trnpoint_1 = int(mutseq.length()/2)
-            trnpoint_2 = int(trn_mutseq.length()/2)
-
-            if None not in (contig_start, contig_end):
-                trnpoint_1 = int((contig_start + contig_end)/2)
-
-            if None not in (trn_contig_start, trn_contig_end):
-                trnpoint_2 = int((trn_contig_start + trn_contig_end)/2)
-
-            mutseq.fusion(trnpoint_1, trn_mutseq, trnpoint_2)
-
-            mutinfo[mutid] = "\t".join(('bigdup',chrom,str(refstart),str(refend),action,str(trnpoint_1),trn_chrom,str(trn_refstart),str(trn_refend),str(trnpoint_2),str(svfrac)))
-            logfile.write(mutinfo[mutid] + "\n")
-            rename_reads = False
+    logdir = 'addsv_logs_' + os.path.basename(args.outBamFile)
+    logfile = open(os.path.join(logdir, os.path.basename(args.outBamFile) + '_' + mutid + '.log'), 'w')
+
+    result = MutationResult()
+
+    try:
+        pad = int(args.pad)
+
+        # copy number adjusts the requested VAF, as before
+        if args.cnvfile:
+            cnv = pysam.Tabixfile(args.cnvfile, 'r')
+            if chrom in cnv.contigs:
+                for cnregion in cnv.fetch(chrom, start, end):
+                    cn = float(cnregion.strip().split()[3])
+                    logger.info("%s copy number in sv region: %f" % (mutid, cn))
+                    vaf = vaf / cn
+                    assert vaf <= 1.0, 'copy number from %s must be at least 1: %s' % (args.cnvfile, cnregion.strip())
+                    logger.info("%s adjusted VAF: %f" % (mutid, vaf))
+
+        breakends = [start, end] if kind != 'BND' else [start]
+        if kind == 'BND':
+            if not check_depth(bamfile, mutid, req['mate_chrom'], [req['mate_pos']],
+                               args.mindepth, args.maxdepth):
+                return result
+
+        if not check_depth(bamfile, mutid, chrom, breakends, args.mindepth, args.maxdepth):
+            return result
+
+        dfrac = discordant_fraction(args.bamFileName, args.refFasta, chrom,
+                                    max(0, start - pad), end + pad)
+        logger.info("%s discordant fraction: %f" % (mutid, dfrac))
+        if dfrac > args.maxdfrac:
+            logger.warning("%s discordant fraction %f > %f aborting mutation!" % (mutid, dfrac, args.maxdfrac))
+            return result
+
+        # ---- build the mutated haplotype from reference slices ----
+        ins_id = None
+        donor_interior = False
+
+        if kind == 'BND':
+            template = svt.build_breakend(
+                reffile, chrom, start, req['mate_chrom'], req['mate_pos'], pad,
+                mutid=mutid, allow_n=args.allowN,
+                flip_left=req['flip_left'], flip_right=req['flip_right'])
+
+        elif kind == 'DUP' and args.donorbam is not None:
+            # interior copy number comes from real reads instead of simulation
+            donor_interior = True
+            template = svt.build_dup_junction(reffile, chrom, start, end, pad,
+                                              mutid=mutid, allow_n=args.allowN)
 
         else:
-            raise ValueError("ERROR " + mutid + "\t: mutation not one of: INS,INV,DEL,DUP,TRN,BIGDEL,BIGINV,BIGDUP\n")
+            insseq = ''
+            if kind == 'INS':
+                insseq, ins_id = resolve_insertion(args, req, mutid)
 
-        logfile.write(">" + chrom + ":" + str(refstart) + "-" + str(refend) +" AFTER\n" + str(mutseq) + "\n")
+            template = svt.build_interval(
+                kind, reffile, chrom, start, end, pad, mutid=mutid,
+                allow_n=args.allowN, insseq=insseq, tsdlen=int(req['tsdlen']),
+                ndups=int(req['ndups']), ins_motif=req['ins_motif'],
+                maxlibsize=int(args.maxlibsize))
 
-    pemean, pesd = float(args.ismean), float(args.issd) 
-    logger.info("%s set paired end mean distance: %f" % (mutid, pemean))
-    logger.info("%s set paired end distance stddev: %f" % (mutid, pesd))
+        logger.info("%s template length %d, replacing %d bp of reference (ratio %.4f)"
+                    % (mutid, len(template.seq), template.exclude_length, template.reads_ratio()))
 
-    exclfile = args.tmpdir + '/' + '.'.join((mutid, 'exclude', str(uuid4()), 'txt'))
-    exclude = open(exclfile, 'w')
+        # ---- collect the reads this replaces ----
+        excl_names = set()
+        for excl_chrom, excl_start, excl_end in template.exclude:
+            for read in get_reads(args.bamFileName, args.refFasta, excl_chrom,
+                                  max(0, excl_start), excl_end, vaf, args.salt):
+                excl_names.add(read.query_name)
 
-    if is_transloc:
-        buffer = int(float(args.ismean))
-        region_1_start, region_1_end = (refstart + trnpoint_1 - buffer, refend) if trn_left_flip else (refstart, refstart + trnpoint_1 + buffer)
-        region_2_start, region_2_end = (trn_refstart + trnpoint_2 - buffer, trn_refend) if not trn_right_flip else (trn_refstart, trn_refstart + trnpoint_2 + buffer)
-        region_1_reads = get_reads(args.bamFileName, args.refFasta, chrom, region_1_start, region_1_end, float(svfrac), args.salt)
-        region_2_reads = get_reads(args.bamFileName, args.refFasta, trn_chrom, region_2_start, region_2_end, float(svfrac), args.salt)
-        excl_reads_names = set([read.query_name for read in region_1_reads] + [read.query_name for read in region_2_reads]) 
-        nsimreads = len(excl_reads_names)
-        # add additional excluded reads if bigdel(s) present
-        if action == 'BIGDEL':
-            bigdel_region_reads = get_reads(args.bamFileName, args.refFasta, chrom, region_1_start, region_2_end, float(svfrac), args.salt)
-            excl_reads_names = set([read.query_name for read in bigdel_region_reads])
-    else:
-        region_reads = get_reads(args.bamFileName, args.refFasta, chrom, refstart, refend, float(svfrac), args.salt)
-        excl_reads_names = set([read.query_name for read in region_reads])
-        reads_ratio = len(mutseq.seq) / len(maxcontig.seq)
-        nsimreads = int(len(excl_reads_names) * reads_ratio)
+        if not excl_names:
+            logger.warning("%s no reads to replace, skipping site." % mutid)
+            return result
 
-    for name in excl_reads_names:
-        exclude.write(name + "\n")
-    exclude.close()
+        nsimreads = int(round(len(excl_names) * template.reads_ratio()))
+        if nsimreads < 1:
+            logger.warning("%s simulated read count rounds to zero, skipping site." % mutid)
+            return result
 
-    # simulate reads
-    (fq1, fq2) = runwgsim(maxcontig, mutseq.seq, pemean, pesd, args.tmpdir, nsimreads, err_rate=float(args.simerr), mutid=mutid, seed=args.seed, trn_contig=trn_maxcontig, rename=rename_reads)
+        readlen = args.readlen
+        if readlen is None:
+            readlen = svt.sample_read_length(bamfile, chrom, max(0, start - pad), end + pad)
+        if not readlen:
+            logger.warning("%s could not determine read length, skipping site." % mutid)
+            return result
 
-    remap_fastq(args.aligner, fq1, args.refFasta, outbam_mutsfile, alignopts, fq2=fq2, mutid=mutid, threads=int(args.alignerthreads))
+        exclfile = os.path.join(args.tmpdir, '.'.join((mutid, 'exclude', str(uuid4()), 'txt')))
+        with open(exclfile, 'w') as exclude:
+            for name in sorted(excl_names):
+                exclude.write(name + "\n")
 
-    if not check_min_read_count(outbam_mutsfile, args.refFasta, 0):
-        logger.warning("%s outbam %s has no mapped reads!" % (mutid, outbam_mutsfile))
-        # Remove content from logfile in order to skip this mutation in the final VCF file
-        logfile.seek(0)
-        logfile.truncate()
-        return None, None, None
+        # ---- simulate and realign ----
+        outbam_mutsfile = os.path.join(args.tmpdir, '.'.join((mutid, str(uuid4()), "muts.bam")))
 
-    if action == 'BIGDUP':
-        bdup_left_bnd = min(region_1_start, region_2_start, region_1_end, region_2_end)
-        bdup_right_bnd = max(region_1_start, region_2_start, region_1_end, region_2_end)
-        prev_outbam_mutsfile = outbam_mutsfile
-        outbam_mutsfile = add_donor_reads(args, mutid, outbam_mutsfile, chrom, bdup_left_bnd, bdup_right_bnd, float(svfrac))
-        os.remove(prev_outbam_mutsfile)
-        os.remove(prev_outbam_mutsfile + '.bai')
+        fq1, fq2 = runwgsim(template.seq, int(readlen), float(args.ismean), float(args.issd),
+                            args.tmpdir, nsimreads, mutid=mutid,
+                            err_rate=float(args.simerr), seed=args.seed)
 
-    logger.info("%s temporary bam: %s" % (mutid, outbam_mutsfile))
+        remap_fastq(args.aligner, fq1, args.refFasta, outbam_mutsfile, alignopts,
+                    fq2=fq2, mutid=mutid, threads=int(args.alignerthreads))
 
-    bamfile.close()
+        if not check_min_read_count(outbam_mutsfile, args.refFasta, 0):
+            logger.warning("%s outbam %s has no mapped reads!" % (mutid, outbam_mutsfile))
+            return result
 
-    return outbam_mutsfile, exclfile, mutinfo
+        if donor_interior:
+            prev = outbam_mutsfile
+            outbam_mutsfile = add_donor_reads(args, mutid, prev, chrom, start, end, vaf)
+            os.remove(prev)
+            if os.path.exists(prev + '.bai'):
+                os.remove(prev + '.bai')
 
+        # ---- report ----
+        if kind == 'BND':
+            record = MutationRecord(
+                kind='BND', chrom=chrom, pos=start, vaf=vaf, mutid=mutid,
+                mate_chrom=req['mate_chrom'], mate_pos=req['mate_pos'],
+                flip_left=req['flip_left'], flip_right=req['flip_right'])
+        else:
+            # an insertion reports where it landed inside the requested
+            # interval, and how much sequence it added; the others span
+            # exactly what was asked for
+            pos = template.event_pos if template.event_pos else start
+            record = MutationRecord(
+                kind=kind, chrom=chrom, pos=pos,
+                end=pos if kind == 'INS' else end,
+                svlen=template.event_len if kind == 'INS' else end - start,
+                vaf=vaf, mutid=mutid, ins_id=ins_id, tsdlen=int(req['tsdlen']),
+                ndups=int(req['ndups']), donor_interior=donor_interior)
 
+        logfile.write('%s\t%s\t%d\t%d\tvaf=%s\ttemplate_len=%d\texcluded=%d\tsimulated=%d\n'
+                      % (kind, chrom, start, end, vaf, len(template.seq),
+                         len(excl_names), nsimreads))
+
+        logger.info("%s temporary bam: %s" % (mutid, outbam_mutsfile))
+
+        result.bamfile = outbam_mutsfile
+        result.excludefile = exclfile
+        result.records = [record]
+
+    except svt.TemplateError as e:
+        logger.warning('%s %s' % (mutid, e))
+    except Exception:
+        logger.error('%s failed:' % mutid)
+        traceback.print_exc(file=sys.stderr)
+    finally:
+        logfile.close()
+        bamfile.close()
+
+    return result
 
 
 def main(args):
     logger.info("starting %s called with args: %s" % (sys.argv[0], ' '.join(sys.argv)))
     tmpbams = [] # temporary BAMs, each holds the realigned reads for one mutation
     exclfns = [] # 'exclude' files store reads to be removed from the original BAM due to deletions
+    records = [] # MutationRecords, become the truth VCF
 
     if (args.bamFileName.endswith('.bam') and not os.path.exists(args.bamFileName + '.bai')) or \
         (args.bamFileName.endswith('.cram') and not os.path.exists(args.bamFileName + '.crai')):
@@ -842,6 +497,9 @@ def main(args):
     # deriving it per-process is what made read selection vary with --procs.
     args.salt = make_salt(args.seed)
     logger.info("read selection salt: %s" % args.salt)
+
+    if args.minctglen is not None:
+        logger.warning('--minctglen is deprecated and ignored; use --pad to set the flank size')
 
     # load insertion library if present
     try:
@@ -858,164 +516,67 @@ def main(args):
 
     nmuts = 0
 
-    if not os.path.exists(args.tmpdir):
-        os.mkdir(args.tmpdir)
-        logger.info("created tmp directory: %s" % args.tmpdir)
+    logdir = 'addsv_logs_' + os.path.basename(args.outBamFile)
 
-    if not os.path.exists('addsv_logs_' + os.path.basename(args.outBamFile)):
-        os.mkdir('addsv_logs_' + os.path.basename(args.outBamFile))
-        logger.info("created log directory: addsv_logs_%s" % os.path.basename(args.outBamFile))
+    for d in (args.tmpdir, logdir):
+        if not os.path.exists(d):
+            os.mkdir(d)
+            logger.info("created directory: %s" % d)
 
-    assert os.path.exists('addsv_logs_' + os.path.basename(args.outBamFile)), "could not create output directory!"
+    assert os.path.exists(logdir), "could not create output directory!"
     assert os.path.exists(args.tmpdir), "could not create temporary directory!"
-
-    biginvs = {}
 
     with open(args.varFileName, 'r') as varfile:
         for bedline in varfile:
             bedline = bedline.strip()
 
-            if re.search('^#', bedline):
+            if bedline == '' or re.search('^#', bedline):
                 continue
 
             if args.maxmuts and nmuts >= int(args.maxmuts):
                 break
-            
-            fields = re.split(r"[\s]", bedline)
-            num_fields = len(fields)
-            if num_fields < 4:
-                raise ValueError("Invalid varfile line: %s" % bedline)
-            
-            chrom = fields[0]
-            start = int(fields[1])
-            end = int(fields[2])
-            mut_type = fields[3]
-            mut_len = end - start
 
-            if mut_type in ('DEL', 'DUP', 'INV') and mut_len > 10000:
-                logger.warning('%s is over 10kbp long: converting to use BIG%s instead.' % (bedline, mut_type))
-                mut_type = 'BIG' + mut_type
-                if mut_type == 'BIGDUP' and num_fields == 6: # convert DUP to BIGDUP
-                    fields = fields[:4] + [fields[-1]]
+            if ';' in bedline:
+                logger.error('compound (";"-chained) mutations are not supported, skipping: %s' % bedline)
+                continue
 
-            if mut_type.startswith('BIG') and mut_len < 5000:
-                mut_type = mut_type.replace('BIG', '')
-                logger.warning('%s is under 5kbp, "BIG" mutation types will yield unpredictable results, converting to %s' % (bedline, mut_type))
+            req = parse_varfile_line(bedline, float(args.svfrac))
+            req['index'] = nmuts
+            results.append(pool.submit(makemut, args, req, alignopts))
 
-            # rewrite biginv coords as translocations
-            if mut_type == 'BIGINV':
-                if num_fields == 5:
-                    binv_svfrac = float(fields[-1])
-                else:
-                    binv_svfrac = float(args.svfrac)
-
-                binv_mutid = '_'.join(map(str, (chrom, start, start, 'BIGINV')))
-                biginvs[binv_mutid] = (chrom, start, end, binv_svfrac)
-
-                fields_left = [chrom, start, start, 'BIGINV', chrom, end, end, '+-', binv_svfrac]
-                results.append(pool.submit(makemut, args, fields_left, alignopts))
-
-                fields_right = [chrom, start, start, 'BIGINV', chrom, end, end, '-+', binv_svfrac]
-                results.append(pool.submit(makemut, args, fields_right, alignopts))
-            
-            else:
-                # rewrite bigdel coords as translocation
-                if mut_type == 'BIGDEL':
-                    if num_fields == 5:
-                        bdel_svfrac = float(fields[-1])
-                    else:
-                        bdel_svfrac = float(args.svfrac)
-
-                    fields = [chrom, start, start, 'BIGDEL', chrom, end, end, '++', bdel_svfrac]
-
-                # rewrite bigdup coords as translocation
-                elif mut_type == 'BIGDUP':
-                    if num_fields == 6:
-                        bdup_svfrac = float(fields[-1])
-                    else:
-                        bdup_svfrac = float(args.svfrac)
-
-                    if args.donorbam is None:
-                        logger.warning('%s: using BIGDUP requires specifying a --donorbam and none was provided, using %s' % (bedline, args.bamFileName))
-                        args.donorbam = args.bamFileName
-
-                    fields = [chrom, end, end, 'BIGDUP', chrom, start, start, '++', bdup_svfrac]
-
-                # submit each mutation as its own thread
-                result = pool.submit(makemut, args, fields, alignopts)
-                results.append(result)
-            
             nmuts += 1
 
     ## process the results of mutation jobs
     for result in results:
-        tmpbam = None
-        exclfn = None
+        res = result.result()
 
-        tmpbam, exclfn, mutinfo = result.result()
-
-        if None not in (tmpbam, exclfn) and os.path.exists(tmpbam) and os.path.exists(exclfn):
-            if check_min_read_count(tmpbam, args.refFasta, 0):
-                tmpbams.append(tmpbam)
-                exclfns.append(exclfn)
+        if res.ok() and os.path.exists(res.bamfile) and os.path.exists(res.excludefile):
+            if check_min_read_count(res.bamfile, args.refFasta, 0):
+                tmpbams.append(res.bamfile)
+                exclfns.append(res.excludefile)
+                records.extend(res.records)
             else:
-                os.remove(tmpbam)
-                os.remove(exclfn)
+                os.remove(res.bamfile)
+                os.remove(res.excludefile)
 
     if len(tmpbams) == 0:
         logger.error("no succesful mutations")
         sys.exit(1)
 
-    biginv_pairs = dd(list)
-
-    new_tmpbams = []
-
-    for tmpbamfn in tmpbams:
-        mutid = os.path.basename(tmpbamfn).split('.')[0]
-        if mutid.endswith('BIGINV'):
-            biginv_pairs[mutid].append(tmpbamfn)
-        else:
-            new_tmpbams.append(tmpbamfn)
-
-    # find translocation pairs corresponding to BIGINV, merge pairs / remove singletons
-    for binv_pair in biginv_pairs.values():
-        if len(binv_pair) == 2:
-            logger.info('merging biginv pair and reversing unassembled interval: %s' % str(binv_pair))
-
-            binv_mutid = os.path.basename(binv_pair[0]).split('.')[0]
-
-            assert binv_mutid in biginvs
-
-            binv_chrom, binv_start, binv_end, binv_svfrac = biginvs[binv_mutid]
-
-            binv_left_end = start
-            binv_right_end = end
-            if binv_left_end > binv_right_end:
-                binv_left_end, binv_right_end = binv_right_end, binv_left_end
-
-            merged_binv = merge_multi_trn(args, alignopts, binv_pair, binv_chrom, binv_start, binv_end, binv_svfrac)
-            new_tmpbams.append(merged_binv)
-
-    tmpbams = new_tmpbams
-
     logger.info("tmpbams: %s" % tmpbams)
     logger.info("exclude: %s" % exclfns)
-
-    if len(tmpbams) == 0:
-        sys.exit('no tmp bams remain, nothing to do!')
 
     excl_merged = 'addsv.exclude.final.' + str(uuid4()) + '.txt'
     mergedtmp = 'addsv.mergetmp.final.' + str(uuid4()) + '.bam'
 
     logger.info("merging exclude files into %s" % excl_merged)
-    exclout = open(excl_merged, 'w')
-    for exclfn in exclfns:
-        with open(exclfn, 'r') as excl:
-            for line in excl:
-                exclout.write(line)
-        if not args.debug:
-            os.remove(exclfn)
-    exclout.close()
+    with open(excl_merged, 'w') as exclout:
+        for exclfn in exclfns:
+            with open(exclfn, 'r') as excl:
+                for line in excl:
+                    exclout.write(line)
+            if not args.debug:
+                os.remove(exclfn)
 
     if len(tmpbams) == 1:
         logger.info("only one bam: %s renaming to %s" % (tmpbams[0], mergedtmp))
@@ -1055,11 +616,11 @@ def main(args):
 
     vcf_fn = args.vcf + bam_basename + '.addsv.' + var_basename + '.vcf'
 
-    makevcf.write_vcf_sv('addsv_logs_' + os.path.basename(args.outBamFile), args.refFasta, vcf_fn, salt=args.salt)
+    makevcf.write_vcf_sv(records, args.refFasta, vcf_fn, salt=args.salt)
 
     logger.info('vcf output written to ' + vcf_fn)
 
-    
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='adds SVs to reads, outputs modified reads as .bam along with mates')
     parser.add_argument('-v', '--varfile', dest='varFileName', required=True,
@@ -1072,33 +633,33 @@ if __name__ == '__main__':
                         help='.bam file name for output')
     parser.add_argument('-l', '--maxlibsize', dest='maxlibsize', default=600,
                         help="maximum fragment length of seq. library")
-    parser.add_argument('-k', '--kmer', dest='kmersize', default=31, 
-                        help="kmer size for assembly (default = 31)")
-    parser.add_argument('-s', '--svfrac', dest='svfrac', default=1.0, 
+    parser.add_argument('-s', '--svfrac', dest='svfrac', default=1.0,
                         help="allele fraction of variant (default = 1.0)")
-    parser.add_argument('--require_exact', default=False, action='store_true',
-                        help="drop mutation if breakpoints cannot be made exactly as input")
+    parser.add_argument('--pad', default=None, type=int,
+                        help='reference flank each side of a breakpoint (default = 2x --maxlibsize)')
+    parser.add_argument('--readlen', default=None, type=int,
+                        help='simulated read length (default: modal read length sampled from the BAM)')
     parser.add_argument('--mindepth', default=10, type=int,
                         help='minimum read depth in the breakend position to make mutation (default = 10)')
     parser.add_argument('--maxdepth', default=2000, type=int,
                         help='maximum read depth in the breakend position to make mutation (default = 2000)')
     parser.add_argument('--maxdfrac', default=0.1, type=float,
                         help='maximum discordant fraction (is_proper_pair / is_pair) of reads (default = 0.1)')
-    parser.add_argument('--minctglen', dest='minctglen', default=4000,
-                        help="minimum length for contig generation, also used to pad assembly (default=4000)")
+    parser.add_argument('--minctglen', dest='minctglen', default=None,
+                        help=argparse.SUPPRESS)  # deprecated, see --pad
     parser.add_argument('-n', dest='maxmuts', default=None,
                         help="maximum number of mutations to make")
-    parser.add_argument('-c', '--cnvfile', dest='cnvfile', default=None, 
+    parser.add_argument('-c', '--cnvfile', dest='cnvfile', default=None,
                         help="tabix-indexed list of genome-wide absolute copy number values (e.g. 2 alleles = no change)")
     parser.add_argument('--donorbam', dest='donorbam', default=None,
-                        help='bam file for donor reads if using BIGDUP mutations')
-    parser.add_argument('--ismean', dest='ismean', default=300, 
+                        help='bam file supplying duplication interior reads; without it the interior is simulated')
+    parser.add_argument('--ismean', dest='ismean', default=300,
                         help="mean insert size (default = estimate from region)")
-    parser.add_argument('--issd', dest='issd', default=70, 
+    parser.add_argument('--issd', dest='issd', default=70,
                         help="insert size standard deviation (default = estimate from region)")
     parser.add_argument('--simerr', dest='simerr', default=0.0,
                         help='error rate for wgsim-generated reads')
-    parser.add_argument('-p', '--procs', dest='procs', default=1, 
+    parser.add_argument('-p', '--procs', dest='procs', default=1,
                         help="split into multiple processes (default=1)")
     parser.add_argument('--inslib', default=None,
                         help='FASTA file containing library of possible insertions, use INS RND instead of INS filename to pick one')
@@ -1121,9 +682,12 @@ if __name__ == '__main__':
     parser.add_argument('--seed', default=None, type=int,
                         help='seed random number generation')
     parser.add_argument('--allowN', action='store_true', default=False,
-                        help='allow N in contigs, replace with A and warn user (default: drop mutation)')
-    parser.add_argument('--vcf', default='', 
+                        help='allow N in the reference slice, replace with A and warn (default: drop mutation)')
+    parser.add_argument('--vcf', default='',
                         help="Path for the output VCF file. If not provided, the file will be saved in the current directory.")
     args = parser.parse_args()
-    main(args)
 
+    if args.pad is None:
+        args.pad = 2 * int(args.maxlibsize)
+
+    main(args)

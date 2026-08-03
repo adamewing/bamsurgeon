@@ -87,3 +87,73 @@ sv_mut.bam     41e2664d33bdf9a6a5936df440af47b0
 big_sv_mut.bam acbf01451bdc1f522d0369a9813c9ee1
 indel_mut.bam  543fbf10059ebafa24e1bb2fdb5d8c86
 ```
+
+---
+
+# After: reference-templated engine
+
+Same fixtures, same validator, same seed.
+
+| Fixture | velvet | reference-templated |
+|---|---|---|
+| `test_sv.txt` | 4/6 OK, 2 variants never emitted | **8/8 OK** |
+| `test_big_sv.txt` | 3/3 OK | **3/3 OK** |
+| `test_sv_inslib.txt` | not captured | **3/3 OK** |
+| `test_sv_empty_cols.txt` | not captured | **2/2 OK** |
+
+Coordinates are now exact for every fixture: output VCF POS equals the requested
+start and END equals the requested end, including for the `BIG*` spellings.
+The two cases that moved before:
+
+| | requested | velvet | templated |
+|---|---|---|---|
+| `DEL` | 33871043 | 33870241 (**-802**) | 33871043 |
+| `BIGDUP` | 33871043 | 33869245 (**-1798**) | 33871043 |
+
+`INV` and `DUP` from `test_sv.txt`, which velvet dropped over manufactured `N`
+bases, are now created.
+
+Insertions are the one kind whose POS is not the requested start, by design: the
+varfile gives an interval and the insertion is placed at its midpoint (or at a
+cut-site motif). Those positions match the velvet engine exactly (33610508,
+34172377), and the record now carries the inserted length as SVLEN and the
+target site duplication as TSDLEN, neither of which the old writer emitted.
+
+## Determinism
+
+`-p 1` and `-p 4` at the same seed now produce byte-identical output:
+
+```
+samtools view out.1.bam | md5sum   e77773df3028a1a581c792cc28943d88
+samtools view out.4.bam | md5sum   e77773df3028a1a581c792cc28943d88
+```
+
+Before Stage 2a the exclude lists alone differed by 2294 read names. Full BAM
+equality additionally required removing velvet, whose assembly was not
+reproducible across process counts.
+
+## Tabix
+
+The new writer sorts its output, so the truth VCF can be indexed. The old one
+walked `os.listdir()`:
+
+```
+old: [E::hts_idx_push] Unsorted positions on sequence #1: 34172377 followed by 33607508
+new: indexed OK
+```
+
+## Validator corrections made while measuring this
+
+Three defects in the Stage 1 validator surfaced only once there was a correct
+engine to compare against, and the numbers above are post-fix on both sides:
+
+- `INFO/END` was read with `rec.info.get('END')`, which htslib always returns
+  `None` for because it folds END into the record's `stop`. The DEL/DUP depth
+  corroboration had therefore never run.
+- SVs were graded against the requested VAF using the fraction of clipped or
+  indel-carrying reads. That fraction is not an allele fraction: only reads
+  spanning a junction can express it. SVs are now graded on presence and
+  position, with the DEL/DUP depth ratio as the one VAF-sensitive check.
+- A DEL or DUP shorter than ~50bp is emitted by the aligner as a CIGAR D or I
+  rather than as a clip, so the breakend detector found nothing. Short events
+  now route to CIGAR matching.

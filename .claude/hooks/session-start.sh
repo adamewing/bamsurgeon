@@ -3,7 +3,7 @@
 # Install BAMSurgeon's runtime and test dependencies so that a Claude Code on
 # the web session can actually run the tools and their tests.
 #
-# None of samtools/bwa/pysam/wgsim/picard ship in the base image, so without
+# None of samtools/bwa/pysam/picard ship in the base image, so without
 # this every test in test/ fails at the first subprocess call.
 
 set -euo pipefail

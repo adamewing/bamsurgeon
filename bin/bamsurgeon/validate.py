@@ -43,6 +43,7 @@ class Thresholds:
     sv_search_radius: int = 200  # how far to look for a shifted breakend
     sv_exact_tolerance: int = 5  # breakend within this many bp counts as exact
     sv_min_clip: int = 10        # soft-clip length that counts as breakend evidence
+    sv_small_bp: int = 50        # at or below this, a DEL/DUP reads as a CIGAR indel
     sv_pass_rate: float = 0.8    # fraction of SV sites that must be OK
 
 
@@ -249,6 +250,51 @@ def clip_profile(bam, chrom, start, end, min_clip=10):
     return profile
 
 
+def _observe_small_sv(bam, chrom, pos, svlen, svtype, thresholds,
+                      requested_vaf=None):
+    '''
+    Sub-read-length DEL and DUP, detected the way an aligner actually
+    represents them: a deletion of N bases is a CIGAR D of length N, and a
+    tandem duplication of N bases is a CIGAR I of length N.
+    '''
+    obs = SiteObservation()
+    want_op = 'D' if svtype == 'DEL' else 'I'
+    window = svlen + 1
+
+    lo = max(0, pos - window - svlen)
+    hi = pos + window + svlen + 1
+
+    for read in bam.fetch(chrom, lo, hi):
+        if not _primary(read):
+            continue
+        if not (read.reference_start <= pos < read.reference_end):
+            continue
+        obs.depth += 1
+        for op, length, refpos in _indel_events(read):
+            if op == want_op and length == svlen and abs(refpos - pos) <= window:
+                obs.alt_count += 1
+                break
+
+    if obs.depth:
+        obs.alt_fraction = obs.alt_count / float(obs.depth)
+
+    # Graded on presence, not VAF, for the same reason as the breakend path:
+    # only reads that span the whole event can express it, so the supporting
+    # fraction sits below the allele fraction by an amount that depends on
+    # event length and read length rather than on whether the spike-in worked.
+    if obs.depth < thresholds.min_depth:
+        obs.status = NO_COVERAGE
+    elif obs.alt_count < thresholds.min_alt_reads:
+        obs.status = ABSENT
+        obs.note = 'short %s: looked for %s%d within +/-%dbp of %d' % (
+            svtype, want_op, svlen, window, pos)
+    else:
+        obs.status = OK
+        obs.note = 'short %s matched as CIGAR %s%d' % (svtype, want_op, svlen)
+
+    return obs
+
+
 def _best_breakend(profile, expect, radius):
     ''' strongest clip peak within radius of expect -> (pos, support) '''
     best_pos, best_support = None, 0
@@ -268,19 +314,33 @@ def _mean_depth(bam, chrom, start, end):
 
 
 def observe_sv(bam, chrom, pos, thresholds, requested_vaf=None,
-               orig_bam=None, svtype=None, end=None):
+               orig_bam=None, svtype=None, end=None, tsdlen=0):
     '''
     Locate the breakend by soft-clip peak. If it is not at the requested
     position but is within sv_search_radius, report SHIFTED and the offset --
     that is the status that characterises the assembly-based engine, whose
     coordinates come from an exonerate alignment rather than from the request.
 
-    For DEL and DUP the interval depth is additionally compared against the
-    original BAM, which controls for regions that were simply low-coverage to
-    begin with.
+    SVs are deliberately not graded on VAF. The supporting fraction here is
+    clipped reads over local depth, which is not an allele fraction: only
+    reads that physically span a junction can clip, so even a VAF of 1.0
+    produces a fraction well below 1. Comparing it to a requested VAF, as
+    this function originally did, made correct spike-ins look like failures.
+    The fraction is still reported, and for DEL and DUP the interval depth is
+    compared against the original BAM, which is a sound VAF signal and can
+    fail a site whose copy number moved the wrong way.
     '''
     obs = SiteObservation()
     expect = pos - 1  # 0-based
+
+    # A short DEL or DUP is an indel-scale event: an aligner emits a CIGAR
+    # D or I for it rather than clipping, so the breakend detector below
+    # finds nothing to peak on. A 10bp tandem duplication is a 10bp
+    # insertion as far as the BAM is concerned.
+    svlen = (end - pos) if end else 0
+    if svtype in ('DEL', 'DUP') and 0 < svlen <= thresholds.sv_small_bp:
+        return _observe_small_sv(bam, chrom, pos, svlen, svtype, thresholds,
+                                 requested_vaf)
 
     radius = thresholds.sv_search_radius
     profile = clip_profile(bam, chrom, expect - radius, expect + radius + 1,
@@ -305,22 +365,28 @@ def observe_sv(bam, chrom, pos, thresholds, requested_vaf=None,
     obs.observed_pos = best_pos + 1  # back to 1-based for reporting
     obs.offset = obs.observed_pos - pos
 
-    if abs(obs.offset) > thresholds.sv_exact_tolerance:
+    # An insertion carrying a target site duplication puts tsdlen bases of
+    # reference-matching sequence after POS, so reads stop aligning at the
+    # far edge of the TSD rather than at POS itself. Both are the same event.
+    tolerated = [0]
+    if tsdlen:
+        tolerated.append(tsdlen)
+
+    if min(abs(obs.offset - t) for t in tolerated) > thresholds.sv_exact_tolerance:
         obs.status = SHIFTED
         obs.note = 'breakend found at %d (%+d)' % (obs.observed_pos, obs.offset)
         return obs
 
-    # depth corroboration for the two types that change copy number
+    obs.status = OK
+
+    # depth corroboration for the two kinds that change copy number; this is
+    # the only VAF-sensitive check applied to an SV
     if svtype in ('DEL', 'DUP') and end is not None and orig_bam is not None:
-        note = _depth_ratio_note(bam, orig_bam, chrom, pos, end, svtype)
+        note, contradicts = _depth_ratio_note(bam, orig_bam, chrom, pos, end, svtype)
         if note:
             obs.note = note
-
-    if requested_vaf is not None and \
-            obs.alt_fraction < requested_vaf * thresholds.vaf_ratio_min:
-        obs.status = LOW_VAF
-    else:
-        obs.status = OK
+        if contradicts:
+            obs.status = LOW_VAF
 
     return obs
 
@@ -329,8 +395,11 @@ def _depth_ratio_note(bam, orig_bam, chrom, start, end, svtype):
     '''
     Interval depth in the mutant relative to the original, normalised by the
     same ratio in the flanks. > 1 means sequence was added (DUP), < 1 means it
-    was removed (DEL). Reported as context, not used to fail a site: at low VAF
-    the shift is small and noisy.
+    was removed (DEL).
+
+    Returns (note, contradicts). A ratio that moved the wrong way is real
+    evidence the spike-in did not land, so it can fail a site; the magnitude
+    is not checked, since at low VAF the shift is small and noisy.
     '''
     span = max(1, end - start)
     flank = min(2000, max(200, span // 10))
@@ -341,19 +410,19 @@ def _depth_ratio_note(bam, orig_bam, chrom, start, end, svtype):
         mut_fl = _mean_depth(bam, chrom, start - flank, start)
         org_fl = _mean_depth(orig_bam, chrom, start - flank, start)
     except ValueError:
-        return ''
+        return '', False
 
     if not (org_in and mut_fl and org_fl):
-        return ''
+        return '', False
 
     normalised = (mut_in / org_in) / (mut_fl / org_fl)
     direction = 'depth ratio %.2f' % normalised
 
     if svtype == 'DEL' and normalised >= 1.0:
-        return direction + ' (expected < 1 for DEL)'
+        return direction + ' (expected < 1 for DEL)', True
     if svtype == 'DUP' and normalised <= 1.0:
-        return direction + ' (expected > 1 for DUP)'
-    return direction
+        return direction + ' (expected > 1 for DUP)', True
+    return direction, False
 
 
 def classify(rec):
@@ -364,7 +433,7 @@ def classify(rec):
     bare REF/ALT, write_vcf_indel emits bare REF/ALT with differing lengths, and
     write_vcf_sv emits SVTYPE plus a symbolic or breakend ALT.
     '''
-    svtype = rec.info.get('SVTYPE')
+    svtype = info_get(rec, 'SVTYPE')
     if svtype:
         return str(svtype)
 
@@ -382,9 +451,28 @@ def classify(rec):
     return 'INDEL'
 
 
+def info_get(rec, key, default=None):
+    '''
+    INFO lookup that tolerates undeclared keys.
+
+    pysam raises ValueError('Invalid header') for a key the VCF header does
+    not define, rather than returning None, so a truth VCF written by an
+    older bamsurgeon blows up on fields added later.
+    '''
+    try:
+        value = rec.info.get(key, default)
+    except (ValueError, KeyError):
+        return default
+
+    if isinstance(value, (tuple, list)):
+        return value[0] if value else default
+
+    return default if value is None else value
+
+
 def requested_vaf(rec):
     ''' bamsurgeon writes VAF= into INFO on every record it emits '''
-    vaf = rec.info.get('VAF')
+    vaf = info_get(rec, 'VAF')
     if vaf is None:
         return None
     if isinstance(vaf, (tuple, list)):
@@ -424,12 +512,18 @@ def validate_vcf(truth_vcf, mutant_bam, ref_fasta, orig_bam=None,
                     report.observation = observe_indel(
                         bam, rec.chrom, rec.pos, rec.ref, alt, thresholds, vaf)
                 else:
-                    end = rec.info.get('END')
-                    if isinstance(end, (tuple, list)):
-                        end = end[0]
+                    # htslib folds INFO/END into the record's stop, so
+                    # info['END'] reads back as None even when the text
+                    # carries it. rec.stop is the reliable accessor.
+                    end = rec.stop
+                    if not end or end <= rec.pos:
+                        end = info_get(rec, 'END')
+
+                    tsdlen = info_get(rec, 'TSDLEN', 0) or 0
+
                     report.observation = observe_sv(
                         bam, rec.chrom, rec.pos, thresholds, vaf,
-                        orig_bam=orig, svtype=kind, end=end)
+                        orig_bam=orig, svtype=kind, end=end, tsdlen=int(tsdlen))
             except ValueError as e:
                 # contig absent from the BAM, or a coordinate off the end of it
                 report.observation = SiteObservation(

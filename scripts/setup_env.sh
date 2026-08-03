@@ -2,9 +2,6 @@
 #
 # Install everything BAMSurgeon needs to run and to run its test suite.
 # Idempotent: safe to re-run, skips anything already present.
-#
-# velvet and exonerate are only required by the pre-2.x assembly-based addsv
-# path. They are marked LEGACY below and can be dropped once that path is gone.
 
 set -euo pipefail
 
@@ -17,9 +14,7 @@ log() { printf '\n=== %s ===\n' "$1"; }
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
-APT_PKGS=(samtools bcftools bwa minimap2 build-essential zlib1g-dev default-jre)
-# LEGACY: required only by the velvet/exonerate addsv path.
-APT_PKGS+=(velvet exonerate)
+APT_PKGS=(samtools bcftools bwa minimap2 tabix build-essential zlib1g-dev default-jre)
 
 missing=()
 for pkg in "${APT_PKGS[@]}"; do

@@ -42,26 +42,6 @@ wget https://github.com/broadinstitute/picard/releases/download/1.131/picard-too
 unzip picard-tools-1.131.zip
 ```
 
-Exonerate
-
-```
-git clone https://github.com/adamewing/exonerate.git
-cd exonerate
-git checkout v2.4.0
-autoreconf -i
-./configure && make && make check && make install
-```
-
-Velvet
-
-```
-git clone https://github.com/dzerbino/velvet.git
-cd velvet
-make
-cp velvetg $HOME/bin
-cp velveth $HOME/bin
-```
-
 Pysam
 
 ```

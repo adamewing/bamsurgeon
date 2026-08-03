@@ -23,8 +23,6 @@ BAMSurgeon requires the following software packages be available:
   \item samtools/wgsim/tabix (\url{http://samtools.sourceforge.net/})
   \item pysam (\url{http://code.google.com/p/pysam/} or \texttt{pip install pysam})
   \item bwa (\url{http://bio-bwa.sourceforge.net/})
-  \item velvet (\url{http://www.ebi.ac.uk/~zerbino/velvet/})
-  \item exonerate (\url{https://github.com/nathanweeks/exonerate})
   \item picard (\url{http://http://picard.sourceforge.net/})
 \end{enumerate}
 
@@ -289,9 +287,9 @@ For deletions, the sequence from the start to the end (columns two and three) is
 \subsection{Usage}
 \begin{verbatim}
 usage: addsv.py [-h] -v VARFILENAME -f BAMFILENAME -r REFFASTA -o OUTBAMFILE
-  [-l MAXLIBSIZE] [-k KMERSIZE] [-s SVFRAC] [--require_exact]
+  [-l MAXLIBSIZE] [-s SVFRAC] [--pad PAD] [--readlen READLEN]
   [--mindepth MINDEPTH] [--maxdepth MAXDEPTH]
-  [--maxdfrac MAXDFRAC] [--minctglen MINCTGLEN] [-n MAXMUTS]
+  [--maxdfrac MAXDFRAC] [-n MAXMUTS]
   [-c CNVFILE] [--donorbam DONORBAM] [--ismean ISMEAN]
   [--issd ISSD] [--simerr SIMERR] [-p PROCS] [--inslib INSLIB]
   [--aligner ALIGNER] [--alignopts ALIGNOPTS]
@@ -315,26 +313,24 @@ options:
           .bam file name for output
 -l MAXLIBSIZE, --maxlibsize MAXLIBSIZE
           maximum fragment length of seq. library
--k KMERSIZE, --kmer KMERSIZE
-          kmer size for assembly (default = 31)
 -s SVFRAC, --svfrac SVFRAC
           allele fraction of variant (default = 1.0)
---require_exact       drop mutation if breakpoints cannot be made exactly as
-          input
+--pad PAD             reference flank each side of a breakpoint
+          (default = 2x --maxlibsize)
+--readlen READLEN     simulated read length (default: modal read length
+          sampled from the BAM)
 --mindepth MINDEPTH   minimum read depth in the breakend position to make
           mutation (default = 10)
 --maxdepth MAXDEPTH   maximum read depth in the breakend position to make
           mutation (default = 2000)
 --maxdfrac MAXDFRAC   maximum discordant fraction (is_proper_pair / is_pair)
           of reads (default = 0.1)
---minctglen MINCTGLEN
-          minimum length for contig generation, also used to pad
-          assembly (default=4000)
 -n MAXMUTS            maximum number of mutations to make
 -c CNVFILE, --cnvfile CNVFILE
           tabix-indexed list of genome-wide absolute copy number
           values (e.g. 2 alleles = no change)
---donorbam DONORBAM   bam file for donor reads if using BIGDUP mutations
+--donorbam DONORBAM   bam file supplying duplication interior reads;
+          without it the interior is simulated
 --ismean ISMEAN       mean insert size (default = estimate from region)
 --issd ISSD           insert size standard deviation (default = estimate
           from region)
@@ -357,7 +353,7 @@ options:
           intermediates
 --tmpdir TMPDIR       temporary directory (default=addsv.tmp)
 --seed SEED           seed random number generation
---allowN              allow N in contigs, replace with A and warn user
+--allowN              allow N in the reference slice, replace with A and warn
           (default: drop mutation)
 --vcf VCF             Path for the output VCF file. If not provided, the
           file will be saved in the current directory.
@@ -368,7 +364,7 @@ options:
    Larger structural variants (insertions, deletions, duplications, inversions, and compound rearrangements) are added to existing BAM alignments using \texttt{addsv.py} as described in Figure 3. Input consists of a list of regions where SVs will be made along with a specification of each variant, and as with addsnv and addindel, a target BAM alignment, and a reference genome indexed using bwa are required.
 
 \subsection{Input}
-    The input mutation list consists of four columns: chromosome, start of region, end of region, and a controlled-vocabulary description of the mutation. A mutation will not be made if the largest contig obtained from local assembly of the specified region is less than 3 times the maximum expected library size (specified by \texttt{-l/--maxlibsize}). The mutation description starts with either \texttt{INS, DEL, DUP, TRN}, or \texttt{INV} for insertion, deletion, duplication, transduction, and inversion, respectively and is followed by mutation-specific options. An example follows.
+    The input mutation list consists of four columns: chromosome, start of region, end of region, and a controlled-vocabulary description of the mutation. The mutated haplotype is built from reference sequence spanning the region plus \texttt{--pad} bases either side (\texttt{--pad} defaults to twice \texttt{-l/--maxlibsize}), so that simulated read pairs crossing each junction are fully contained. The mutation description starts with either \texttt{INS, DEL, DUP, TRN}, or \texttt{INV} for insertion, deletion, duplication, transduction, and inversion, respectively and is followed by mutation-specific options. An example follows.
 
 \begin{verbatim}
 22 34171055 34184700 INS ACTAACCTGCACAATGTGCACATGTACCCTAAAACTTAGAGTATAATAAAAAAAA 13 AA^TTTT 0.8
@@ -381,17 +377,17 @@ options:
 
    For translocations (\texttt{TRN}), the above example will join the 6kbp region centered on 22:33607508 and the 6kpb region centered on 22:34314981. The variant allele fraction (VAF) is specified in the last column (0.9 in the above example).
 
-    For insertions, \texttt{INS} should be followed by either a FASTA file containing the sequence to be inserted, by the nucleotide sequence itself, or by RND if a library of potential insertion sequences is passed in FASTA format via the --inslib option. For example, \texttt{INS ATG} would insert the sequence \texttt{``ATG''} in the middle of the largest contig obtained from the specified region, while \texttt{INS LINE1.fa} would insert the sequence in the FASTA-formatted file \texttt{LINE1.fa} into the largest contig. Many insertions include target site duplications (TSDs), so to simulate this an integer value can be added in the fifth column of insertion entries specifying the TSD length. Endonuclease motifs are another common feature of insertion breakpoints, so to simulate this, a preferred cut site can be defined in the 6th column of an insertion entry with the syntax NNN\^{}NNN where 'NNN' denotes sequence of any length composed of characters (A, T, G, C) with the actual cut site in the motif specified by the caret (\^{}). An optional seventh column can be used to specifiy the VAF, 0.8 in the example above.
+    For insertions, \texttt{INS} should be followed by either a FASTA file containing the sequence to be inserted, by the nucleotide sequence itself, or by RND if a library of potential insertion sequences is passed in FASTA format via the --inslib option. For example, \texttt{INS ATG} would insert the sequence \texttt{``ATG''} at the midpoint of the specified region, while \texttt{INS LINE1.fa} would insert the sequence in the FASTA-formatted file \texttt{LINE1.fa} there. The VCF records the position the insertion actually landed at, which is the midpoint unless a cut-site motif moved it. Many insertions include target site duplications (TSDs), so to simulate this an integer value can be added in the fifth column of insertion entries specifying the TSD length. Endonuclease motifs are another common feature of insertion breakpoints, so to simulate this, a preferred cut site can be defined in the 6th column of an insertion entry with the syntax NNN\^{}NNN where 'NNN' denotes sequence of any length composed of characters (A, T, G, C) with the actual cut site in the motif specified by the caret (\^{}). An optional seventh column can be used to specifiy the VAF, 0.8 in the example above.
     
-    For deletions  \texttt{DEL} is optionally followed by specifying the per-mutation VAF (0.75 in the example above). Inversions (\texttt{INV}) have no further options aside from an optional VAF column - the region inside the largest contig will be inverted. Duplications (\texttt{DUP}) have two optional parameters, an integer specifying the number of times the sequence of the largest contig should be duplicated, e.g. \texttt{DUP 2} specifies the region is duplicated twice, and a VAF column. In general, we recommend that short insertions and deletions (those shorter than one read length) be created with addindel.py instead of addsv.py as addindel.py does not require reconstruction of the region through sequence assembly and is thus less error-prone.
+    For deletions  \texttt{DEL} is optionally followed by specifying the per-mutation VAF (0.75 in the example above). Inversions (\texttt{INV}) have no further options aside from an optional VAF column - the specified region will be inverted. Duplications (\texttt{DUP}) have two optional parameters, an integer specifying the number of additional tandem copies, e.g. \texttt{DUP 2} adds two extra copies, and a VAF column. In general, we recommend that short insertions and deletions (those shorter than one read length) be created with addindel.py instead of addsv.py, as addindel.py edits existing reads rather than simulating replacements.
 
-    Compound variants are also possible by chaining a number of mutations together in a semicolon-delimited list, e.g. \texttt{DUP 1;DEL 0.5;INS AAATCC;INV} would duplicate the region inside the largest contig once, delete half the width of the region, insert the sequence \texttt{AAATCC}, and invert the region (not currently supported with transductions). Good luck!
+    Compound variants chained together in a semicolon-delimited list, e.g. \texttt{DUP 1;DEL 0.5;INS AAATCC;INV}, are not currently supported: such lines are reported and skipped rather than being applied partially.
 
 \subsection{Mutation Size}
-Mutation types DEL, DUP, and INV are created within a single contig unless they are greater than 10kbp in length. Larger mutations are created using TRN mutations as the breakpoints with coverage adjustments to the intervening region. Internally these mutation types are named BIGDEL, BIGDUP, and BIGINV which can be specified in the variant input file but will be converted to DEL, DUP, and INV, respectively, if they are less than 5kbp in length. For duplications, the additional reads are supplied through a BAM file specified by the \texttt{--donorbam} parameter. If \texttt{--donorbam} is not given the BAM specified by \texttt{-f/--bamfile} is used instead (which is not ideal!). Ideally the donor BAM and the input BAM would be seperate partitions of the same higher coverage BAM.
+Mutation types DEL, DUP, and INV are handled identically regardless of size: the mutated haplotype is built from reference sequence spanning the interval plus \texttt{--pad} bases either side, and reads are simulated over it. The names BIGDEL, BIGDUP, and BIGINV are accepted as deprecated spellings of DEL, DUP, and INV and are treated identically; there is no longer a size threshold that switches between implementations. For duplications, the interior copy is simulated by default. Supplying \texttt{--donorbam} instead takes the interior reads from that BAM, which keeps the simulated template small for large duplications and gives the interior a real error profile. Ideally the donor BAM and the input BAM would be seperate partitions of the same higher coverage BAM.
 
 \subsection{Exact Breakpoints}
-BAMSurgeon will prefer to create the user input breakpoints unless the assembled contig does not cover the breakpoint position. If \texttt{--require\_exact} is specified, mutations that do not cover the user input breakpoint(s) will be dropped. In any case, the mutation positions output by the \texttt{makevcf\_sv.py} script will reflect the actual breakpoints added.
+Breakpoints are created at the requested positions. Because the mutated haplotype is built from reference sequence rather than from a local assembly, the coordinates in the output VCF are exact by construction and match the input.
 
 \subsection{Controlling SV VAF}
 Variant allele fraction for \texttt{addsv.py} can be controlled either via the \texttt{-c/--cnvfile} option (see Section 2.3) or through addition of a column in the input file (float value between 0.0 and 1.0). Note that all other optional columns must be specified for the VAF column to be effective, which means the input format for \texttt{addsv.py} really needs an overhaul.
@@ -404,13 +400,12 @@ Here are some extended descriptions for additional options not mentioned yet:
      
 \begin{itemize}
 \item -s/--svfrac : equivalent to -m/--mutfrac for addindel.py and addsnv.py
-\item -k/--kmer : kmer size to be fed to velvet, which is used for assembly
 \item -n : only attempt this many mutations
 \item --ismean/--issd : the mean and standard deviation of the library size should be estimated from the original bam and specified through these arguments. This can be accomplished a number of ways, I suggest CollectInsertSizeMetrics from the picard tools.
 \item --simerr : control sequencing error rate around breakends
 \item --inslib : a FASTA file can be specified and insertions can be tagged with RND instead of a sequence or file. If this is done, a sequence will be chosen at random from the FASTA file specified by --inslib and inserted.
 \item --skipmerge : same meaning as for addsnv/addindel
-\item --allowN : useful if desired mutations are being dropped due to one or more N bases present in the assembled contig
+\item --allowN : useful if desired mutations are being dropped due to one or more N bases present in the reference sequence of the region
 \end{itemize}
 
 \section{Output (all tools)}
@@ -428,7 +423,7 @@ Here are some extended descriptions for additional options not mentioned yet:
 \begin{figure}[!h]
 \centering
 \includegraphics[width=5.5in]{bamsurgeon_sv_del.eps}
-\caption{Method for adding multi-nucleotide variants (indels and SVs) to existing BAMs: deletion example. Starting with the original BAM alignment (a) regions, e.g. (b), are assembled using Velvet/Columbus (\texttt{http://www.ebi.ac.uk/~zerbino/velvet/}) and the desired mutation(s) are created in the largest contig. Read coverage is simulated over the contig using wgsim (\texttt{https://github.com/lh3/wgsim}, also included with samtools) with parameters \texttt{-e 0 -r 0 -R 0} to suppress additional mutations, other parameters are set based on the input BAM and desired coverage. Simulated coverage is scaled based on whether the mutation is adds sequence (duplication) or removes sequence (deletions), and replaced into the original BAM while excluded reads are removed from the original BAM (d).}
+\caption{Method for adding multi-nucleotide variants (indels and SVs) to existing BAMs: deletion example. Starting with the original BAM alignment (a) the mutated haplotype for a region, e.g. (b), is built directly from reference sequence and the desired mutation(s) are created in it. Read coverage is simulated over this haplotype using wgsim (\texttt{https://github.com/lh3/wgsim}, also included with samtools) with parameters \texttt{-e 0 -r 0 -R 0} to suppress additional mutations, other parameters are set based on the input BAM and desired coverage. Simulated coverage is scaled based on whether the mutation is adds sequence (duplication) or removes sequence (deletions), and replaced into the original BAM while excluded reads are removed from the original BAM (d).}
 \end{figure}
 
 \section{Testing}

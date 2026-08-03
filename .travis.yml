@@ -19,21 +19,6 @@ install:
     - wget https://github.com/broadinstitute/picard/releases/download/2.27.3/picard.jar
     - chmod +x picard.jar
 
-    ## Exonerate
-    - git clone https://github.com/adamewing/exonerate.git
-    - cd exonerate
-    - git checkout v2.4.0
-    - autoreconf -i
-    - ./configure --prefix=$WORKDIR && make && make install
-    - cd ..
-
-    # Velvet
-    - wget https://github.com/dzerbino/velvet/archive/refs/tags/v1.2.10.tar.gz
-    - tar xvzf v1.2.10.tar.gz
-    - sudo make -C velvet-1.2.10
-    - sudo cp velvet-1.2.10/velvetg $WORKDIR/bin/
-    - sudo cp velvet-1.2.10/velveth $WORKDIR/bin/
-
     ## BWA
     - git clone https://github.com/lh3/bwa.git
     - sudo make -C bwa

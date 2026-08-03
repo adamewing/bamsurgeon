@@ -5,6 +5,133 @@ import pysam
 import datetime
 import hashlib
 
+from bamsurgeon.records import INTERVAL_KINDS
+
+
+SV_HEADER_LINES = (
+    '##INFO=<ID=SVTYPE,Number=1,Type=String,Description="Type of structural variant">',
+    '##INFO=<ID=SVLEN,Number=1,Type=Integer,Description="Difference in length between REF and ALT alleles">',
+    '##INFO=<ID=END,Number=1,Type=Integer,Description="End position of the variant described in this record">',
+    '##INFO=<ID=SOMATIC,Number=0,Type=Flag,Description="Somatic mutation in primary">',
+    '##INFO=<ID=PRECISE,Number=0,Type=Flag,Description="Precise structural variation">',
+    '##INFO=<ID=VAF,Number=1,Type=Float,Description="Variant allele frequency">',
+    '##INFO=<ID=MATEID,Number=1,Type=String,Description="Breakend mate">',
+    '##INFO=<ID=NDUPS,Number=1,Type=Integer,Description="Number of additional tandem copies">',
+    '##INFO=<ID=TSDLEN,Number=1,Type=Integer,Description="Target site duplication length">',
+    '##ALT=<ID=DEL,Description="Deletion">',
+    '##ALT=<ID=DUP,Description="Duplication">',
+    '##ALT=<ID=INV,Description="Inversion">',
+    '##ALT=<ID=INS,Description="Insertion">',
+    '##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">',
+)
+
+
+def sv_variant_header(ref_fa, salt=None):
+    ''' VariantHeader built from the reference .fai '''
+    header = pysam.VariantHeader()
+
+    fa = pysam.Fastafile(ref_fa)
+    for contig in fa.references:
+        header.add_line('##contig=<ID=%s,length=%d>'
+                        % (contig, fa.get_reference_length(contig)))
+
+    header.add_line('##fileDate=%s' % str(datetime.date.today()))
+    header.add_line('##phasing=none')
+    if salt is not None:
+        header.add_line('##bamsurgeonSalt=%s' % salt)
+    header.add_line('##INDIVIDUAL=TRUTH')
+    header.add_line('##SAMPLE=<ID=TRUTH,Individual="TRUTH",Description="BAMSurgeon spike-in">')
+
+    for line in SV_HEADER_LINES:
+        header.add_line(line)
+
+    header.add_sample('SPIKEIN')
+
+    return header
+
+
+def _breakend_alts(rec, base1, base2):
+    '''
+    The four bracket forms. Preserved from the previous writer, which built
+    these by hand from a log line.
+    '''
+    bracket1 = ']' if rec.flip_right else '['
+    prefix1, suffix1 = ('', base1) if rec.flip_left else (base1, '')
+    bracket2 = '[' if rec.flip_left else ']'
+    prefix2, suffix2 = (base2, '') if rec.flip_right else ('', base2)
+
+    alt1 = '%s%s%s:%d%s%s' % (prefix1, bracket1, rec.mate_chrom, rec.mate_pos,
+                              bracket1, suffix1)
+    alt2 = '%s%s%s:%d%s%s' % (prefix2, bracket2, rec.chrom, rec.pos,
+                              bracket2, suffix2)
+    return alt1, alt2
+
+
+def write_vcf_sv(records, ref_fa, vcf_fn, salt=None):
+    '''
+    Write SV truth records, sorted by coordinate.
+
+    The previous writer walked os.listdir(logdir) and re-parsed per-mutation
+    log lines, so output order was arbitrary and the result could not be
+    tabix-indexed -- meaning bamsurgeon could not produce input that its own
+    evaluator.py would accept.
+    '''
+    header = sv_variant_header(ref_fa, salt=salt)
+    ref = pysam.Fastafile(ref_fa)
+
+    order = {c: i for i, c in enumerate(header.contigs)}
+
+    def base_at(chrom, pos):
+        return ref.fetch(chrom, pos - 1, pos).upper() or 'N'
+
+    rows = []
+
+    for rec in records:
+        if rec.kind == 'BND':
+            base1 = base_at(rec.chrom, rec.pos)
+            base2 = base_at(rec.mate_chrom, rec.mate_pos)
+            alt1, alt2 = _breakend_alts(rec, base1, base2)
+
+            id1 = hashlib.md5(rec.key().encode()).hexdigest()
+            id2 = hashlib.md5((rec.key() + '|mate').encode()).hexdigest()
+
+            rows.append((rec.chrom, rec.pos, id1, base1, alt1,
+                         {'SVTYPE': 'BND', 'PRECISE': True, 'SOMATIC': True,
+                          'MATEID': id2, 'VAF': rec.vaf}, None))
+            rows.append((rec.mate_chrom, rec.mate_pos, id2, base2, alt2,
+                         {'SVTYPE': 'BND', 'PRECISE': True, 'SOMATIC': True,
+                          'MATEID': id1, 'VAF': rec.vaf}, None))
+
+        elif rec.kind in INTERVAL_KINDS:
+            info = {'SVTYPE': rec.kind, 'PRECISE': True, 'SOMATIC': True,
+                    'SVLEN': int(rec.svlen), 'VAF': rec.vaf}
+            if rec.kind == 'DUP' and rec.ndups:
+                info['NDUPS'] = int(rec.ndups)
+            if rec.kind == 'INS' and rec.tsdlen:
+                info['TSDLEN'] = int(rec.tsdlen)
+
+            rows.append((rec.chrom, rec.pos, rec.ins_id or '.',
+                         base_at(rec.chrom, rec.pos), '<%s>' % rec.kind,
+                         info, rec.end))
+
+    rows.sort(key=lambda r: (order.get(r[0], len(order)), r[1]))
+
+    with pysam.VariantFile(vcf_fn, 'w', header=header) as out:
+        for chrom, pos, rid, refbase, alt, info, end in rows:
+            vrec = out.new_record(
+                contig=chrom,
+                start=pos - 1,
+                stop=end if end is not None else pos,
+                alleles=(refbase, alt),
+                id=None if rid == '.' else rid,
+                qual=100,
+                filter='PASS',
+            )
+            for k, v in info.items():
+                vrec.info[k] = v
+            vrec.samples['SPIKEIN']['GT'] = (None, None)
+            out.write(vrec)
+
 
 def vcf_header(ref_fa, salt=None):
     contigs = ''
@@ -101,99 +228,3 @@ def write_vcf_indel(logdir, ref_fa, vcf_fn):
                             vcf_out.write('\t'.join((chrom, start, '.', ref, alt, '100',
                                           'PASS', ';'.join(info), 'GT', '0/1')) + '\n')
 
-
-def sv_vcf_line(chrom, bnd1, bnd2, precise, type, svlen, ref, id, svfrac, fh):
-    base1 = ref.fetch(chrom, bnd1-1, bnd1).upper()
-
-    alt = '<' + type.upper() + '>'
-
-    info = []
-    if not precise:
-        info.append('IMPRECISE')
-        info.append('CIPOS=-100,100')
-        info.append('CIEND=-100,100')
-
-    info.append('SOMATIC')
-    info.append('SVTYPE=' + type.upper())
-    info.append('END=' + str(bnd2))
-    info.append('SVLEN=' + str(abs(svlen)))
-    info.append('VAF=' + svfrac)
-
-    infostr = ';'.join(info)
-
-    fh.write('\t'.join((chrom, str(bnd1), id, base1, alt, '100', 'PASS', infostr, 'GT', './.')) + '\n')
-
-
-def sv_vcf_precise_interval(mutline, ref, fh):
-    precise = True
-    m = mutline.split()
-    chrom, refstart, refend = m[1:4]
-    svfrac = m[-1]
-    refstart = int(refstart)
-    refend = int(refend)
-    id_ = '.'
-
-    if m[0].startswith('big'):
-        bnd1 = int(m[2])+int(m[5])
-        bnd2 = int(m[7])+int(m[9])
-        bnd1, bnd2 = sorted([bnd1, bnd2])
-        m[0] = m[0].replace('big', '')
-    elif m[0] == 'ins':
-        bnd1 = refstart+int(m[6])
-        length = int(m[9])
-        bnd2 = bnd1 + length
-        id_ = m[7] if m[7] != 'None' else '.'
-    elif m[0] == 'trn':
-        chr1 = chrom
-        chr2 = m[6]
-
-        bnd1 = int(m[2])+int(m[5])
-        bnd2 = int(m[7])+int(m[9])
-
-        id1 = hashlib.md5(mutline.encode()).hexdigest()
-        id2 = hashlib.md5((mutline+mutline).encode()).hexdigest()
-
-        base1 = ref.fetch(chr1, bnd1-1, bnd1).upper()
-        base2 = ref.fetch(chr2, bnd2-1, bnd2).upper()
-
-        flip_left = True if m[10] == 'True' else False
-        flip_right = True if m[11] == 'True' else False
-        bracket1 = '[' if not flip_right else ']'
-        prefix1, suffix1 = (base1, '') if not flip_left else ('', base1)
-        bracket2 = '[' if flip_left else ']'
-        prefix2, suffix2 = (base2, '') if flip_right else ('', base2)
-
-        alt1 = prefix1 + bracket1 + chr2 + ':' + str(bnd2) + bracket1 + suffix1
-        alt2 = prefix2 + bracket2 + chr1 + ':' + str(bnd1) + bracket2 + suffix2
-
-        fh.write('\t'.join((chr1, str(bnd1), id1, base1, alt1, '100', 'PASS',
-                 'SOMATIC;SVTYPE=BND;PRECISE;MATEID='+id2+';VAF='+svfrac, 'GT', './.')) + '\n')
-        fh.write('\t'.join((chr2, str(bnd2), id2, base2, alt2, '100', 'PASS',
-                 'SOMATIC;SVTYPE=BND;PRECISE;MATEID='+id1+';VAF='+svfrac, 'GT', './.')) + '\n')
-    else:
-        contigstart = int(m[6])
-        contigend = int(m[7])
-        bnd1 = refstart + contigstart
-        bnd2 = refstart + contigend
-
-    if m[0] != 'trn':
-        sv_vcf_line(chrom, bnd1, bnd2, precise, m[0], bnd2-bnd1, ref, id_, svfrac, fh)
-
-
-def write_vcf_sv(logdir, ref_fa, vcf_fn, salt=None):
-    header = vcf_header(ref_fa, salt=salt)
-
-    ref = pysam.Fastafile(ref_fa)
-
-    logdir_files = os.listdir(logdir)
-
-    with open(vcf_fn, 'w') as vcf_out:
-        vcf_out.write(header + '\n')
-
-        for filename in logdir_files:
-            if filename.endswith('.log'):
-                with open(logdir + '/' + filename, 'r') as log:
-                    for line in log:
-                        for mutype in ('ins', 'del', 'inv', 'dup', 'trn', 'bigdup', 'biginv', 'bigdel'):
-                            if line.startswith(mutype):
-                                sv_vcf_precise_interval(line.strip(), ref, vcf_out)
