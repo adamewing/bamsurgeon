@@ -448,7 +448,7 @@ def run():
     parser.add_argument('-d', '--coverdiff', dest='coverdiff', default=0.9, help="allow difference in input and output coverage (default=0.9)")
     parser.add_argument('-z', '--haplosize', default=0, help='haplotype size (default = 0)')
     parser.add_argument('-p', '--procs', dest='procs', default=1, help="split into multiple processes (default=1)")
-    parser.add_argument('--picardjar', required=True, help='path to picard.jar, required for most aligners')
+    parser.add_argument('--picardjar', default=os.environ.get('BAMSURGEON_PICARD_JAR'), help='path to picard.jar, required for most aligners (default: $BAMSURGEON_PICARD_JAR)')
     parser.add_argument('--mindepth', default=10, help='minimum read depth to make mutation (default = 10)')
     parser.add_argument('--maxdepth', default=2000, help='maximum read depth to make mutation (default = 2000)')
     parser.add_argument('--minmutreads', default=3, help='minimum number of mutated reads to output per site')
@@ -472,8 +472,8 @@ def run():
     parser.add_argument('--vcf', default='', help="Path for the output VCF file. If not provided, the file will be saved in the current directory.")
     args = parser.parse_args()
 
-    if 'BAMSURGEON_PICARD_JAR' in os.environ:
-        args.picardjar = os.environ['BAMSURGEON_PICARD_JAR']
+    if args.picardjar is None:
+        parser.error('--picardjar is required, or set BAMSURGEON_PICARD_JAR in the environment')
 
     main(args)
 
