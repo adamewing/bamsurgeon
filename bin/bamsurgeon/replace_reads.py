@@ -219,4 +219,4 @@ if __name__=='__main__':
     parser.add_argument('--keepsupplementary', action='store_true', default=False, help='keep supplementary reads in final BAM')    
     args = parser.parse_args()
 
-    replace_reads(args.targetbam, args.donorbam, args.outputbam, args.namechange, args.refFasta, args.exclfile, args.all, args.keepqual, args.progress, args.keepsecondary,args.keepsupplementary)
+    replace_reads(args.targetbam, args.donorbam, args.outputbam, args.refFasta, args.namechange, args.exclfile, args.all, args.keepqual, args.progress, args.keepsecondary, args.keepsupplementary)

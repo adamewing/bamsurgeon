@@ -1,0 +1,26 @@
+##fileformat=VCFv4.1
+##fileDate=2026-08-03
+##phasing=none
+##contig=<ID=22,length=51304566>
+##INDIVIDUAL=TRUTH
+##SAMPLE=<ID=TRUTH,Individual="TRUTH",Description="BAMSurgeon spike-in">
+##INFO=<ID=CIPOS,Number=2,Type=Integer,Description="Confidence interval around POS for imprecise variants">
+##INFO=<ID=IMPRECISE,Number=0,Type=Flag,Description="Imprecise structural variation">
+##INFO=<ID=PRECISE,Number=0,Type=Flag,Description="Precise structural variation">
+##INFO=<ID=SVTYPE,Number=1,Type=String,Description="Type of structural variant">
+##INFO=<ID=SVLEN,Number=1,Type=Integer,Description="Difference in length between REF and ALT alleles">
+##INFO=<ID=SOMATIC,Number=0,Type=Flag,Description="Somatic mutation in primary">
+##INFO=<ID=VAF,Number=1,Type=Float,Description="Variant allele frequency">
+##INFO=<ID=DPR,Number=1,Type=Float,Description="Density of reads supporting the variant">
+##INFO=<ID=MATEID,Number=1,Type=String,Description="Breakend mate">
+##INFO=<ID=END,Number=1,Type=Integer,Description="End position of the variant described in this record">
+##ALT=<ID=INV,Description="Inversion">
+##ALT=<ID=DEL,Description="Deletion">
+##ALT=<ID=INS,Description="Insertion">
+##ALT=<ID=DUP,Description="Duplication">
+##ALT=<ID=IGN,Description="Ignore SNVs in Interval">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	SPIKEIN
+22	33911043	.	T	<DEL>	100	PASS	SOMATIC;SVTYPE=DEL;END=33921043;SVLEN=10000;VAF=1.0	GT	./.
+22	33891043	.	G	<INV>	100	PASS	SOMATIC;SVTYPE=INV;END=33901043;SVLEN=10000;VAF=1.0	GT	./.
+22	33869245	.	C	<DUP>	100	PASS	SOMATIC;SVTYPE=DUP;END=33881043;SVLEN=11798;VAF=1.0	GT	./.

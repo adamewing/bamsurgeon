@@ -1,0 +1,29 @@
+##fileformat=VCFv4.1
+##fileDate=2026-08-03
+##phasing=none
+##contig=<ID=22,length=51304566>
+##INDIVIDUAL=TRUTH
+##SAMPLE=<ID=TRUTH,Individual="TRUTH",Description="BAMSurgeon spike-in">
+##INFO=<ID=CIPOS,Number=2,Type=Integer,Description="Confidence interval around POS for imprecise variants">
+##INFO=<ID=IMPRECISE,Number=0,Type=Flag,Description="Imprecise structural variation">
+##INFO=<ID=PRECISE,Number=0,Type=Flag,Description="Precise structural variation">
+##INFO=<ID=SVTYPE,Number=1,Type=String,Description="Type of structural variant">
+##INFO=<ID=SVLEN,Number=1,Type=Integer,Description="Difference in length between REF and ALT alleles">
+##INFO=<ID=SOMATIC,Number=0,Type=Flag,Description="Somatic mutation in primary">
+##INFO=<ID=VAF,Number=1,Type=Float,Description="Variant allele frequency">
+##INFO=<ID=DPR,Number=1,Type=Float,Description="Density of reads supporting the variant">
+##INFO=<ID=MATEID,Number=1,Type=String,Description="Breakend mate">
+##INFO=<ID=END,Number=1,Type=Integer,Description="End position of the variant described in this record">
+##ALT=<ID=INV,Description="Inversion">
+##ALT=<ID=DEL,Description="Deletion">
+##ALT=<ID=INS,Description="Insertion">
+##ALT=<ID=DUP,Description="Duplication">
+##ALT=<ID=IGN,Description="Ignore SNVs in Interval">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	SPIKEIN
+22	33610508	10_9258941_9259251_AluYa5_+	T	<INS>	100	PASS	SOMATIC;SVTYPE=INS;END=33610826;SVLEN=318;VAF=1.0	GT	./.
+22	34172377	.	A	<INS>	100	PASS	SOMATIC;SVTYPE=INS;END=34172445;SVLEN=68;VAF=0.8	GT	./.
+22	33607508	7895fe8dc838e325d37b3a39f02c4642	C	C[22:34314981[	100	PASS	SOMATIC;SVTYPE=BND;PRECISE;MATEID=e1b667a4ec5f751844421e307e5df87c;VAF=1.0	GT	./.
+22	34314981	e1b667a4ec5f751844421e307e5df87c	G	]22:33607508]G	100	PASS	SOMATIC;SVTYPE=BND;PRECISE;MATEID=7895fe8dc838e325d37b3a39f02c4642;VAF=1.0	GT	./.
+22	33891043	.	G	<DEL>	100	PASS	SOMATIC;SVTYPE=DEL;END=33902689;SVLEN=11646;VAF=0.5	GT	./.
+22	33870241	.	C	<DEL>	100	PASS	SOMATIC;SVTYPE=DEL;END=33884754;SVLEN=14513;VAF=0.75	GT	./.

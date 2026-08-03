@@ -1,0 +1,4 @@
+chrom	pos	kind	req_vaf	depth	alt	obs_vaf	status	note
+22	33911043	DEL	1.000	19	17	0.895	OK	
+22	33891043	INV	1.000	16	17	1.062	OK	
+22	33869245	DUP	1.000	89	26	0.292	LOW_VAF	

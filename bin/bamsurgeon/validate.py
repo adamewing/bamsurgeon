@@ -1,0 +1,488 @@
+#!/usr/bin/env python
+
+'''
+Verify that variants described in a truth VCF are actually present in a BAM.
+
+BAMSurgeon emits a truth VCF alongside every spike-in run, but nothing has ever
+checked that the BAM agrees with it. The shell tests end in a `samtools mpileup
+| bcftools call -vm` that prints calls and always exits 0.
+
+Everything here is built on pysam directly rather than shelling out to
+`samtools mpileup` (which is what mutation.countBaseAtPos does), because the
+subprocess route does not work on CRAM without extra plumbing and costs a fork
+per position.
+'''
+
+import logging
+from dataclasses import dataclass, field
+
+import pysam
+
+FORMAT = '%(levelname)s %(asctime)s %(message)s'
+logging.basicConfig(format=FORMAT)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+
+# site statuses
+OK = 'OK'                    # found at the requested position and VAF
+LOW_VAF = 'LOW_VAF'          # found, but at a materially lower VAF than requested
+ABSENT = 'ABSENT'            # covered, but no supporting reads
+NO_COVERAGE = 'NO_COVERAGE'  # too little depth to say anything
+SHIFTED = 'SHIFTED'          # found, but not where the truth VCF says it is
+
+
+@dataclass
+class Thresholds:
+    ''' every cutoff is a knob; defaults are deliberately generous so that a
+        pass means something and a failure is worth investigating '''
+    min_depth: int = 4           # below this, report NO_COVERAGE rather than ABSENT
+    min_alt_reads: int = 2       # below this, report ABSENT
+    vaf_ratio_min: float = 0.5   # observed VAF must be >= requested * this
+    indel_window: int = None     # default: len(indel) + 1, set per-site
+    sv_search_radius: int = 200  # how far to look for a shifted breakend
+    sv_exact_tolerance: int = 5  # breakend within this many bp counts as exact
+    sv_min_clip: int = 10        # soft-clip length that counts as breakend evidence
+    sv_pass_rate: float = 0.8    # fraction of SV sites that must be OK
+
+
+@dataclass
+class SiteObservation:
+    depth: int = 0
+    alt_count: int = 0
+    alt_fraction: float = 0.0
+    status: str = NO_COVERAGE
+    # populated for SVs when the breakend is not where it was requested
+    observed_pos: int = None
+    offset: int = None
+    note: str = ''
+
+
+@dataclass
+class SiteReport:
+    chrom: str
+    pos: int
+    kind: str
+    requested_vaf: float = None
+    observation: SiteObservation = field(default_factory=SiteObservation)
+
+    @property
+    def status(self):
+        return self.observation.status
+
+    @property
+    def passed(self):
+        return self.observation.status == OK
+
+
+def _primary(read):
+    return not (read.is_unmapped or read.is_secondary or read.is_supplementary
+                or read.is_duplicate or read.is_qcfail)
+
+
+def _grade(obs, requested_vaf, thresholds):
+    ''' shared status logic: depth first, then presence, then VAF '''
+    if obs.depth < thresholds.min_depth:
+        obs.status = NO_COVERAGE
+    elif obs.alt_count < thresholds.min_alt_reads:
+        obs.status = ABSENT
+    elif requested_vaf is not None and \
+            obs.alt_fraction < requested_vaf * thresholds.vaf_ratio_min:
+        obs.status = LOW_VAF
+    else:
+        obs.status = OK
+    return obs
+
+
+def observe_snv(bam, chrom, pos, alt_allele, thresholds, requested_vaf=None):
+    ''' pos is 1-based (VCF convention) '''
+    obs = SiteObservation()
+    start = pos - 1
+    alt = alt_allele.upper()
+
+    # truncate=True is essential: without it pysam yields every column spanned
+    # by any overlapping read, not just the requested one.
+    for col in bam.pileup(chrom, start, start + 1, truncate=True,
+                          min_base_quality=0, stepper='nofilter'):
+        if col.reference_pos != start:
+            continue
+        for pread in col.pileups:
+            if pread.is_del or pread.is_refskip or pread.query_position is None:
+                continue
+            if not _primary(pread.alignment):
+                continue
+            obs.depth += 1
+            if pread.alignment.query_sequence[pread.query_position].upper() == alt:
+                obs.alt_count += 1
+
+    if obs.depth:
+        obs.alt_fraction = obs.alt_count / float(obs.depth)
+
+    return _grade(obs, requested_vaf, thresholds)
+
+
+def _indel_events(read):
+    ''' yield (op, length, refpos) for each I/D in a read's CIGAR.
+        refpos is the reference coordinate the event begins at. '''
+    if read.cigartuples is None:
+        return
+    refpos = read.reference_start
+    for op, length in read.cigartuples:
+        if op in (0, 7, 8):        # M, =, X consume both
+            refpos += length
+        elif op == 2:              # D
+            yield ('D', length, refpos)
+            refpos += length
+        elif op == 3:              # N
+            refpos += length
+        elif op == 1:              # I consumes query only
+            yield ('I', length, refpos)
+        # S(4), H(5), P(6) consume no reference
+
+
+def observe_indel(bam, chrom, pos, ref_allele, alt_allele, thresholds,
+                  requested_vaf=None):
+    '''
+    Match on (type, length) inside a window rather than on exact position.
+
+    Indels in repeat context are ambiguous under left-alignment: the aligner is
+    free to place an equivalent event a few bases either side of where the truth
+    VCF puts it. Demanding an exact position match makes this validator report
+    failures that are not failures, which is worse than having no validator.
+
+    Insertions get a second detection path. Once the inserted sequence is a
+    large fraction of the read length, an aligner stops emitting an I operation
+    and soft-clips instead -- a 36bp insertion in 100bp reads comes back as
+    60M40S/64S36M, not 36I. So a read also counts as supporting if it simply
+    carries the inserted sequence. Matching ~20 exact bases of a known insert is
+    specific enough not to fire by chance.
+    '''
+    obs = SiteObservation()
+
+    inserted = ''
+    if len(alt_allele) > len(ref_allele):
+        want_op, want_len = 'I', len(alt_allele) - len(ref_allele)
+        inserted = alt_allele[len(ref_allele):].upper()
+    elif len(ref_allele) > len(alt_allele):
+        want_op, want_len = 'D', len(ref_allele) - len(alt_allele)
+    else:
+        obs.note = 'not an indel'
+        return obs
+
+    # long enough to be specific, short enough to survive a sequencing error
+    probe = inserted[:20] if len(inserted) >= 8 else ''
+
+    window = thresholds.indel_window
+    if window is None:
+        window = want_len + 1
+
+    # VCF anchors an indel on the base *before* the event
+    expect = pos
+
+    lo = max(0, expect - window - want_len)
+    hi = expect + window + want_len + 1
+
+    for read in bam.fetch(chrom, lo, hi):
+        if not _primary(read):
+            continue
+        spans_anchor = read.reference_start <= expect < read.reference_end
+
+        supported = False
+        for op, length, refpos in _indel_events(read):
+            if op == want_op and length == want_len and abs(refpos - expect) <= window:
+                supported = True
+                break
+
+        # soft-clipped insertion: the I operation is gone, the sequence is not
+        if not supported and probe and read.query_sequence:
+            if probe in read.query_sequence.upper():
+                supported = True
+                obs.note = 'matched by inserted sequence (soft-clipped)'
+
+        if supported:
+            obs.alt_count += 1
+
+        # A read that carries the insertion can be clipped so hard that its
+        # alignment no longer spans the anchor base. Counting it as support but
+        # not as depth yields fractions above 1.0, so the denominator is
+        # "covers the site or carries the variant".
+        if spans_anchor or supported:
+            obs.depth += 1
+
+    if obs.depth:
+        obs.alt_fraction = obs.alt_count / float(obs.depth)
+
+    note = obs.note
+    obs = _grade(obs, requested_vaf, thresholds)
+    if obs.status == OK:
+        obs.note = note
+    else:
+        obs.note = 'looked for %s%d within +/-%dbp of %d%s' % (
+            want_op, want_len, window, expect,
+            ' (and for the inserted sequence)' if probe else '')
+    return obs
+
+
+def clip_profile(bam, chrom, start, end, min_clip=10):
+    '''
+    Map reference position -> number of reads whose alignment is soft-clipped
+    there. A real breakend shows up as a sharp peak, because every read crossing
+    it has to stop aligning at the same base.
+
+    This is the one signal that works identically for DEL, DUP, INV and BND,
+    which is what lets observe_sv() treat them uniformly.
+    '''
+    profile = {}
+    start = max(0, start)
+
+    for read in bam.fetch(chrom, start, end):
+        if not (_primary(read) or read.is_supplementary):
+            continue
+        cigar = read.cigartuples
+        if not cigar:
+            continue
+        if cigar[0][0] == 4 and cigar[0][1] >= min_clip:
+            profile[read.reference_start] = profile.get(read.reference_start, 0) + 1
+        if cigar[-1][0] == 4 and cigar[-1][1] >= min_clip:
+            profile[read.reference_end] = profile.get(read.reference_end, 0) + 1
+
+    return profile
+
+
+def _best_breakend(profile, expect, radius):
+    ''' strongest clip peak within radius of expect -> (pos, support) '''
+    best_pos, best_support = None, 0
+    for pos, support in profile.items():
+        if abs(pos - expect) <= radius and support > best_support:
+            best_pos, best_support = pos, support
+    return best_pos, best_support
+
+
+def _mean_depth(bam, chrom, start, end):
+    start = max(0, start)
+    if end <= start:
+        return 0.0
+    total = sum(sum(col) for col in
+                bam.count_coverage(chrom, start, end, quality_threshold=0))
+    return total / float(end - start)
+
+
+def observe_sv(bam, chrom, pos, thresholds, requested_vaf=None,
+               orig_bam=None, svtype=None, end=None):
+    '''
+    Locate the breakend by soft-clip peak. If it is not at the requested
+    position but is within sv_search_radius, report SHIFTED and the offset --
+    that is the status that characterises the assembly-based engine, whose
+    coordinates come from an exonerate alignment rather than from the request.
+
+    For DEL and DUP the interval depth is additionally compared against the
+    original BAM, which controls for regions that were simply low-coverage to
+    begin with.
+    '''
+    obs = SiteObservation()
+    expect = pos - 1  # 0-based
+
+    radius = thresholds.sv_search_radius
+    profile = clip_profile(bam, chrom, expect - radius, expect + radius + 1,
+                           min_clip=thresholds.sv_min_clip)
+
+    obs.depth = int(round(_mean_depth(bam, chrom, expect - 50, expect + 50)))
+
+    best_pos, support = _best_breakend(profile, expect, radius)
+    obs.alt_count = support
+    if obs.depth:
+        obs.alt_fraction = support / float(obs.depth)
+
+    if obs.depth < thresholds.min_depth:
+        obs.status = NO_COVERAGE
+        return obs
+
+    if best_pos is None or support < thresholds.min_alt_reads:
+        obs.status = ABSENT
+        obs.note = 'no clip peak within %dbp of %d' % (radius, pos)
+        return obs
+
+    obs.observed_pos = best_pos + 1  # back to 1-based for reporting
+    obs.offset = obs.observed_pos - pos
+
+    if abs(obs.offset) > thresholds.sv_exact_tolerance:
+        obs.status = SHIFTED
+        obs.note = 'breakend found at %d (%+d)' % (obs.observed_pos, obs.offset)
+        return obs
+
+    # depth corroboration for the two types that change copy number
+    if svtype in ('DEL', 'DUP') and end is not None and orig_bam is not None:
+        note = _depth_ratio_note(bam, orig_bam, chrom, pos, end, svtype)
+        if note:
+            obs.note = note
+
+    if requested_vaf is not None and \
+            obs.alt_fraction < requested_vaf * thresholds.vaf_ratio_min:
+        obs.status = LOW_VAF
+    else:
+        obs.status = OK
+
+    return obs
+
+
+def _depth_ratio_note(bam, orig_bam, chrom, start, end, svtype):
+    '''
+    Interval depth in the mutant relative to the original, normalised by the
+    same ratio in the flanks. > 1 means sequence was added (DUP), < 1 means it
+    was removed (DEL). Reported as context, not used to fail a site: at low VAF
+    the shift is small and noisy.
+    '''
+    span = max(1, end - start)
+    flank = min(2000, max(200, span // 10))
+
+    try:
+        mut_in = _mean_depth(bam, chrom, start, end)
+        org_in = _mean_depth(orig_bam, chrom, start, end)
+        mut_fl = _mean_depth(bam, chrom, start - flank, start)
+        org_fl = _mean_depth(orig_bam, chrom, start - flank, start)
+    except ValueError:
+        return ''
+
+    if not (org_in and mut_fl and org_fl):
+        return ''
+
+    normalised = (mut_in / org_in) / (mut_fl / org_fl)
+    direction = 'depth ratio %.2f' % normalised
+
+    if svtype == 'DEL' and normalised >= 1.0:
+        return direction + ' (expected < 1 for DEL)'
+    if svtype == 'DUP' and normalised <= 1.0:
+        return direction + ' (expected > 1 for DUP)'
+    return direction
+
+
+def classify(rec):
+    '''
+    Decide what kind of variant a VCF record describes.
+
+    BAMSurgeon's own writers are the primary input: makevcf.write_vcf_snv emits
+    bare REF/ALT, write_vcf_indel emits bare REF/ALT with differing lengths, and
+    write_vcf_sv emits SVTYPE plus a symbolic or breakend ALT.
+    '''
+    svtype = rec.info.get('SVTYPE')
+    if svtype:
+        return str(svtype)
+
+    alt = rec.alts[0] if rec.alts else ''
+
+    if alt.startswith('<') and alt.endswith('>'):
+        return alt.strip('<>')
+
+    if '[' in alt or ']' in alt:
+        return 'BND'
+
+    if len(rec.ref) == 1 and len(alt) == 1:
+        return 'SNV'
+
+    return 'INDEL'
+
+
+def requested_vaf(rec):
+    ''' bamsurgeon writes VAF= into INFO on every record it emits '''
+    vaf = rec.info.get('VAF')
+    if vaf is None:
+        return None
+    if isinstance(vaf, (tuple, list)):
+        vaf = vaf[0]
+    try:
+        return float(vaf)
+    except (TypeError, ValueError):
+        return None
+
+
+def validate_vcf(truth_vcf, mutant_bam, ref_fasta, orig_bam=None,
+                 thresholds=None):
+    ''' returns a list of SiteReport, one per record in truth_vcf '''
+    thresholds = thresholds or Thresholds()
+
+    reports = []
+
+    vcf = pysam.VariantFile(truth_vcf)
+    bam = pysam.AlignmentFile(mutant_bam, reference_filename=ref_fasta)
+    orig = pysam.AlignmentFile(orig_bam, reference_filename=ref_fasta) \
+        if orig_bam else None
+
+    try:
+        for rec in vcf:
+            kind = classify(rec)
+            vaf = requested_vaf(rec)
+            report = SiteReport(chrom=rec.chrom, pos=rec.pos, kind=kind,
+                                requested_vaf=vaf)
+
+            alt = rec.alts[0] if rec.alts else ''
+
+            try:
+                if kind == 'SNV':
+                    report.observation = observe_snv(
+                        bam, rec.chrom, rec.pos, alt, thresholds, vaf)
+                elif kind == 'INDEL':
+                    report.observation = observe_indel(
+                        bam, rec.chrom, rec.pos, rec.ref, alt, thresholds, vaf)
+                else:
+                    end = rec.info.get('END')
+                    if isinstance(end, (tuple, list)):
+                        end = end[0]
+                    report.observation = observe_sv(
+                        bam, rec.chrom, rec.pos, thresholds, vaf,
+                        orig_bam=orig, svtype=kind, end=end)
+            except ValueError as e:
+                # contig absent from the BAM, or a coordinate off the end of it
+                report.observation = SiteObservation(
+                    status=NO_COVERAGE, note=str(e))
+
+            reports.append(report)
+    finally:
+        vcf.close()
+        bam.close()
+        if orig is not None:
+            orig.close()
+
+    return reports
+
+
+def has_bs_tag_support(mutant_bam, ref_fasta, chrom, pos, alt_allele):
+    '''
+    For runs made with --tagreads, every altered read carries a BS tag. Same
+    check scripts/remove_non_BS.py performs, reused here so that a --tagreads
+    run can assert the tagging actually happened.
+    '''
+    tagged = untagged = 0
+    bam = pysam.AlignmentFile(mutant_bam, reference_filename=ref_fasta)
+    try:
+        start = pos - 1
+        for col in bam.pileup(chrom, start, start + 1, truncate=True,
+                              min_base_quality=0, stepper='nofilter'):
+            if col.reference_pos != start:
+                continue
+            for pread in col.pileups:
+                if pread.is_del or pread.is_refskip or pread.query_position is None:
+                    continue
+                read = pread.alignment
+                if not _primary(read):
+                    continue
+                base = read.query_sequence[pread.query_position].upper()
+                if base != alt_allele.upper():
+                    continue
+                if read.has_tag('BS'):
+                    tagged += 1
+                else:
+                    untagged += 1
+    finally:
+        bam.close()
+
+    return tagged, untagged
+
+
+def summarise(reports):
+    ''' status -> count, plus overall pass rate '''
+    counts = {}
+    for r in reports:
+        counts[r.status] = counts.get(r.status, 0) + 1
+    total = len(reports)
+    passed = counts.get(OK, 0)
+    return counts, passed, total
