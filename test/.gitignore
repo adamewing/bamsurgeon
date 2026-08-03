@@ -2,3 +2,11 @@
 *.tmp
 *.vcf
 *_logs_*
+
+# addsv/addsnv working files written to the invocation directory
+*.bam
+*.bam.bai
+addsv.mergetmp.final.*
+addsv.exclude.final.*
+addsnv.*.muts.bam
+addindel.*.muts.bam

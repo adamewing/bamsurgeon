@@ -6,7 +6,7 @@ import datetime
 import hashlib
 
 
-def vcf_header(ref_fa):
+def vcf_header(ref_fa, salt=None):
     contigs = ''
     fasta_file = pysam.Fastafile(ref_fa)
     for contig in fasta_file.references:
@@ -15,6 +15,10 @@ def vcf_header(ref_fa):
     header = '##fileformat=VCFv4.1' + '\n'
     header += '##fileDate=%s' % (str(datetime.date.today())) + '\n'
     header += '##phasing=none' + '\n'
+    # which reads were selected is a function of this salt; recording it makes
+    # a run reproducible even when --seed was not given
+    if salt is not None:
+        header += '##bamsurgeonSalt=%s' % salt + '\n'
     header += contigs
     header += '##INDIVIDUAL=TRUTH' + '\n'
     header += '##SAMPLE=<ID=TRUTH,Individual="TRUTH",Description="BAMSurgeon spike-in">' + '\n'
@@ -176,8 +180,8 @@ def sv_vcf_precise_interval(mutline, ref, fh):
         sv_vcf_line(chrom, bnd1, bnd2, precise, m[0], bnd2-bnd1, ref, id_, svfrac, fh)
 
 
-def write_vcf_sv(logdir, ref_fa, vcf_fn):
-    header = vcf_header(ref_fa)
+def write_vcf_sv(logdir, ref_fa, vcf_fn, salt=None):
+    header = vcf_header(ref_fa, salt=salt)
 
     ref = pysam.Fastafile(ref_fa)
 

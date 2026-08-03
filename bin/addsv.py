@@ -28,21 +28,39 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-def get_reads(bam_file, fasta_ref, chrom, start, end, svfrac):
+def _read_in_region(read, chrom, start, end):
+    ''' primary, properly-mated, and fully contained in the interval '''
+    read_end = read.reference_start + read.query_length
+    pair_end = read.next_reference_start + read.query_length
+    return not (read.is_duplicate or read.is_secondary or read.is_supplementary or
+                read.is_unmapped or read.mate_is_unmapped or
+                read.next_reference_name != chrom or
+                pair_end > end or read.next_reference_start < start or
+                read_end > end or read.reference_start < start)
+
+
+def get_reads(bam_file, fasta_ref, chrom, start, end, svfrac, salt):
+    '''
+    Yield the svfrac subset of reads in the interval.
+
+    Two passes: selection is by exact count over the whole candidate set, so
+    the population has to be known before anything can be emitted. Selecting
+    on qname rather than per-read keeps both mates on the same side of the
+    decision, as the previous per-read hash also did.
+    '''
     bam = pysam.AlignmentFile(bam_file, reference_filename=fasta_ref)
+
+    qnames = set()
     for read in bam.fetch(chrom, start, end):
-        read_end = read.reference_start + read.query_length
-        pair_end = read.next_reference_start + read.query_length
-        if read.is_duplicate or read.is_secondary or read.is_supplementary or \
-                read.is_unmapped or read.mate_is_unmapped or \
-                read.next_reference_name != chrom or \
-                pair_end > end or read.next_reference_start < start or \
-                read_end > end or read.reference_start < start:
-            continue
-        
-        read_random_factor = read_hash_fraction(read.query_name)
-        if read_random_factor <= svfrac:
+        if _read_in_region(read, chrom, start, end):
+            qnames.add(read.query_name)
+
+    selected = select_qnames(qnames, svfrac, salt)
+
+    for read in bam.fetch(chrom, start, end):
+        if read.query_name in selected and _read_in_region(read, chrom, start, end):
             yield read
+
     bam.close()
 
 
@@ -254,7 +272,7 @@ def add_donor_reads(args, mutid, tmpbamfn, bdup_chrom, bdup_left_bnd, bdup_right
 
     nreads = 0
 
-    for read in get_reads(args.donorbam, args.refFasta, bdup_chrom, bdup_left_bnd, bdup_right_bnd, donor_norm_factor):
+    for read in get_reads(args.donorbam, args.refFasta, bdup_chrom, bdup_left_bnd, bdup_right_bnd, donor_norm_factor, args.salt):
         read.query_name = read.query_name + '_donor_' + mutid
         outbam.write(read)
         nreads += 1
@@ -759,16 +777,16 @@ def makemut(args, fields, alignopts):
         buffer = int(float(args.ismean))
         region_1_start, region_1_end = (refstart + trnpoint_1 - buffer, refend) if trn_left_flip else (refstart, refstart + trnpoint_1 + buffer)
         region_2_start, region_2_end = (trn_refstart + trnpoint_2 - buffer, trn_refend) if not trn_right_flip else (trn_refstart, trn_refstart + trnpoint_2 + buffer)
-        region_1_reads = get_reads(args.bamFileName, args.refFasta, chrom, region_1_start, region_1_end, float(svfrac))
-        region_2_reads = get_reads(args.bamFileName, args.refFasta, trn_chrom, region_2_start, region_2_end, float(svfrac))
+        region_1_reads = get_reads(args.bamFileName, args.refFasta, chrom, region_1_start, region_1_end, float(svfrac), args.salt)
+        region_2_reads = get_reads(args.bamFileName, args.refFasta, trn_chrom, region_2_start, region_2_end, float(svfrac), args.salt)
         excl_reads_names = set([read.query_name for read in region_1_reads] + [read.query_name for read in region_2_reads]) 
         nsimreads = len(excl_reads_names)
         # add additional excluded reads if bigdel(s) present
         if action == 'BIGDEL':
-            bigdel_region_reads = get_reads(args.bamFileName, args.refFasta, chrom, region_1_start, region_2_end, float(svfrac))
+            bigdel_region_reads = get_reads(args.bamFileName, args.refFasta, chrom, region_1_start, region_2_end, float(svfrac), args.salt)
             excl_reads_names = set([read.query_name for read in bigdel_region_reads])
     else:
-        region_reads = get_reads(args.bamFileName, args.refFasta, chrom, refstart, refend, float(svfrac))
+        region_reads = get_reads(args.bamFileName, args.refFasta, chrom, refstart, refend, float(svfrac), args.salt)
         excl_reads_names = set([read.query_name for read in region_reads])
         reads_ratio = len(mutseq.seq) / len(maxcontig.seq)
         nsimreads = int(len(excl_reads_names) * reads_ratio)
@@ -819,6 +837,11 @@ def main(args):
     alignopts = {}
     if args.alignopts is not None:
         alignopts = dict([o.split(':') for o in args.alignopts.split(',')])
+
+    # Must happen before any pool.submit: workers inherit this by pickle, and
+    # deriving it per-process is what made read selection vary with --procs.
+    args.salt = make_salt(args.seed)
+    logger.info("read selection salt: %s" % args.salt)
 
     # load insertion library if present
     try:
@@ -1032,7 +1055,7 @@ def main(args):
 
     vcf_fn = args.vcf + bam_basename + '.addsv.' + var_basename + '.vcf'
 
-    makevcf.write_vcf_sv('addsv_logs_' + os.path.basename(args.outBamFile), args.refFasta, vcf_fn)
+    makevcf.write_vcf_sv('addsv_logs_' + os.path.basename(args.outBamFile), args.refFasta, vcf_fn, salt=args.salt)
 
     logger.info('vcf output written to ' + vcf_fn)
 

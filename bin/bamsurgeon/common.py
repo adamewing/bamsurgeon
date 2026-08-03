@@ -18,16 +18,46 @@ logging.basicConfig(format=FORMAT)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-random_salt = None
+def make_salt(seed=None):
+    '''
+    Build the salt that read selection is hashed against.
+
+    This must be created once in the parent process and passed down to
+    workers. It used to be a lazily-initialised module global, which meant
+    every process in a ProcessPoolExecutor drew its own, so the set of
+    replaced reads changed with --procs.
+    '''
+    if seed is not None:
+        return hashlib.md5(('bamsurgeon:' + str(seed)).encode()).hexdigest()[:10]
+
+    alphabet = string.ascii_lowercase + string.ascii_uppercase + string.digits
+    return ''.join(random.choice(alphabet) for _ in range(10))
 
 
-def read_hash_fraction(query_name):
-    global random_salt
-    if random_salt is None:
-        random_salt = ''.join(random.choice(string.ascii_lowercase + string.ascii_uppercase + string.digits) for i in range(10))
-    read_hash = int(hashlib.md5((random_salt + query_name).encode()).hexdigest(), 16)
-    read_random_factor = (read_hash % 1000000) / 1000000.0
-    return read_random_factor
+def read_hash_fraction(query_name, salt):
+    ''' stable pseudo-random value in [0,1) for a read name '''
+    read_hash = int(hashlib.md5((salt + query_name).encode()).hexdigest(), 16)
+    return (read_hash % 1000000) / 1000000.0
+
+
+def select_qnames(qnames, frac, salt):
+    '''
+    Pick exactly round(frac * N) of qnames, deterministically.
+
+    The previous approach kept each read whose hash fell below frac, which
+    makes the count binomially distributed around the target rather than
+    equal to it -- a direct contributor to spiked depth not matching the
+    requested VAF. Ranking by hash and taking a prefix gives the same
+    pseudo-random membership with an exact count.
+    '''
+    if frac >= 1.0:
+        return set(qnames)
+    if frac <= 0.0:
+        return set()
+
+    # qname breaks ties so the ordering is total, not just stable
+    ranked = sorted(qnames, key=lambda q: (read_hash_fraction(q, salt), q))
+    return set(ranked[:int(round(frac * len(ranked)))])
 
 
 def get_avg_coverage(alignment_file, chrom, start, end):
