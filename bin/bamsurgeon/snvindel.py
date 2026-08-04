@@ -436,6 +436,13 @@ def cluster_sites(targets, hapsize):
     clusters are mutated independently and merged, so two clusters touching
     the same reads will overwrite each other. That is what --haplosize
     controls.
+
+    Distance is measured from the previous site, so a run of nearby sites
+    chains into one cluster. It used to be measured from the first site on
+    the chromosome, because laststart was assigned once and never updated --
+    which meant --haplosize only ever grouped the leading run and left
+    everything after it as singletons. On test_data/random_snvs.txt, `-z 20`
+    produced 20 clusters from 20 sites, including for two sites 1bp apart.
     '''
     clusters = []
     current = []
@@ -443,30 +450,21 @@ def cluster_sites(targets, hapsize):
     laststart = None
 
     for target in targets:
-        if lastchrom is None:
-            lastchrom = target.chrom
-            laststart = target.start
-            current.append(target)
+        same_chrom = target.chrom == lastchrom
+        near = laststart is not None and (target.start - laststart) < hapsize
 
-        elif target.chrom == lastchrom:
-            if laststart is None:
-                laststart = target.start
-                current.append(target)
-            elif target.start - laststart < hapsize:
-                current.append(target)
-            else:
-                clusters.append(current)
-                current = [target]
-
-        else:
+        if current and (not same_chrom or not near):
             clusters.append(current)
-            current = [target]
-            lastchrom = target.chrom
-            laststart = None
+            current = []
 
-    clusters.append(current)
+        current.append(target)
+        lastchrom = target.chrom
+        laststart = target.start
 
-    return [c for c in clusters if c]
+    if current:
+        clusters.append(current)
+
+    return clusters
 
 
 def run_spikein(args, clusters, toolname):
