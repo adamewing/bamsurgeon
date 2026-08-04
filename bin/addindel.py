@@ -12,12 +12,14 @@ import argparse
 
 from bamsurgeon.aligners import SUPPORTED_ALIGNERS
 from bamsurgeon.snvindel import read_indel_targets, run_spikein
+from bamsurgeon.varinput import sample_read_length
 
 logger = logging.getLogger(__name__)
 
 
 def main(args):
-    clusters = read_indel_targets(args.varFileName, int(args.numsnvs))
+    read_length = sample_read_length(args.bamFileName, args.refFasta) or 0
+    clusters = read_indel_targets(args.varFileName, int(args.numsnvs), read_length)
     run_spikein(args, clusters, 'addindel')
 
 
@@ -53,7 +55,7 @@ def run():
     parser.add_argument('--skipmerge', action='store_true', default=False, help="final output is tmp file to be merged")
     parser.add_argument('--ignorepileup', action='store_true', default=False, help="do not check pileup depth in mutation regions")
     parser.add_argument('--tmpdir', default='addindel.tmp', help='temporary directory (default=addindel.tmp)')
-    parser.add_argument('--seed', default=None, help='seed random number generation')
+    parser.add_argument('--seed', default=None, type=int, help='seed random number generation')
     parser.add_argument('--vcf', default='', help="Path for the output VCF file. If not provided, the file will be saved in the current directory.")
     args = parser.parse_args()
 

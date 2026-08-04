@@ -10,12 +10,13 @@ import os
 import argparse
 
 from bamsurgeon.aligners import SUPPORTED_ALIGNERS
-from bamsurgeon.snvindel import read_snv_targets, run_spikein
+from bamsurgeon.snvindel import read_snv_targets, resolve_haplosize, run_spikein
 
 
 def main(args):
+    haplosize, read_length = resolve_haplosize(args)
     clusters = read_snv_targets(args.varFileName, int(args.numsnvs),
-                                int(args.haplosize))
+                                haplosize, read_length)
     run_spikein(args, clusters, 'addsnv')
 
 
@@ -30,7 +31,7 @@ def run():
     parser.add_argument('-n', '--numsnvs', dest='numsnvs', default=0, help="maximum number of mutations to try (default: entire input)")
     parser.add_argument('-c', '--cnvfile', dest='cnvfile', default=None, help="tabix-indexed list of genome-wide absolute copy number values (e.g. 2 alleles = no change)")
     parser.add_argument('-d', '--coverdiff', dest='coverdiff', default=0.9, help="allow difference in input and output coverage (default=0.9)")
-    parser.add_argument('-z', '--haplosize', default=0, help='haplotype size: sites within this distance are mutated together (default = 0)')
+    parser.add_argument('-z', '--haplosize', default=0, help="haplotype size: sites within this distance are mutated together, or 'auto' for the sampled read length (default = 0)")
     parser.add_argument('-p', '--procs', dest='procs', default=1, help="split into multiple processes (default=1)")
     parser.add_argument('--picardjar', default=os.environ.get('BAMSURGEON_PICARD_JAR'), help='path to picard.jar, required for most aligners (default: $BAMSURGEON_PICARD_JAR)')
     parser.add_argument('--mindepth', default=10, help='minimum read depth to make mutation (default = 10)')
@@ -52,7 +53,7 @@ def run():
     parser.add_argument('--alignerthreads', default=1, help='threads used per realignment (default = 1)')
     parser.add_argument('--alignopts', default=None, help='aligner-specific options as comma delimited list of option1:value1,option2:value2,...')
     parser.add_argument('--tmpdir', default='addsnv.tmp', help='temporary directory (default=addsnv.tmp)')
-    parser.add_argument('--seed', default=None, help='seed random number generation')
+    parser.add_argument('--seed', default=None, type=int, help='seed random number generation')
     parser.add_argument('--vcf', default='', help="Path for the output VCF file. If not provided, the file will be saved in the current directory.")
     args = parser.parse_args()
 

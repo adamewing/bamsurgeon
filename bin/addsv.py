@@ -15,6 +15,7 @@ import bamsurgeon.makevcf as makevcf
 
 from bamsurgeon.aligners import remap_fastq, SUPPORTED_ALIGNERS
 from bamsurgeon.records import MutationRecord, MutationResult
+from bamsurgeon.varinput import read_variants
 from bamsurgeon.common import *
 from uuid import uuid4
 from shutil import move
@@ -26,11 +27,6 @@ logging.basicConfig(format=FORMAT)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-
-# BIG* used to be a parallel implementation reached by a size threshold. They
-# are accepted as spellings of the plain types now; only their argument order
-# differs, since BIGDUP never took a copy count.
-BIG_ALIASES = {'BIGDEL': 'DEL', 'BIGINV': 'INV', 'BIGDUP': 'DUP'}
 
 INTERVAL_KINDS = ('DEL', 'DUP', 'INV', 'INS')
 
@@ -191,92 +187,12 @@ def add_donor_reads(args, mutid, tmpbamfn, chrom, left_bnd, right_bnd, svfrac):
     return outbamfn
 
 
-def parse_varfile_line(bedline, default_vaf):
-    '''
-    Parse one varfile line into a request dict.
-
-    Split on single whitespace characters rather than runs, because empty
-    columns are meaningful: `DUP\\t\\t0.9` means "default copy count, VAF 0.9".
-    '''
-    fields = re.split(r"[\s]", bedline)
-
-    if len(fields) < 4:
-        raise ValueError("Invalid varfile line: %s" % bedline)
-
-    def field(i):
-        return fields[i].strip() if len(fields) > i else ''
-
-    def number(i, default):
-        v = field(i)
-        return type(default)(v) if v != '' else default
-
-    chrom = fields[0]
-    start = int(fields[1])
-    end = int(fields[2])
-    kind = fields[3].upper()
-
-    req = {'chrom': chrom, 'start': start, 'end': end,
-           'vaf': default_vaf, 'ndups': 1, 'tsdlen': 0, 'ins_motif': None,
-           'insseqfile': None, 'insseq': '',
-           'mate_chrom': None, 'mate_pos': None,
-           'flip_left': False, 'flip_right': False}
-
-    big = kind in BIG_ALIASES
-    if big:
-        logger.warning('%s is deprecated, treating as %s' % (kind, BIG_ALIASES[kind]))
-        kind = BIG_ALIASES[kind]
-
-    req['kind'] = kind
-
-    if kind == 'INS':
-        insspec = field(4)
-        assert insspec != '', 'insertion requires a sequence, file, RND or INSLIB: entry'
-        if os.path.exists(insspec) or insspec == 'RND' or insspec.startswith('INSLIB:'):
-            req['insseqfile'] = insspec
-        else:
-            assert re.search('^[ATGCatgc]*$', insspec), "cannot determine SV type: %s" % insspec
-            req['insseq'] = insspec.upper()
-        req['tsdlen'] = number(5, 0)
-        motif = field(6)
-        if motif:
-            assert '^' in motif, 'insertion motif specification requires cut site defined by ^'
-            req['ins_motif'] = motif
-        req['vaf'] = number(7, default_vaf)
-
-    elif kind == 'DUP':
-        # BIGDUP never took a copy count; its trailing field is the VAF
-        if big:
-            req['vaf'] = number(4, default_vaf)
-        else:
-            req['ndups'] = number(4, 1)
-            req['vaf'] = number(5, default_vaf)
-
-    elif kind in ('DEL', 'INV'):
-        req['vaf'] = number(4, default_vaf)
-
-    elif kind in ('TRN', 'BND'):
-        req['kind'] = 'BND'
-        req['mate_chrom'] = field(4)
-        req['mate_pos'] = int(field(5))
-        # fields[6] is the mate end; breakends are points, so it is unused
-        orient = field(7)
-        if orient:
-            req['flip_left'] = orient[0] == '-'
-            req['flip_right'] = orient[1] == '-'
-        req['vaf'] = number(8, default_vaf)
-
-    else:
-        raise ValueError("mutation type not one of INS,INV,DEL,DUP,TRN: %s" % kind)
-
-    return req
-
-
 def resolve_insertion(args, req, mutid):
     ''' turn the INS spec into literal sequence '''
-    spec = req['insseqfile']
+    spec = req.insseqfile
 
     if spec is None:
-        return req['insseq'], None
+        return req.insseq, None
 
     if spec == 'RND':
         assert args.inslib is not None, 'INS RND requires --inslib'
@@ -308,18 +224,18 @@ def check_depth(bamfile, mutid, chrom, positions, mindepth, maxdepth):
 
 def makemut(args, req, alignopts):
     if args.seed is not None:
-        random.seed(args.seed + int(req['start']))
+        random.seed(args.seed + int(req.start))
 
-    kind = req['kind']
-    chrom = req['chrom']
-    start = int(req['start'])
-    end = int(req['end'])
-    vaf = float(req['vaf'])
+    kind = req.kind
+    chrom = req.chrom
+    start = int(req.start)
+    end = int(req.end)
+    vaf = float(req.vaf)
 
     # the index keeps mutids unique when a varfile repeats an interval.
     # wgsim names simulated reads after the mutid, so a collision would make
     # two mutations' reads indistinguishable to replace_reads.
-    mutid = '_'.join(map(str, (chrom, start, end, kind, req['index'])))
+    mutid = '_'.join(map(str, (chrom, start, end, kind, req.index)))
 
     bamfile = pysam.AlignmentFile(args.bamFileName, reference_filename=args.refFasta)
     reffile = pysam.Fastafile(args.refFasta)
@@ -345,7 +261,7 @@ def makemut(args, req, alignopts):
 
         breakends = [start, end] if kind != 'BND' else [start]
         if kind == 'BND':
-            if not check_depth(bamfile, mutid, req['mate_chrom'], [req['mate_pos']],
+            if not check_depth(bamfile, mutid, req.mate_chrom, [req.mate_pos],
                                args.mindepth, args.maxdepth):
                 return result
 
@@ -361,13 +277,14 @@ def makemut(args, req, alignopts):
 
         # ---- build the mutated haplotype from reference slices ----
         ins_id = None
+        literal_insseq = None
         donor_interior = False
 
         if kind == 'BND':
             template = svt.build_breakend(
-                reffile, chrom, start, req['mate_chrom'], req['mate_pos'], pad,
+                reffile, chrom, start, req.mate_chrom, req.mate_pos, pad,
                 mutid=mutid, allow_n=args.allowN,
-                flip_left=req['flip_left'], flip_right=req['flip_right'])
+                flip_left=req.flip_left, flip_right=req.flip_right)
 
         elif kind == 'DUP' and args.donorbam is not None:
             # interior copy number comes from real reads instead of simulation
@@ -379,11 +296,15 @@ def makemut(args, req, alignopts):
             insseq = ''
             if kind == 'INS':
                 insseq, ins_id = resolve_insertion(args, req, mutid)
+                # a library entry round-trips by name; an inline sequence has
+                # to carry itself
+                if ins_id is None:
+                    literal_insseq = insseq
 
             template = svt.build_interval(
                 kind, reffile, chrom, start, end, pad, mutid=mutid,
-                allow_n=args.allowN, insseq=insseq, tsdlen=int(req['tsdlen']),
-                ndups=int(req['ndups']), ins_motif=req['ins_motif'],
+                allow_n=args.allowN, insseq=insseq, tsdlen=int(req.tsdlen),
+                ndups=int(req.ndups), ins_motif=req.ins_motif,
                 maxlibsize=int(args.maxlibsize))
 
         logger.info("%s template length %d, replacing %d bp of reference (ratio %.4f)"
@@ -442,8 +363,8 @@ def makemut(args, req, alignopts):
         if kind == 'BND':
             record = MutationRecord(
                 kind='BND', chrom=chrom, pos=start, vaf=vaf, mutid=mutid,
-                mate_chrom=req['mate_chrom'], mate_pos=req['mate_pos'],
-                flip_left=req['flip_left'], flip_right=req['flip_right'])
+                mate_chrom=req.mate_chrom, mate_pos=req.mate_pos,
+                flip_left=req.flip_left, flip_right=req.flip_right)
         else:
             # an insertion reports where it landed inside the requested
             # interval, and how much sequence it added; the others span
@@ -453,8 +374,9 @@ def makemut(args, req, alignopts):
                 kind=kind, chrom=chrom, pos=pos,
                 end=pos if kind == 'INS' else end,
                 svlen=template.event_len if kind == 'INS' else end - start,
-                vaf=vaf, mutid=mutid, ins_id=ins_id, tsdlen=int(req['tsdlen']),
-                ndups=int(req['ndups']), donor_interior=donor_interior)
+                vaf=vaf, mutid=mutid, ins_id=ins_id, tsdlen=int(req.tsdlen),
+                insseq=literal_insseq, ins_motif=req.ins_motif,
+                ndups=int(req.ndups), donor_interior=donor_interior)
 
         logfile.write('%s\t%s\t%d\t%d\tvaf=%s\ttemplate_len=%d\texcluded=%d\tsimulated=%d\n'
                       % (kind, chrom, start, end, vaf, len(template.seq),
@@ -514,8 +436,6 @@ def main(args):
     results = []
     pool = ProcessPoolExecutor(max_workers=int(args.procs))
 
-    nmuts = 0
-
     logdir = 'addsv_logs_' + os.path.basename(args.outBamFile)
 
     for d in (args.tmpdir, logdir):
@@ -526,25 +446,13 @@ def main(args):
     assert os.path.exists(logdir), "could not create output directory!"
     assert os.path.exists(args.tmpdir), "could not create temporary directory!"
 
-    with open(args.varFileName, 'r') as varfile:
-        for bedline in varfile:
-            bedline = bedline.strip()
+    requests = read_variants(args.varFileName, 'sv',
+                             default_vaf=float(args.svfrac),
+                             maxmuts=int(args.maxmuts) if args.maxmuts else 0)
 
-            if bedline == '' or re.search('^#', bedline):
-                continue
-
-            if args.maxmuts and nmuts >= int(args.maxmuts):
-                break
-
-            if ';' in bedline:
-                logger.error('compound (";"-chained) mutations are not supported, skipping: %s' % bedline)
-                continue
-
-            req = parse_varfile_line(bedline, float(args.svfrac))
-            req['index'] = nmuts
-            results.append(pool.submit(makemut, args, req, alignopts))
-
-            nmuts += 1
+    for nmuts, req in enumerate(requests):
+        req.index = nmuts
+        results.append(pool.submit(makemut, args, req, alignopts))
 
     ## process the results of mutation jobs
     for result in results:
@@ -583,7 +491,7 @@ def main(args):
         os.rename(tmpbams[0], mergedtmp)
     elif len(tmpbams) > 1:
         logger.info("merging bams into %s" % mergedtmp)
-        mergebams(tmpbams, mergedtmp, debug=args.debug)
+        mergebams(tmpbams, mergedtmp, maxopen=int(args.maxopen), debug=args.debug)
 
     if args.skipmerge:
         logger.info("final merge skipped, please merge manually: %s" % mergedtmp)
@@ -677,6 +585,8 @@ if __name__ == '__main__':
                         help='keep secondary reads in final BAM')
     parser.add_argument('--debug', action='store_true', default=False,
                         help='output read tracking info to debug file, retain all intermediates')
+    parser.add_argument('--maxopen', dest='maxopen', default=1000, type=int,
+                        help="maximum number of open files during merge (default 1000)")
     parser.add_argument('--tmpdir', default='addsv.tmp',
                         help='temporary directory (default=addsv.tmp)')
     parser.add_argument('--seed', default=None, type=int,

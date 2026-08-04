@@ -31,6 +31,8 @@ from uuid import uuid4
 from bamsurgeon.aligners import remap_bam
 from bamsurgeon.common import get_avg_coverage
 from bamsurgeon.records import MutationRecord
+from bamsurgeon.varinput import (VariantRequest, read_variants,
+                                 sample_read_length, warn_proximity)
 
 FORMAT = '%(levelname)s %(asctime)s %(message)s'
 logging.basicConfig(format=FORMAT)
@@ -41,20 +43,9 @@ logger.setLevel(logging.INFO)
 BASES = ('A', 'T', 'C', 'G')
 
 
-@dataclass
-class VariantSite:
-    ''' one requested edit; a cluster of these shares a haplotype '''
-    chrom: str
-    start: int
-    end: int
-    vaf: float = None
-    kind: str = 'SNV'      # SNV, INS or DEL
-    altbase: str = None    # SNV: explicit ALT, otherwise chosen at random
-    insseq: str = None     # INS: sequence to insert
-
-    @property
-    def is_snv(self):
-        return self.kind == 'SNV'
+# a cluster of these shares a haplotype. Defined in varinput because the
+# legacy varfiles and a VCF both parse into it.
+VariantSite = VariantRequest
 
 
 def mut(base, altbase):
@@ -570,64 +561,68 @@ def run_spikein(args, clusters, toolname):
     logger.info('vcf output written to ' + vcf_fn)
 
 
-def read_snv_targets(path, maxmuts, haplosize):
-    ''' BED-like: chrom start end [vaf] [altbase] '''
+def resolve_haplosize(args):
+    '''
+    Returns (hapsize, read_length).
+
+    `-z auto` sets the grouping distance to the read length, which is the
+    distance at which two sites can share a read. It is opt-in rather than the
+    default because grouping is not free: a cluster collapses to a single VAF,
+    so widening it silently overrides what was asked for. A dropped mutation at
+    least shows up as a BAM/VCF divergence; an overridden VAF looks like
+    success.
+    '''
+    read_length = sample_read_length(args.bamFileName, args.refFasta)
+
+    if str(args.haplosize).lower() == 'auto':
+        if not read_length:
+            logger.warning('could not sample a read length, using --haplosize 0')
+            return 0, 0
+        logger.info('--haplosize auto: using sampled read length %d' % read_length)
+        return read_length, read_length
+
+    return int(args.haplosize), read_length or 0
+
+
+def read_snv_targets(path, maxmuts, haplosize, read_length=0):
+    ''' whitespace varfile or VCF; SNVs only '''
     from operator import attrgetter
 
-    targets = []
-    ntried = 0
+    requests = read_variants(path, 'snv', maxmuts=maxmuts)
 
-    with open(path, 'r') as bedfile:
-        for line in bedfile:
-            if maxmuts and ntried >= maxmuts:
-                break
-            c = line.strip().split()
-            if not c:
-                continue
-
-            site = VariantSite(chrom=c[0], start=int(c[1]), end=int(c[2]), kind='SNV')
-
-            if len(c) > 3:
-                site.vaf = float(c[3])
-            if len(c) == 5:
-                altbase = c[4].upper()
-                assert altbase in BASES, "ERROR: ALT " + altbase + " not A, T, C, or G!\n"
-                site.altbase = altbase
-
-            targets.append(site)
-            ntried += 1
+    targets = [r for r in requests if r.kind == 'SNV']
+    if len(targets) != len(requests):
+        logger.warning('%s: skipping %d non-SNV record(s); use addindel for those'
+                       % (path, len(requests) - len(targets)))
 
     targets.sort(key=attrgetter('chrom', 'start'))
 
-    return cluster_sites(targets, haplosize)
+    clusters = cluster_sites(targets, haplosize)
+
+    if read_length:
+        warn_proximity(clusters, read_length)
+
+    return clusters
 
 
-def read_indel_targets(path, maxmuts):
+def read_indel_targets(path, maxmuts, read_length=0):
     '''
-    BED-like: chrom start end vaf INS|DEL [seq]
+    whitespace varfile or VCF; indels only.
 
-    Indels are not grouped: each line becomes a cluster of one, preserving
-    file order, which is what addindel did before.
+    Not grouped: each becomes a cluster of one, preserving input order.
     '''
-    clusters = []
-    ntried = 0
+    requests = read_variants(path, 'indel', maxmuts=maxmuts)
 
-    with open(path, 'r') as bedfile:
-        for line in bedfile:
-            if maxmuts and ntried >= maxmuts:
-                break
-            c = line.strip().split()
-            if not c:
-                continue
+    targets = [r for r in requests if r.kind in ('INS', 'DEL')]
+    if len(targets) != len(requests):
+        logger.warning('%s: skipping %d non-indel record(s); use addsnv for those'
+                       % (path, len(requests) - len(targets)))
 
-            kind = c[4]
-            assert kind in ('INS', 'DEL'), 'indel type must be INS or DEL: %s' % kind
+    clusters = [[t] for t in targets]
 
-            site = VariantSite(chrom=c[0], start=int(c[1]), end=int(c[2]),
-                               vaf=float(c[3]), kind=kind,
-                               insseq=c[5] if kind == 'INS' else None)
-
-            clusters.append([site])
-            ntried += 1
+    # every indel is its own cluster, so any nearby pair can collide and there
+    # is no --haplosize here to group them
+    if read_length:
+        warn_proximity(clusters, read_length)
 
     return clusters

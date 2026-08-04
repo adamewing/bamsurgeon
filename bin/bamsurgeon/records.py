@@ -40,7 +40,9 @@ class MutationRecord:
     flip_right: bool = False
 
     # INS only
-    ins_id: str = None   # insertion library entry, when one was used
+    ins_id: str = None      # insertion library entry, when one was used
+    insseq: str = None      # literal inserted sequence, when given inline
+    ins_motif: str = None   # preferred cut site, NNN^NNN
     tsdlen: int = 0
 
     # DUP only

@@ -25,6 +25,11 @@ SV_HEADER_LINES = (
     '##INFO=<ID=NDUPS,Number=1,Type=Integer,Description="Number of additional tandem copies">',
     '##INFO=<ID=TSDLEN,Number=1,Type=Integer,Description="Target site duplication length">',
     '##INFO=<ID=DPR,Number=1,Type=Float,Description="Read depth in the spiked region after realignment">',
+    # bamsurgeon dialect: simulation directives with no native VCF home, kept
+    # so that an emitted truth VCF is valid input to another run
+    '##INFO=<ID=BS_INSSEQ,Number=1,Type=String,Description="bamsurgeon: literal inserted sequence">',
+    '##INFO=<ID=BS_INSLIB,Number=1,Type=String,Description="bamsurgeon: insertion library entry name">',
+    '##INFO=<ID=BS_MOTIF,Number=1,Type=String,Description="bamsurgeon: preferred insertion cut site, NNN^NNN">',
     '##ALT=<ID=DEL,Description="Deletion">',
     '##ALT=<ID=DUP,Description="Duplication">',
     '##ALT=<ID=INV,Description="Inversion">',
@@ -122,8 +127,15 @@ def write_vcf(records, ref_fa, vcf_fn, salt=None):
                     'SVLEN': int(rec.svlen), 'VAF': rec.vaf}
             if rec.kind == 'DUP' and rec.ndups:
                 info['NDUPS'] = int(rec.ndups)
-            if rec.kind == 'INS' and rec.tsdlen:
-                info['TSDLEN'] = int(rec.tsdlen)
+            if rec.kind == 'INS':
+                if rec.tsdlen:
+                    info['TSDLEN'] = int(rec.tsdlen)
+                if rec.insseq:
+                    info['BS_INSSEQ'] = rec.insseq
+                if rec.ins_id:
+                    info['BS_INSLIB'] = rec.ins_id
+                if rec.ins_motif:
+                    info['BS_MOTIF'] = rec.ins_motif
 
             rows.append((rec.chrom, rec.pos, rec.ins_id or '.',
                          base_at(rec.chrom, rec.pos), '<%s>' % rec.kind,
