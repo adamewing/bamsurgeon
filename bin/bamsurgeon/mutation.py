@@ -197,6 +197,10 @@ def mutate(args, log, bamfile, bammate, chrom, mutstart, mutend, mutpos_list, av
 
     snvfrac = float(args.snvfrac)
 
+    # --ignoresnps skips the scan for confounding nearby SNPs entirely, rather
+    # than running it and discarding the answer
+    ignoresnps = getattr(args, 'ignoresnps', False)
+
     for pcol in bamfile.pileup(reference=chrom, start=mutstart-1, end=mutend+1, max_depth=int(args.maxdepth), ignore_overlaps=False):
         # `if pcol.pos:` used to guard this loop, silently skipping position 0
         # of a contig.
@@ -271,6 +275,9 @@ def mutate(args, log, bamfile, bammate, chrom, mutstart, mutend, mutpos_list, av
         # the last column examined could ever set them.
         if result.maxfrac is None:
             result.maxfrac = 0.0
+
+        if ignoresnps:
+            continue
 
         basepile = column_bases(pcol)
         if basepile:

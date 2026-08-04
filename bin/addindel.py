@@ -7,10 +7,13 @@ The implementation lives in bamsurgeon.snvindel, which addsnv.py shares.
 '''
 
 import os
+import logging
 import argparse
 
 from bamsurgeon.aligners import SUPPORTED_ALIGNERS
 from bamsurgeon.snvindel import read_indel_targets, run_spikein
+
+logger = logging.getLogger(__name__)
 
 
 def main(args):
@@ -36,6 +39,9 @@ def run():
     parser.add_argument('--minmutreads', default=3, help='minimum number of mutated reads to output per site')
     parser.add_argument('--avoidreads', default=None, help='file of read names to avoid (mutations will be skipped if overlap)')
     parser.add_argument('--nomut', action='store_true', default=False, help="dry run")
+    parser.add_argument('--det', action='store_true', default=False, help=argparse.SUPPRESS)  # deprecated, no effect
+    parser.add_argument('--ignoresnps', action='store_true', default=False, help="skip the scan for confounding SNPs sharing reads with the mutation")
+    parser.add_argument('--insane', action='store_true', default=False, help="skip the coverage sanity check comparing input and output depth")
     parser.add_argument('--force', action='store_true', default=False, help="force mutation to happen regardless of nearby SNP or low coverage")
     parser.add_argument('--single', action='store_true', default=False, help="input BAM is simgle-ended (default is paired-end)")
     parser.add_argument('--maxopen', dest='maxopen', default=1000, help="maximum number of open files during merge (default 1000)")
@@ -54,6 +60,9 @@ def run():
     # addindel never took these, but the shared implementation reads them
     args.haplosize = 0
     args.ignoreref = False
+
+    if args.det:
+        logger.warning('--det is deprecated and has no effect')
 
     if args.picardjar is None:
         parser.error('--picardjar is required, or set BAMSURGEON_PICARD_JAR in the environment')

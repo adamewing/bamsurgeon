@@ -395,9 +395,12 @@ def makemut(args, sites, avoid, alignopts):
 
     spikein_frac = float(nmut)/float(wrote) if wrote > 0 else 0.0
 
-    # qc cutoff for final depth
-    if not ((avgoutcover > 0 and avgincover > 0 and
-             avgoutcover/avgincover >= float(args.coverdiff)) or args.force):
+    # qc cutoff for final depth. --insane skips it, --force overrides it
+    # along with everything else.
+    covers_ok = (avgoutcover > 0 and avgincover > 0 and
+                 avgoutcover/avgincover >= float(args.coverdiff))
+
+    if not (covers_ok or args.insane or args.force):
         outbam_muts.close()
         os.remove(tmpoutbamname)
         if os.path.exists(tmpoutbamname + '.bai'):
