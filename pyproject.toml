@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bamsurgeon"
+version = "1.4"
+description = "Tools for adding mutations to existing .bam files, used for testing mutation callers"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { file = "LICENSE.txt" }
+authors = [{ name = "Adam Ewing", email = "adam.ewing@gmail.com" }]
+dependencies = ["pysam>=0.22"]
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[project.urls]
+Homepage = "https://github.com/adamewing/bamsurgeon"
+
+[project.scripts]
+bamsurgeon = "bamsurgeon.cli.main:run"
+
+[tool.setuptools]
+# the package lives under bin/ alongside the legacy addsnv/addindel/addsv
+# scripts, which stay where they are so existing pipelines keep working
+package-dir = { "" = "bin" }
+packages = ["bamsurgeon", "bamsurgeon.cli"]
+
+[tool.pytest.ini_options]
+testpaths = ["test"]

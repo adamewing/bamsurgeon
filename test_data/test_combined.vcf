@@ -1,0 +1,32 @@
+##fileformat=VCFv4.2
+##FILTER=<ID=PASS,Description="All filters passed">
+##contig=<ID=22,length=51304566>
+##fileDate=2026-08-04
+##phasing=none
+##INDIVIDUAL=TRUTH
+##SAMPLE=<ID=TRUTH,Individual="TRUTH",Description="BAMSurgeon spike-in">
+##INFO=<ID=SVTYPE,Number=1,Type=String,Description="Type of structural variant">
+##INFO=<ID=SVLEN,Number=1,Type=Integer,Description="Difference in length between REF and ALT alleles">
+##INFO=<ID=END,Number=1,Type=Integer,Description="End position of the variant described in this record">
+##INFO=<ID=SOMATIC,Number=0,Type=Flag,Description="Somatic mutation in primary">
+##INFO=<ID=PRECISE,Number=0,Type=Flag,Description="Precise structural variation">
+##INFO=<ID=VAF,Number=1,Type=Float,Description="Variant allele frequency">
+##INFO=<ID=MATEID,Number=1,Type=String,Description="Breakend mate">
+##INFO=<ID=NDUPS,Number=1,Type=Integer,Description="Number of additional tandem copies">
+##INFO=<ID=TSDLEN,Number=1,Type=Integer,Description="Target site duplication length">
+##INFO=<ID=DPR,Number=1,Type=Float,Description="Read depth in the spiked region after realignment">
+##INFO=<ID=BS_INSSEQ,Number=1,Type=String,Description="bamsurgeon: literal inserted sequence">
+##INFO=<ID=BS_INSLIB,Number=1,Type=String,Description="bamsurgeon: insertion library entry name">
+##INFO=<ID=BS_MOTIF,Number=1,Type=String,Description="bamsurgeon: preferred insertion cut site, NNN^NNN">
+##ALT=<ID=DEL,Description="Deletion">
+##ALT=<ID=DUP,Description="Duplication">
+##ALT=<ID=INV,Description="Inversion">
+##ALT=<ID=INS,Description="Insertion">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	SPIKEIN
+22	33694303	.	C	CATGGC	100	PASS	SOMATIC;VAF=1	GT	0/1
+22	33714965	.	A	G	100	PASS	SOMATIC;VAF=0.5	GT	0/1
+22	33769483	.	T	A	100	PASS	SOMATIC;VAF=0.35	GT	0/1
+22	33871043	.	G	<DEL>	100	PASS	END=33884754;SVTYPE=DEL;PRECISE;SOMATIC;SVLEN=13711;VAF=0.75	GT	./.
+22	34006643	.	AAGAACCCACA	A	100	PASS	SOMATIC;VAF=0.5	GT	0/1
+22	34071043	.	C	<INV>	100	PASS	END=34084754;SVTYPE=INV;PRECISE;SOMATIC;SVLEN=13711;VAF=0.5	GT	./.

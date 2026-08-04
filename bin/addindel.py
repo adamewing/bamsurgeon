@@ -11,7 +11,7 @@ import logging
 import argparse
 
 from bamsurgeon.aligners import SUPPORTED_ALIGNERS
-from bamsurgeon.snvindel import read_indel_targets, run_spikein
+from bamsurgeon.snvindel import read_indel_targets, run_and_write
 from bamsurgeon.varinput import sample_read_length
 
 logger = logging.getLogger(__name__)
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 def main(args):
     read_length = sample_read_length(args.bamFileName, args.refFasta) or 0
     clusters = read_indel_targets(args.varFileName, int(args.numsnvs), read_length)
-    run_spikein(args, clusters, 'addindel')
+    run_and_write(args, clusters, 'addindel')
 
 
 def run():

@@ -10,14 +10,14 @@ import os
 import argparse
 
 from bamsurgeon.aligners import SUPPORTED_ALIGNERS
-from bamsurgeon.snvindel import read_snv_targets, resolve_haplosize, run_spikein
+from bamsurgeon.snvindel import read_snv_targets, resolve_haplosize, run_and_write
 
 
 def main(args):
     haplosize, read_length = resolve_haplosize(args)
     clusters = read_snv_targets(args.varFileName, int(args.numsnvs),
                                 haplosize, read_length)
-    run_spikein(args, clusters, 'addsnv')
+    run_and_write(args, clusters, 'addsnv')
 
 
 def run():

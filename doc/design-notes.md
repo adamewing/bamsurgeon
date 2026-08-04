@@ -29,28 +29,51 @@ research problem, not an implementation detail.
 continues to bypass both the SNP-proximity guard and the coverage check;
 the other two flags bypass one each.
 
-## Outstanding: Stage 4 — VCF input and unified CLI
+**The unified entry point applies SVs first, then small variants on the SV
+output.** Not an implementation convenience: the SV engine replaces every read
+over its interval with reads simulated from a reference template, which
+carries no small variants, so anything spiked in beforehand is reverted. The
+other order works because the read-editing engine happily edits simulated
+reads, and it means a small variant inside a duplication or inversion
+survives rather than needing the composition machinery described below. A
+small variant inside a *deletion* still has nothing to sit on, which is
+correct.
 
-- `varinput.py`: one `VariantRequest` produced by both a VCF reader and the
-  frozen legacy varfile readers. Legacy readers move verbatim; they are the
-  compatibility contract.
-- **Proximity warning.** Warn when two requested sites fall in different
-  haplotype clusters but within a read length of each other, comparing target
-  *intervals* rather than the drawn position. Warn harder when their VAFs
-  differ, because clustering collapses a cluster to a single VAF.
-- **`-z auto`** as an opt-in value alongside the integer. Deliberately not the
-  default: auto-expanding clusters would trade a visible failure (a dropped
-  mutation, detectable as BAM/VCF divergence) for an invisible one (a silently
-  overridden VAF).
-- **SV / small-variant overlap detection.** An SNV inside an SV's excluded read
-  set is destroyed. Detection and warning only; composition is out of scope,
-  see below.
-- CLI collisions: `-s` means `--snvfrac` in two tools and `--svfrac` in the
-  third; `--coverdiff` defaults 0.9 vs 0.1; `--seed` is `type=int` only in
-  addsv; addsv has no `--maxopen` so it inherits `mergebams`'s default of 100
-  rather than 1000.
+The alternative considered, and rejected, was merging both donors and calling
+`replace_reads` once. One pass instead of two, but it destroys exactly the
+small variants the ordering saves.
 
-### SVs overwrite small variants
+**`--coverdiff` stays per variant class.** addsnv defaulted to 0.9 and
+addindel to 0.1, and that is tuning rather than drift: a deletion removes
+bases and its reads may soft-clip, so the input/output coverage ratio
+legitimately falls further. Forcing one value showed it immediately -- a 10bp
+deletion that passes at 0.1 is dropped at 0.9. The unified CLI therefore
+takes `--coverdiff` (0.9) and `--indel-coverdiff` (0.1). Tools that set only
+one keep using it for both.
+
+**`-s` is retired in the unified CLI only.** It means `--snvfrac` in
+addsnv/addindel and `--svfrac` in addsv, so one letter cannot carry both
+where the engines meet. Retiring it in the legacy shims would break every
+existing invocation for no benefit, since within one tool it was never
+ambiguous.
+
+## Stage 4 — done
+
+`varinput.py` gives both engines one `VariantRequest`, produced by a VCF
+reader or by the legacy varfile readers (relocated verbatim). The unified
+`bamsurgeon` entry point takes one VCF containing every class. Proximity and
+overlap warnings, `-z auto`, `--seed type=int` everywhere and addsv's missing
+`--maxopen` all landed.
+
+Remaining from the original plan, deliberately not done: nothing. The
+`--coverdiff` and `-s` items were resolved as described above rather than as
+originally sketched.
+
+### SVs overwrite small variants (background)
+
+The ordering above avoids this in a single unified run. It still applies to
+anyone running the tools separately in the wrong order, and to the general
+composition problem.
 
 `get_reads()` excludes every read in an SV region and `replace_reads(allreads=True)`
 substitutes wgsim reads simulated from the template, which knows nothing about
@@ -65,9 +88,8 @@ modelling, not the plumbing: conditional VAF (an SNV at 0.3 inside an SV at
 0.5 — what fraction of simulated SV reads carry it?) and phase (SNV on the SV
 allele or the reference allele; VCF cannot say without phasing).
 
-**Ordering workaround, valid today:** SVs first, then SNVs/indels on the SV
-output BAM. `addsnv` mutates whatever reads it finds, including simulated ones.
-It is SNV-then-SV that reverts.
+**This is what the unified CLI does automatically.** Running the tools by hand,
+the same rule applies: SVs first, then SNVs/indels on the SV output BAM.
 
 ## Outstanding: Stage 5 — cleanup
 
@@ -75,6 +97,9 @@ It is SNV-then-SV that reverts.
   (`import vcf`; unmaintained since 2018) onto `pysam.VariantFile`. Keep
   `have_identical_haplotypes()`.
 - Convert `test/*.sh` to a pytest table asserting via `validate_spikein.py`.
+  `test/test_combined.py` is the seed: it runs the unified entry point on
+  `test_data/test_combined.vcf` and asserts every site validates, and it
+  asserts that a small variant inside an SV survives the ordering above.
   Four cases reference fixtures absent from the repo (`test_trn.sh`,
   `test_snv_haplo.sh`, `test_snv_bowtie2.sh`, `test_indel_bowtie2.sh`);
   `test_snv_avoid.sh` uses one file as both input and output and depends on

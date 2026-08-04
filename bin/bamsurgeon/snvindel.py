@@ -388,15 +388,25 @@ def makemut(args, sites, avoid, alignopts):
 
     # qc cutoff for final depth. --insane skips it, --force overrides it
     # along with everything else.
+    #
+    # SNVs and indels get different cutoffs because they lose coverage
+    # differently on realignment: a deletion removes bases and its reads may
+    # soft-clip, so the ratio legitimately falls further. addsnv defaulted to
+    # 0.9 and addindel to 0.1 for that reason. Tools that set only one value
+    # keep using it for both, so their behaviour is unchanged.
+    coverdiff = args.coverdiff
+    if not is_snv_cluster:
+        coverdiff = getattr(args, 'indel_coverdiff', None) or args.coverdiff
+
     covers_ok = (avgoutcover > 0 and avgincover > 0 and
-                 avgoutcover/avgincover >= float(args.coverdiff))
+                 avgoutcover/avgincover >= float(coverdiff))
 
     if not (covers_ok or args.insane or args.force):
         outbam_muts.close()
         os.remove(tmpoutbamname)
         if os.path.exists(tmpoutbamname + '.bai'):
             os.remove(tmpoutbamname + '.bai')
-        logger.warning("%s dropped for outcover/incover < %s" % (hapstr, str(args.coverdiff)))
+        logger.warning("%s dropped for outcover/incover < %s" % (hapstr, str(coverdiff)))
         log.close()
         bamfile.close()
         bammate.close()
@@ -463,10 +473,11 @@ def cluster_sites(targets, hapsize):
 
 def run_spikein(args, clusters, toolname):
     '''
-    Shared driver: farm clusters out to the pool, merge, replace, write VCF.
+    Shared driver: farm clusters out to the pool, merge, replace reads.
 
-    addsnv and addindel had a copy of this each, differing only in the log
-    directory name and the temp file prefix.
+    Returns the MutationRecords rather than writing a VCF, so a run combining
+    both engines can emit one truth file. addsnv and addindel had a copy of
+    this each, differing only in the log directory name and temp file prefix.
     '''
     import sys
     import bamsurgeon.replace_reads as rr
@@ -551,6 +562,15 @@ def run_spikein(args, clusters, toolname):
                          args.refFasta, keepqual=True, seed=args.seed)
         os.remove(outbam_mutsfile)
 
+    return records
+
+
+def run_and_write(args, clusters, toolname):
+    ''' run_spikein plus the per-tool truth VCF that addsnv/addindel emit '''
+    import bamsurgeon.makevcf as makevcf
+
+    records = run_spikein(args, clusters, toolname)
+
     var_basename = '.'.join(os.path.basename(args.varFileName).split('.')[:-1])
     bam_basename = '.'.join(os.path.basename(args.outBamFile).split('.')[:-1])
 
@@ -559,6 +579,31 @@ def run_spikein(args, clusters, toolname):
     makevcf.write_vcf(records, args.refFasta, vcf_fn)
 
     logger.info('vcf output written to ' + vcf_fn)
+
+    return records
+
+
+def cluster_small(requests, hapsize, read_length=0):
+    '''
+    Group a mixed list of small-variant requests.
+
+    SNVs cluster by --haplosize; indels stay singletons, because an indel
+    cluster would have to compose makeins/makedel coordinate shifts and
+    makemut refuses mixed clusters anyway.
+    '''
+    from operator import attrgetter
+
+    snvs = sorted([r for r in requests if r.kind == 'SNV'],
+                  key=attrgetter('chrom', 'start'))
+    indels = [r for r in requests if r.kind in ('INS', 'DEL')]
+
+    clusters = cluster_sites(snvs, hapsize) if snvs else []
+    clusters += [[r] for r in indels]
+
+    if read_length:
+        warn_proximity(clusters, read_length)
+
+    return clusters
 
 
 def resolve_haplosize(args):

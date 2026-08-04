@@ -556,13 +556,17 @@ def looks_like_vcf(path):
 def read_variants(path, kind, default_vaf=1.0, maxmuts=0):
     '''
     Read either format. `kind` names the legacy reader to use when the input
-    is not a VCF: 'snv', 'indel' or 'sv'.
+    is not a VCF: 'snv', 'indel', 'sv', or 'any' to keep everything, which is
+    what the unified entry point wants.
     '''
     if looks_like_vcf(path):
         requests = read_vcf(path, default_vaf=default_vaf, maxmuts=maxmuts)
 
+        if kind == 'any':
+            return requests
+
         # both engines' records are visible here and nowhere else, so this is
-        # the only place the cross-engine overlap can be seen
+        # the only place a single-engine tool can see the cross-engine overlap
         warn_sv_overlap(requests)
 
         wanted = SV_ENGINE if kind == 'sv' else SMALL_ENGINE
@@ -580,5 +584,8 @@ def read_variants(path, kind, default_vaf=1.0, maxmuts=0):
         return read_indel_varfile(path, maxmuts)
     if kind == 'sv':
         return read_sv_varfile(path, default_vaf, maxmuts)
+    if kind == 'any':
+        raise ValueError('a legacy varfile cannot mix variant classes; '
+                         'use a VCF for combined input')
 
     raise ValueError('unknown variant kind: %s' % kind)
