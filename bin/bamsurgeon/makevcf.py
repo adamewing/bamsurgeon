@@ -254,4 +254,3 @@ def write_vcf_indel(logdir, ref_fa, vcf_fn):
 
                             vcf_out.write('\t'.join((chrom, start, '.', ref, alt, '100',
                                           'PASS', ';'.join(info), 'GT', '0/1')) + '\n')
-

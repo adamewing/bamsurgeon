@@ -554,5 +554,3 @@ def main(args):
     makevcf.write_vcf(records, args.refFasta, vcf_fn, salt=args.salt)
 
     logger.info('vcf output written to ' + vcf_fn)
-
-
