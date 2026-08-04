@@ -97,6 +97,46 @@ It is SNV-then-SV that reverts.
   checksum comparison against earlier runs; validate with
   `validate_spikein.py` before and after instead.
 
+## Scale: what is untested, and where it will bite first
+
+Everything here has only been exercised on a ~770 kb chr22 region at ~50x.
+It needs stress-testing on whole genomes before it can be trusted at that
+scale. Several choices deliberately traded headroom for simplicity, and these
+are the ones to look at first.
+
+**`get_reads()` is no longer streaming.** Exact-count selection has to know the
+whole candidate population before it can emit anything, so it now holds a set
+of qnames for the interval and makes two passes. Memory is O(reads in
+interval) where it used to be O(1), and `select_qnames()` sorts that set. Fine
+for a 14 kb interval; a chromosome-arm deletion at 30x is a different
+proposition.
+
+**Interval templates fetch the whole span as a Python string.**
+`build_interval()` fetches `ref[start-pad : end+pad]` and lets `MutableSeq`
+slice it. A 1 Mb deletion is a 1 MB string; a chromosome-arm deletion is
+~100 MB, and the deletion case only ever needs the two flanks. Worth
+special-casing DEL to fetch flanks only if large deletions become common.
+
+**Duplication defaults do not scale.** The simulated interior is
+`(ndups + 1)` copies of the interval, so a 1 Mb DUP with `ndups 3` is a 4 MB
+template and proportionally many simulated reads. `--donorbam` exists exactly
+for this and is the WGS path; the simulate-by-default choice suits test-scale
+intervals.
+
+**`replace_reads()` loads the entire donor BAM into a dict** keyed by qname,
+holding read objects. This predates the rework and is untouched, but with
+thousands of mutations merged into one donor it is the most likely place to
+run out of memory. It is also the one step that sees every read in the target
+BAM.
+
+**`mergebams` in the SV path still inherits `maxopen=100`** rather than 1000,
+because addsv never grew a `--maxopen`. With thousands of temp BAMs that is
+many more hierarchical merge rounds than necessary. Listed under Stage 4.
+
+**The validator does a fetch or pileup per record.** Acceptable for a
+truth VCF of tens of thousands of sites, but it has never been run against a
+whole-genome truth set and makes no attempt to batch by region.
+
 ## Fixture limitations worth knowing
 
 `test_data/testregion_realign.bam` has no column with more than one distinct
