@@ -616,7 +616,7 @@ def main(args):
 
     vcf_fn = args.vcf + bam_basename + '.addsv.' + var_basename + '.vcf'
 
-    makevcf.write_vcf_sv(records, args.refFasta, vcf_fn, salt=args.salt)
+    makevcf.write_vcf(records, args.refFasta, vcf_fn, salt=args.salt)
 
     logger.info('vcf output written to ' + vcf_fn)
 

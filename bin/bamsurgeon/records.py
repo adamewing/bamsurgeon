@@ -17,8 +17,11 @@ and make it the real one.
 from dataclasses import dataclass, field
 
 
-# interval types carry START/END; BND carries a mate
+# symbolic SV interval types carry START/END; BND carries a mate
 INTERVAL_KINDS = ('DEL', 'DUP', 'INV', 'INS')
+
+# small variants are written with explicit REF/ALT rather than a symbolic ALT
+SMALL_KINDS = ('SNV', 'INDEL')
 
 
 @dataclass(frozen=True)
@@ -43,9 +46,19 @@ class MutationRecord:
     # DUP only
     ndups: int = 1
 
+    # small variants (SNV/INDEL) carry explicit alleles instead of a symbolic
+    # ALT, and report the coverage the spike-in achieved
+    ref_allele: str = None
+    alt_allele: str = None
+    dpr: float = None
+
     # provenance
     mutid: str = ''
     donor_interior: bool = False   # DUP interior came from --donorbam
+
+    @property
+    def is_small(self):
+        return self.ref_allele is not None and self.alt_allele is not None
 
     def key(self):
         ''' stable identity, used to derive breakend IDs '''

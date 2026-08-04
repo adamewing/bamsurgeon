@@ -62,7 +62,9 @@ def remap_fastq(name, fq1, fastaref, outbam, options, fq2=None, mutid='null', th
     sam_out = basefn + '.sam'
     sort_tmp = basefn + '.sort.bam'
 
-    logger.info(mutid + " aligning " + fq1 + ',' + fq2 + " with " + name)
+    # fq2 is None for single-ended input; concatenating it here used to raise
+    # TypeError before any aligner ran, which made --single unusable
+    logger.info("%s aligning %s with %s" % (mutid, ','.join(f for f in (fq1, fq2) if f), name))
     if name == 'backtrack':
         _run_backtrack(fq1, fastaref, sam_out, fq2=fq2, threads=threads)
     elif name == 'mem':

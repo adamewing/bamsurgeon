@@ -8,6 +8,12 @@ import hashlib
 from bamsurgeon.records import INTERVAL_KINDS
 
 
+# small variants are written as heterozygous spike-ins, SVs as uncalled --
+# matching what the log-scraping writers they replace emitted
+HET = (0, 1)
+UNCALLED = (None, None)
+
+
 SV_HEADER_LINES = (
     '##INFO=<ID=SVTYPE,Number=1,Type=String,Description="Type of structural variant">',
     '##INFO=<ID=SVLEN,Number=1,Type=Integer,Description="Difference in length between REF and ALT alleles">',
@@ -18,6 +24,7 @@ SV_HEADER_LINES = (
     '##INFO=<ID=MATEID,Number=1,Type=String,Description="Breakend mate">',
     '##INFO=<ID=NDUPS,Number=1,Type=Integer,Description="Number of additional tandem copies">',
     '##INFO=<ID=TSDLEN,Number=1,Type=Integer,Description="Target site duplication length">',
+    '##INFO=<ID=DPR,Number=1,Type=Float,Description="Read depth in the spiked region after realignment">',
     '##ALT=<ID=DEL,Description="Deletion">',
     '##ALT=<ID=DUP,Description="Duplication">',
     '##ALT=<ID=INV,Description="Inversion">',
@@ -67,9 +74,9 @@ def _breakend_alts(rec, base1, base2):
     return alt1, alt2
 
 
-def write_vcf_sv(records, ref_fa, vcf_fn, salt=None):
+def write_vcf(records, ref_fa, vcf_fn, salt=None):
     '''
-    Write SV truth records, sorted by coordinate.
+    Write truth records of any kind, sorted by coordinate.
 
     The previous writer walked os.listdir(logdir) and re-parsed per-mutation
     log lines, so output order was arbitrary and the result could not be
@@ -97,10 +104,18 @@ def write_vcf_sv(records, ref_fa, vcf_fn, salt=None):
 
             rows.append((rec.chrom, rec.pos, id1, base1, alt1,
                          {'SVTYPE': 'BND', 'PRECISE': True, 'SOMATIC': True,
-                          'MATEID': id2, 'VAF': rec.vaf}, None))
+                          'MATEID': id2, 'VAF': rec.vaf}, None, UNCALLED))
             rows.append((rec.mate_chrom, rec.mate_pos, id2, base2, alt2,
                          {'SVTYPE': 'BND', 'PRECISE': True, 'SOMATIC': True,
-                          'MATEID': id1, 'VAF': rec.vaf}, None))
+                          'MATEID': id1, 'VAF': rec.vaf}, None, UNCALLED))
+
+        elif rec.is_small:
+            info = {'SOMATIC': True, 'VAF': rec.vaf}
+            if rec.dpr is not None:
+                info['DPR'] = rec.dpr
+
+            rows.append((rec.chrom, rec.pos, '.', rec.ref_allele.upper(),
+                         rec.alt_allele.upper(), info, None, HET))
 
         elif rec.kind in INTERVAL_KINDS:
             info = {'SVTYPE': rec.kind, 'PRECISE': True, 'SOMATIC': True,
@@ -112,12 +127,12 @@ def write_vcf_sv(records, ref_fa, vcf_fn, salt=None):
 
             rows.append((rec.chrom, rec.pos, rec.ins_id or '.',
                          base_at(rec.chrom, rec.pos), '<%s>' % rec.kind,
-                         info, rec.end))
+                         info, rec.end, UNCALLED))
 
     rows.sort(key=lambda r: (order.get(r[0], len(order)), r[1]))
 
     with pysam.VariantFile(vcf_fn, 'w', header=header) as out:
-        for chrom, pos, rid, refbase, alt, info, end in rows:
+        for chrom, pos, rid, refbase, alt, info, end, gt in rows:
             vrec = out.new_record(
                 contig=chrom,
                 start=pos - 1,
@@ -129,7 +144,7 @@ def write_vcf_sv(records, ref_fa, vcf_fn, salt=None):
             )
             for k, v in info.items():
                 vrec.info[k] = v
-            vrec.samples['SPIKEIN']['GT'] = (None, None)
+            vrec.samples['SPIKEIN']['GT'] = gt
             out.write(vrec)
 
 

@@ -2,6 +2,7 @@
 
 from bamsurgeon.common import *
 from collections import OrderedDict as od
+from dataclasses import dataclass, field
 import subprocess
 
 import logging
@@ -11,32 +12,32 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-def countBaseAtPos(bamfile,chrom,pos,mutid='null'):
-    """ return list of bases at position chrom,pos
+def column_bases(pcol):
     """
-    locstr = chrom + ":" + str(pos) + "-" + str(pos)
-    args = ['samtools', 'mpileup', bamfile,'-Q', '0', '-r', locstr]
+    ACGT bases at a pileup column, from primary alignments only.
 
-    p = subprocess.Popen(args,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
-    p.wait()
-    pout = p.stdout.readlines()
+    Replaces countBaseAtPos(), which forked `samtools mpileup` once per
+    column -- hundreds of process spawns per mutation, and the dominant cost
+    of addsnv/addindel. The data is already in the column being iterated.
 
-    pileup = None 
-
-    for line in pout:
-        line = line.decode()
-        try:
-            c = line.strip().split()
-            assert len(c) > 5
-            pileup = c[4].upper()
-        except AssertionError:
-            logger.info(" mpileup failed, no coverage for base: " + chrom + ":" + str(pos))
-            return []
+    That function also passed pysam's 0-based pcol.pos into a 1-based mpileup
+    region string, so it reported the bases one position to the left of the
+    column it was called for.
+    """
     bases = []
-    if pileup:
-        for b in pileup:
-            if b in ['A','T','C','G']:
-                bases.append(b)
+
+    for pread in pcol.pileups:
+        if pread.is_del or pread.is_refskip or pread.query_position is None:
+            continue
+
+        aln = pread.alignment
+        if aln.is_unmapped or aln.is_secondary or aln.is_supplementary \
+                or aln.is_duplicate or aln.is_qcfail:
+            continue
+
+        base = aln.query_sequence[pread.query_position].upper()
+        if base in ('A', 'C', 'G', 'T'):
+            bases.append(base)
 
     return bases
 
@@ -171,111 +172,128 @@ def find_mate(read, bam):
     return None
 
 
+@dataclass
+class MutateResult:
+    """
+    Outcome of collecting and editing the reads over a mutation region.
+
+    A dataclass rather than a tuple because one of the six former return
+    sites returned five values, so `--requirepaired` with a mateless read
+    unpacked short and raised instead of skipping the site.
+    """
+    failed: bool = False
+    has_snp: bool = False
+    maxfrac: float = None
+    outreads: dict = field(default_factory=od)
+    mutreads: dict = field(default_factory=od)
+    mutmates: dict = field(default_factory=od)
+
+
 def mutate(args, log, bamfile, bammate, chrom, mutstart, mutend, mutpos_list, avoid=None, mutid_list=None, is_snv=False, mutbase_list=None, is_insertion=False, is_deletion=False, ins_seq=None, reffile=None, indel_start=None, indel_end=None):
     assert mutend > mutstart, "mutation start must occur before mutation end"
 
-    hasSNP = False
-
-    outreads = od()
-    mutreads = od()
-    mutmates = od()
-
+    result = MutateResult()
     region = 'haplo_' + chrom + '_' + str(mutstart) + '_' + str(mutend)
 
-    maxfrac = None
+    snvfrac = float(args.snvfrac)
 
     for pcol in bamfile.pileup(reference=chrom, start=mutstart-1, end=mutend+1, max_depth=int(args.maxdepth), ignore_overlaps=False):
-        if pcol.pos:
-            if args.ignorepileup and (pcol.pos < mutstart-1 or pcol.pos > mutend+1):
+        # `if pcol.pos:` used to guard this loop, silently skipping position 0
+        # of a contig.
+        if args.ignorepileup and (pcol.pos < mutstart-1 or pcol.pos > mutend+1):
+            continue
+
+        is_mutcol = pcol.pos+1 in mutpos_list
+
+        for pread in pcol.pileups:
+            if avoid is not None and pread.alignment.qname in avoid:
+                logger.warning(region + " dropped mutation due to read in --avoidlist " + pread.alignment.qname)
+                return MutateResult(failed=True, maxfrac=result.maxfrac)
+
+            if not is_mutcol:
                 continue
 
-            refbase = reffile.fetch(chrom, pcol.pos-1, pcol.pos)
-            basepile = ''
-            for pread in pcol.pileups:
-                if avoid is not None and pread.alignment.qname in avoid:
-                    logger.warning(region + " dropped mutation due to read in --avoidlist " + pread.alignment.qname)
-                    return True, False, maxfrac, {}, {}, {}
+            # only consider primary alignments
+            if pread.query_position is not None and not pread.alignment.is_secondary and bin(pread.alignment.flag & 2048) != bin(2048):
+                pairname = 'F' # read is first in pair
+                if pread.alignment.is_read2:
+                    pairname = 'S' # read is second in pair
+                if not pread.alignment.is_paired:
+                    pairname = 'U' # read is unpaired
 
-                # only consider primary alignments
-                if pread.query_position is not None and not pread.alignment.is_secondary and bin(pread.alignment.flag & 2048) != bin(2048):
-                    basepile += pread.alignment.seq[pread.query_position-1]
-                    pairname = 'F' # read is first in pair
-                    if pread.alignment.is_read2:
-                        pairname = 'S' # read is second in pair
-                    if not pread.alignment.is_paired:
-                        pairname = 'U' # read is unpaired
+                extqname = ','.join((pread.alignment.qname,str(pread.alignment.pos),pairname))
 
-                    extqname = ','.join((pread.alignment.qname,str(pread.alignment.pos),pairname))
+                if not pread.alignment.mate_is_unmapped:
+                    result.outreads[extqname] = pread.alignment
+                    mutid = mutid_list[mutpos_list.index(pcol.pos+1)]
 
-                    if pcol.pos+1 in mutpos_list:
+                    if is_snv:
+                        if extqname not in result.mutreads:
+                            result.mutreads[extqname] = pread.alignment.seq
 
-                        if not pread.alignment.is_secondary and bin(pread.alignment.flag & 2048) != bin(2048) and not pread.alignment.mate_is_unmapped:
-                            outreads[extqname] = pread.alignment
-                            mutid = mutid_list[mutpos_list.index(pcol.pos+1)]
+                        mutbase = mutbase_list[mutpos_list.index(pcol.pos+1)]
+                        mutbases = list(result.mutreads[extqname])
+                        mutbases[pread.query_position] = mutbase
+                        result.mutreads[extqname] = ''.join(mutbases)
 
-                            if is_snv:
-                                if extqname not in mutreads:
-                                    mutreads[extqname] = pread.alignment.seq
+                    if is_insertion:
+                        result.mutreads[extqname] = makeins(pread.alignment, indel_start, ins_seq)
 
-                                mutbase = mutbase_list[mutpos_list.index(pcol.pos+1)]
-                                mutbases = list(mutreads[extqname])
-                                mutbases[pread.query_position] = mutbase
-                                mutread = ''.join(mutbases)
-                                mutreads[extqname] = mutread
+                    if is_deletion:
+                        result.mutreads[extqname] = makedel(pread.alignment, chrom, indel_start, indel_end, reffile)
 
-                            if is_insertion:
-                                mutreads[extqname] = makeins(pread.alignment, indel_start, ins_seq)
+                    mate = None
+                    if not args.single:
+                        try:
+                            mate = find_mate(pread.alignment, bammate)
+                        except ValueError:
+                            raise ValueError('cannot find mate reference chrom for read %s, is this a single-ended BAM?' % pread.alignment.qname)
 
-                            if is_deletion:
-                                mutreads[extqname] = makedel(pread.alignment, chrom, indel_start, indel_end, reffile)
+                        if mate is None:
+                            logger.warning(mutid + " warning: no mate for " + pread.alignment.qname)
+                            if args.requirepaired:
+                                logger.warning(mutid + " skipped mutation due to --requirepaired")
+                                return MutateResult(failed=True, maxfrac=result.maxfrac)
 
-                            mate = None
-                            if not args.single:
-                                try:
-                                    mate = find_mate(pread.alignment, bammate)
-                                except ValueError:
-                                    raise ValueError('cannot find mate reference chrom for read %s, is this a single-ended BAM?' % pread.alignment.qname)
+                    if extqname not in result.mutmates:
+                        result.mutmates[extqname] = mate
 
-                                if mate is None:
-                                    logger.warning(mutid + " warning: no mate for " + pread.alignment.qname)
-                                    if args.requirepaired:
-                                        logger.warning(mutid + " skipped mutation due to --requirepaired")
-                                        return True, False, {}, {}, {}
+                    log.write(" ".join(('read',extqname,result.mutreads[extqname],"\n")))
 
-                            if extqname not in mutmates:
-                                mutmates[extqname] = mate
+                if len(result.mutreads) > int(args.maxdepth):
+                    logger.warning("depth at site is greater than cutoff, aborting mutation")
+                    return MutateResult(failed=True, maxfrac=result.maxfrac)
 
-                            log.write(" ".join(('read',extqname,mutreads[extqname],"\n")))
+        # make sure region doesn't have any changes that are likely SNPs
+        # (trying to avoid messing with haplotypes)
+        #
+        # maxfrac and hasSNP used to be reset at the top of this block, so only
+        # the last column examined could ever set them.
+        if result.maxfrac is None:
+            result.maxfrac = 0.0
 
-                        if len(mutreads) > int(args.maxdepth):
-                            logger.warning("depth at site is greater than cutoff, aborting mutation")
-                            return True, False, maxfrac, {}, {}, {}
+        basepile = column_bases(pcol)
+        if basepile:
+            majb = majorbase(basepile)
+            minb = minorbase(basepile)
 
-            # make sure region doesn't have any changes that are likely SNPs
-            # (trying to avoid messing with haplotypes)
-            maxfrac = 0.0
-            hasSNP  = False
+            frac = float(minb[1])/(float(majb[1])+float(minb[1]))
+            if minb[0] == majb[0]:
+                frac = 0.0
+            if frac > result.maxfrac:
+                result.maxfrac = frac
+            if frac > snvfrac:
+                # this warning used to concatenate args.snvfrac, an int by
+                # default, onto a str and raise TypeError instead of warning
+                logger.warning("%s dropped for proximity to SNP, nearby SNP MAF: %f (max snv frac: %f)" % (region, frac, snvfrac))
+                result.has_snp = True
+        else:
+            logger.warning(region + " could not pileup for region: " + chrom + ":" + str(pcol.pos))
+            if not args.ignorepileup:
+                result.has_snp = True
 
-            basepile = countBaseAtPos(args.bamFileName,chrom,pcol.pos,mutid=region)
-            if basepile:
-                majb = majorbase(basepile)
-                minb = minorbase(basepile)
-
-                frac = float(minb[1])/(float(majb[1])+float(minb[1]))
-                if minb[0] == majb[0]:
-                    frac = 0.0
-                if frac > maxfrac:
-                    maxfrac = frac
-                if frac > float(args.snvfrac):
-                    logger.warning(region + " dropped for proximity to SNP, nearby SNP MAF: " + str(frac)  + " (max snv frac: " + args.snvfrac + ")")
-                    hasSNP = True
-            else:
-                logger.warning(region + " could not pileup for region: " + chrom + ":" + str(pcol.pos))
-                if not args.ignorepileup:
-                    hasSNP = True
-
-    if maxfrac is None:
+    if result.maxfrac is None:
         logger.warning("could not pile up over region: %s" % region)
-        return True, False, maxfrac, {}, {}, {}
+        return MutateResult(failed=True)
 
-    return False, hasSNP, maxfrac, outreads, mutreads, mutmates # todo: convert to class
+    return result
