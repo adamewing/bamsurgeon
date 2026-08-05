@@ -93,9 +93,17 @@ the same rule applies: SVs first, then SNVs/indels on the SV output BAM.
 
 ## Outstanding: Stage 5 — cleanup
 
-- Port `scripts/evaluator.py` and `scripts/bamregions_from_vcf.py` off PyVCF
-  (`import vcf`; unmaintained since 2018) onto `pysam.VariantFile`. Keep
-  `have_identical_haplotypes()`.
+- ~~Port `scripts/evaluator.py` and `scripts/bamregions_from_vcf.py` off
+  PyVCF onto `pysam.VariantFile`.~~ Done. `test/test_evaluator.py` covers it
+  and needs only pysam, so it runs without an aligner or picard.
+
+  Not mechanical in the end: SV mode had never worked. `expand_sv_ends()`
+  did `int(rec.INFO.get('END')[0])`, which subscripts a scalar, and the
+  `except TypeError` meant to report that referenced a `logger` the module
+  never defined, so every SV evaluation died with a NameError. Separately,
+  the record that had matched was tracked by following the fetch loop
+  variable, so the wrong truth site was marked used and deleted from the
+  false-negative set whenever a window returned more than one record.
 - Convert `test/*.sh` to a pytest table asserting via `validate_spikein.py`.
   `test/test_combined.py` is the seed: it runs the unified entry point on
   `test_data/test_combined.vcf` and asserts every site validates, and it

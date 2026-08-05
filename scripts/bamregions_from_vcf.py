@@ -1,30 +1,36 @@
 #!/usr/bin/env python
 
-import vcf
 import os
 import pysam
 import argparse
 import logging
 
+FORMAT = '%(levelname)s %(asctime)s %(message)s'
+logging.basicConfig(format=FORMAT)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
 def fetchregions(infn, outfn, invcf, fasta_ref, window=1000):
     inbam  = pysam.AlignmentFile(infn, reference_filename=fasta_ref)
     outbam = pysam.AlignmentFile(outfn, 'wb', template=inbam)
 
-    vcfh = vcf.Reader(filename=invcf)
+    vcfh = pysam.VariantFile(invcf)
 
     for rec in vcfh:
-        start = rec.POS - window
-        end   = rec.POS + window
+        start = rec.pos - window
+        # htslib folds INFO/END into rec.stop, so this covers symbolic SVs
+        # too; the previous version subscripted the INFO value, which is a
+        # scalar for Number=1 and would have raised
+        end = max(rec.pos, rec.stop) + window
 
-        if 'END' in rec.INFO:
-            end = int(rec.INFO.get('END')[0]) + window
-
-        if rec.CHROM not in inbam.references:
-            logging.warn("WARNING: " + rec.CHROM + " contig or chromosome not in " + infn + "\n")
+        if rec.chrom not in inbam.references:
+            logger.warning("%s contig or chromosome not in %s" % (rec.chrom, infn))
             continue
 
-        for read in inbam.fetch(rec.CHROM, start, end):
+        for read in inbam.fetch(rec.chrom, max(0, start), end):
             outbam.write(read)
+
+    vcfh.close()
 
     inbam.close()
     outbam.close()
@@ -49,4 +55,3 @@ if __name__ == '__main__':
     parser.add_argument('-w', '--window', default=1000, help="window +/- VCF entry (default 1000)")
     args = parser.parse_args()
     main(args)
-
