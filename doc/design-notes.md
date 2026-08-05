@@ -242,6 +242,24 @@ uniformly Q40.
   has no effect. `check_java()` and `default-jre` are gone from the dependency
   check, setup script and Dockerfile.
 
+## Outstanding
+
+**`doc/Manual.pdf` is stale.** It predates every documentation change in this
+work, so it still describes picard, `--picardjar`, velvet, exonerate and
+`--require_exact`. `Manual.tex` is correct; the PDF needs a rebuild with
+`pdflatex`, which is not installed in the web session that produced these
+changes.
+
+**`doc/bamsurgeon_sv_del.eps` still shows a velvet step.** Its caption in
+`Manual.tex` was rewritten to say the haplotype is built directly from
+reference sequence, but the figure itself was not redrawn and no longer
+matches.
+
+**`test_data/baseline/`** holds the pre-rewrite velvet output captured in
+Stage 0 as the diff target for Stage 2. It has served that purpose --
+`test_sv_coordinates_match_the_request` now asserts the property directly --
+so it can go whenever it stops being useful as evidence.
+
 ## Scale: what is untested, and where it will bite first
 
 Everything here has only been exercised on a ~770 kb chr22 region at ~50x.
@@ -274,9 +292,10 @@ thousands of mutations merged into one donor it is the most likely place to
 run out of memory. It is also the one step that sees every read in the target
 BAM.
 
-**`mergebams` in the SV path still inherits `maxopen=100`** rather than 1000,
-because addsv never grew a `--maxopen`. With thousands of temp BAMs that is
-many more hierarchical merge rounds than necessary. Listed under Stage 4.
+**`mergebams` in the SV path used to inherit `maxopen=100`** rather than
+1000, because addsv never grew a `--maxopen`. Fixed in Stage 4; addsv now
+takes the flag and defaults it to 1000, like the other two. Whether 1000 is
+the right number with thousands of temp BAMs is still untested.
 
 **The validator does a fetch or pileup per record.** Acceptable for a
 truth VCF of tens of thousands of sites, but it has never been run against a
