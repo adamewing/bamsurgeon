@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from uuid import uuid4
 
 from bamsurgeon.aligners import remap_bam
-from bamsurgeon.common import get_avg_coverage
+from bamsurgeon.common import get_avg_coverage_windows
 from bamsurgeon.records import MutationRecord
 from bamsurgeon.varinput import (VariantRequest, read_variants,
                                  sample_read_length, warn_proximity)
@@ -38,6 +38,14 @@ FORMAT = '%(levelname)s %(asctime)s %(message)s'
 logging.basicConfig(format=FORMAT)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+# Flank width used to measure depth at each end of a deletion. Wider than the
+# single column used elsewhere because microhomology at the junction lets the
+# aligner place the CIGAR D a base or two either side of where it was asked
+# for, and a one-column window can land on the ambiguous side of it: at the
+# left breakend of the indel_del_hom fixture that column reads 16 where the
+# rest of the flank reads 32.
+BREAKEND_WINDOW = 10
 
 
 BASES = ('A', 'T', 'C', 'G')
@@ -371,16 +379,27 @@ def makemut(args, sites, avoid, alignopts):
     # SNVs measure across the cluster; an indel measures across its own span.
     # These are the windows the two tools used separately -- widening either
     # of them shifts the reported DPR and the --coverdiff decision.
-    incover_start = min(mutpos_list) - coverwindow
-    if is_snv_cluster:
-        incover_end = max(mutpos_list) + coverwindow
-    else:
+    # What has to be monitored is the depth at the mutation's breakends. For
+    # an SNV or an insertion that is the site itself, so the window is the one
+    # the two tools always used. A deletion has two, and measuring between
+    # them measures the deletion against itself: a read carrying it has a
+    # CIGAR D over the interval and contributes no bases there at all, so the
+    # ratio falls in proportion to how well the spike-in worked and at VAF 1.0
+    # goes to ~0 by construction. A 100bp deletion at VAF 1.0 scored
+    # 0.52/53.02 on the Illumina fixture and was dropped at any threshold.
+    if not is_snv_cluster and sites[0].kind == 'DEL':
         site = sites[0]
-        del_ln = (site.end - site.start) if site.kind == 'DEL' else 0
-        incover_end = site.start + del_ln + coverwindow
+        windows = [(site.start - BREAKEND_WINDOW, site.start),
+                   (site.end, site.end + BREAKEND_WINDOW)]
+    elif is_snv_cluster:
+        windows = [(min(mutpos_list) - coverwindow,
+                    max(mutpos_list) + coverwindow)]
+    else:
+        windows = [(min(mutpos_list) - coverwindow,
+                    sites[0].start + coverwindow)]
 
-    avgincover = get_avg_coverage(bamfile, chrom, incover_start, incover_end)
-    avgoutcover = get_avg_coverage(outbam_muts, chrom, incover_start, incover_end)
+    avgincover = get_avg_coverage_windows(bamfile, chrom, windows)
+    avgoutcover = get_avg_coverage_windows(outbam_muts, chrom, windows)
 
     logger.info("%s avgincover: %f, avgoutcover: %f" % (hapstr, avgincover, avgoutcover))
 

@@ -61,9 +61,27 @@ def select_qnames(qnames, frac, salt):
 
 
 def get_avg_coverage(alignment_file, chrom, start, end):
-    split_coverage = alignment_file.count_coverage(chrom, start, end, quality_threshold=0)
-    base_sum = [sum(x) for x in split_coverage]
-    return sum(base_sum) / float(end - start)
+    return get_avg_coverage_windows(alignment_file, chrom, [(start, end)])
+
+
+def get_avg_coverage_windows(alignment_file, chrom, windows):
+    '''
+    Mean base coverage over the union of [start, end) windows.
+
+    Several windows rather than one because the depth worth monitoring at a
+    deletion is the depth at its breakends: inside the deleted interval a read
+    that carries the deletion contributes no bases at all, so measuring there
+    scores the spike-in lowest exactly when it worked best.
+    '''
+    total = 0
+    width = 0
+
+    for start, end in windows:
+        split_coverage = alignment_file.count_coverage(chrom, start, end, quality_threshold=0)
+        total += sum(sum(x) for x in split_coverage)
+        width += end - start
+
+    return total / float(width)
 
 
 def rc(dna):

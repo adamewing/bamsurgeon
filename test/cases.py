@@ -89,10 +89,12 @@ CASES = [
          args=('-n', '5',) + ONT_INDEL_ARGS, **ONT),
 
     Case('indel_del_ont', 'addindel', 'test_ont_indel_del.txt',
-         args=('-n', '5',) + ONT_INDEL_ARGS, **ONT,
-         xfail='deleting 100bp from 27-45kb ONT reads collapses coverage over '
-               'the site from ~26x to ~1x on remapping, so every site is '
-               'dropped by --coverdiff. The insertion equivalent works.'),
+         args=('-n', '5',) + ONT_INDEL_ARGS, **ONT),
+
+    # a homozygous deletion is the case that showed --coverdiff was measuring
+    # base coverage inside the deleted interval: every read carries the
+    # deletion, so that coverage goes to zero when the spike-in worked
+    Case('indel_del_hom', 'addindel', 'test_indel_del_hom.txt'),
 
     # ---- structural variants ---------------------------------------------
     Case('sv', 'addsv', 'test_sv.txt',

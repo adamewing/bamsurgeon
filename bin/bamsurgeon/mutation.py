@@ -12,7 +12,13 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-def column_bases(pcol):
+# pysam's pileup() default. The pileups are now built without it so that read
+# selection sees every read, and it is applied here instead, where a base call
+# too poor to trust is actually the question being asked.
+SNP_SCAN_MIN_BASEQUAL = 13
+
+
+def column_bases(pcol, min_basequal=SNP_SCAN_MIN_BASEQUAL):
     """
     ACGT bases at a pileup column, from primary alignments only.
 
@@ -33,6 +39,10 @@ def column_bases(pcol):
         aln = pread.alignment
         if aln.is_unmapped or aln.is_secondary or aln.is_supplementary \
                 or aln.is_duplicate or aln.is_qcfail:
+            continue
+
+        quals = aln.query_qualities
+        if quals is not None and quals[pread.query_position] < min_basequal:
             continue
 
         base = aln.query_sequence[pread.query_position].upper()
@@ -201,7 +211,12 @@ def mutate(args, log, bamfile, bammate, chrom, mutstart, mutend, mutpos_list, av
     # than running it and discarding the answer
     ignoresnps = getattr(args, 'ignoresnps', False)
 
-    for pcol in bamfile.pileup(reference=chrom, start=mutstart-1, end=mutend+1, max_depth=int(args.maxdepth), ignore_overlaps=False):
+    # min_base_quality=0 because this pileup decides which reads get edited,
+    # and how confident the sequencer was in one base call has no bearing on
+    # that. pysam's default of 13 hid 22 of the 29 reads over a site in the
+    # ONT fixture, whose base qualities run Q2-Q19. The SNP-proximity scan
+    # below does still want the threshold, and applies it in column_bases().
+    for pcol in bamfile.pileup(reference=chrom, start=mutstart-1, end=mutend+1, max_depth=int(args.maxdepth), ignore_overlaps=False, min_base_quality=0):
         # `if pcol.pos:` used to guard this loop, silently skipping position 0
         # of a contig.
         if args.ignorepileup and (pcol.pos < mutstart-1 or pcol.pos > mutend+1):

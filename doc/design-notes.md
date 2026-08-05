@@ -119,14 +119,62 @@ the same rule applies: SVs first, then SNVs/indels on the SV output BAM.
   2 property: output POS equals the requested start and END the requested end,
   for every non-insertion SV.
 
-### Known limitation: deletions in long reads
+### The `--coverdiff` check was measuring against the deletion itself
 
-`indel_del_ont` is marked xfail. Deleting 100bp from 27-45kb ONT reads
-collapses coverage over the site from ~26x to ~1x on remapping, so every site
-is dropped by `--coverdiff` at any threshold. The insertion equivalent
-(`indel_ins_ont`) works, so this is specific to `makedel` on long reads rather
-than to long reads generally. It runs rather than being skipped, so pytest
-reports XPASS if it is ever fixed.
+`indel_del_ont` was xfail on the theory that long reads were the problem.
+They were not, and neither was the site: the same failure reproduces on the
+Illumina fixture with a 30bp homozygous deletion, which is now
+`indel_del_hom`.
+
+`get_avg_coverage()` counts aligned bases per column, and for a deletion the
+window it is asked about is the deleted interval — `[start-1, start+len+1)`.
+A read that carries the deletion has a CIGAR `D` there and contributes no
+bases at all, so the measured output coverage falls in proportion to how well
+the spike-in worked, and at VAF 1.0 goes to ~0 by construction. A 100bp
+deletion at VAF 1.0 on the Illumina fixture scored 0.52 against an input of
+53.02 and was dropped at any threshold.
+
+Nothing caught this because every deletion in `test_indels.txt` is
+heterozygous. The temp BAM holds all the reads over the region, not just the
+mutated ones, so the untouched reads kept the measured coverage up: a 10bp
+deletion at VAF 0.5 measures 29.3 against 51.8, which is the arithmetic of
+26 unmutated reads plus 25 mutated ones contributing only their 2 flanking
+columns. It looks like a plausible coverage loss and is nothing of the kind.
+
+What has to be monitored is the depth at the mutation's **breakends**. For an
+SNV or an insertion that is the site itself, which is the window both tools
+always used. A deletion has two, so it now measures a `BREAKEND_WINDOW` flank
+outside each of them and ignores the interval between — the deleted bases
+carry no information about whether realignment kept the reads, which is the
+only thing the check is asking.
+
+The flank is 10bp rather than the single column used elsewhere because
+microhomology at the junction lets the aligner place the CIGAR `D` a base or
+two either side of where it was asked for. At the left breakend of
+`indel_del_hom` that column reads 16 where the rest of the flank reads 32; a
+one-column window would report a 2x depth loss that is purely alignment
+ambiguity.
+
+Deletions that work now score near 1.0 instead of being penalised for
+working. The 10bp heterozygous deletion in `test_indels.txt` went from
+0.57 to 0.86, the 3bp from 0.75 to 0.93, and the homozygous 30bp — which
+could not pass at all — sits at 0.65. Insertions are unchanged to the
+decimal. That headroom is the point: at 0.57 a genuine realignment failure
+was indistinguishable from the measurement.
+
+### `min_base_quality` was hiding three quarters of the ONT reads
+
+Separately: `mutate()` built its pileup with pysam's defaults, and
+`min_base_quality` defaults to 13. The ONT fixture's base qualities at the
+deletion site run Q2 to Q19, so only 7 of 29 reads were visible and eligible
+to be edited — a spike-in requested at VAF 1.0 could reach at most 0.27.
+
+Whether the sequencer was confident in one base call has no bearing on
+whether a read should be edited, so the pileup is now built with
+`min_base_quality=0`. The threshold does belong in the SNP-proximity scan,
+which is asking whether a minor allele is real, so `column_bases()` applies
+it there instead. Illumina fixtures are unaffected: they are wgsim output,
+uniformly Q40.
 - ~~**Remove picard, and with it java.**~~ Done. `bamtofastq()` is pysam-native:
   pairs are collected in a dict keyed by qname and written when the mate
   arrives, reverse-strand reads are complemented back to original orientation
@@ -198,3 +246,13 @@ The SNP-proximity guard therefore cannot fire on the shipped fixtures at any
 `hasSNP`, an off-by-one in `countBaseAtPos`, and a `TypeError` in its warning
 path. Any test intended to exercise `--snvfrac`, `--ignoresnps` or the linked-SNP
 logic needs a fixture with real allelic variation.
+
+Every deletion in `test_indels.txt` is heterozygous, which hid the
+`--coverdiff` bug above for as long as the fixture has existed:
+`test_indel_del_hom.txt` is a homozygous one, and exists for that reason.
+
+`testregion_realign.bam` is 100bp reads, so a deletion approaching 100bp
+leaves the mutated read with no anchor on one side and it does not span the
+junction on remapping. `makedel()`'s guard is `len(read.seq) < end-start-2`,
+which lets a 100bp deletion into a 100bp read; in practice a deletion wants
+to be well under half a read length for the reads to span it.
