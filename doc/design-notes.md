@@ -162,6 +162,51 @@ could not pass at all — sits at 0.65. Insertions are unchanged to the
 decimal. That headroom is the point: at 0.57 a genuine realignment failure
 was indistinguishable from the measurement.
 
+### Duplications: the same question, two different answers
+
+Asked whether duplications have the mirror-image problem — output coverage
+much *higher* than input, measured inside the duplication. They do not have
+the same bug, because DUP only ever goes through the SV engine, which has no
+post-hoc coverage gate at all: it computes read counts up front from
+`Template.reads_ratio()`. There is no threshold a working duplication could
+fail. `--coverdiff` is read-editing only, and `makedel` was the one edit whose
+effect landed inside its own measurement window.
+
+The engine's duplication depth is sound. Measured against the flanks:
+
+| variant | in interval | normalised | predicted |
+|---|---|---|---|
+| DUP ndups=3, VAF 0.9 | 55.2 → 199.4 | 3.42 | 3.70 |
+| BIGDUP ndups=1, VAF 1.0, `--donorbam` | 55.2 → 107.6 | 1.95 | 2.00 |
+| DEL VAF 0.75 (control) | 55.0 → 13.7 | 0.23 | 0.25 |
+
+Both duplications and the control land within ~8% of `(1 - vaf) + vaf *
+(ndups + 1)`, the shortfall being reads at the interval edges. Two things
+followed from that.
+
+**The validator now checks a duplication's magnitude, not just its
+direction.** `_depth_ratio_note()` only asked whether the ratio moved the
+right way, so a 4-copy duplication that arrived at 1.02x passed. VAF and
+NDUPS are both in the truth VCF, so the ratio is predictable; the bar is
+`dup_depth_min` of the predicted *excess* over 1, which does not get easier
+as the requested duplication grows. Below `dup_depth_floor` (1.5x predicted)
+it stays direction-only, because the shift is then within flank noise.
+Deletions stay direction-only in all cases: their prediction is `1 - vaf`,
+which is 0 at VAF 1.0, leaving no excess to take a fraction of.
+
+**`--maxdepth` rises with local copy number.** It is an absolute cap, so
+amplified sequence hits it on depth that is entirely legitimate. This bites
+in a unified run, which applies SVs first: an SNV inside that 3-copy
+duplication sees 3.7x the input depth, and at `--maxdepth 100` against a 55x
+BAM the run aborts with "depth at site is greater than cutoff" and exits with
+no successful mutations. `copynumber.depth_scale()` takes the multiplier from
+`--cnvfile` and from duplications applied earlier in the same run, and scales
+`--maxdepth` by it. Overlapping sources take the maximum, not the product:
+they describe one locus, not stacked amplifications.
+
+`--mindepth` is deliberately not scaled. Raising it over duplicated sequence
+would make it stricter and could newly drop sites that pass today.
+
 ### `min_base_quality` was hiding three quarters of the ONT reads
 
 Separately: `mutate()` built its pileup with pysam's defaults, and

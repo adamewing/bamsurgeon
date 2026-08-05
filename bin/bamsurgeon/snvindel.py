@@ -17,6 +17,7 @@ A haplotype cluster generalises: an indel is a cluster of one.
 '''
 
 import os
+import copy
 import random
 import logging
 
@@ -30,6 +31,7 @@ from uuid import uuid4
 
 from bamsurgeon.aligners import remap_bam
 from bamsurgeon.common import get_avg_coverage_windows
+from bamsurgeon.copynumber import depth_scale
 from bamsurgeon.records import MutationRecord
 from bamsurgeon.varinput import (VariantRequest, read_variants,
                                  sample_read_length, warn_proximity)
@@ -230,6 +232,18 @@ def makemut(args, sites, avoid, alignopts):
         site = sites[0]
         del_ln = (site.end - site.start) if site.kind == 'DEL' else 0
         mutstart, mutend = site.start, site.start + del_ln + 1
+
+    # --maxdepth is an absolute cap, so amplified sequence hits it on depth
+    # that is entirely legitimate. Raise it in proportion to the local copy
+    # number, from --cnvfile and from any duplication a unified run applied
+    # to this locus earlier in the same run.
+    scale = depth_scale(chrom, mutstart, mutend, cnvfile=args.cnvfile,
+                        intervals=getattr(args, 'cn_intervals', ()))
+    if scale > 1.0:
+        args = copy.copy(args)
+        args.maxdepth = int(round(int(args.maxdepth) * scale))
+        logger.info("%s local copy number x%.2f, --maxdepth raised to %d"
+                    % (hapstr, scale, args.maxdepth))
 
     res = mutation.mutate(args, log, bamfile, bammate, chrom, mutstart, mutend,
                           mutpos_list, avoid=avoid, mutid_list=mutid_list,

@@ -164,7 +164,7 @@ Specific bases can also be specified using a fifth input column:
 \item -z/--haplosize : specifies size of haplotype block to consider when adding more than 1 proximal mutation. For instance, if two SNVs are spiked in 10bp apart and --haplosize is 10 or greater, the two SNVs will be on the same haplotype (i.e. share the same reads for reads covering both positions)
 \item -p/--procs : BAMSurgeon programs currently spawn a new process for each spikein, to speed things along the processes can be run concurrently with the number of simultaneous jobs set by this parameter.
 \item --mindepth : minimum depth at sites for mutations, sites with fewer reads in pileup column will be dropped. Default is 10 reads.
-\item --maxdepth : sites with greater than this number of covering reads will be dropped. Default is 2000 reads. (May need to increase for targeted sequencing data)
+\item --maxdepth : sites with greater than this number of covering reads will be dropped. Default is 2000 reads. (May need to increase for targeted sequencing data) The cutoff is raised in proportion to local copy number, taken from \texttt{--cnvfile} and, in a unified \texttt{bamsurgeon} run, from any duplication spiked into the same locus earlier in that run --- amplified sequence carries more reads legitimately, and would otherwise be dropped for it.
 \item --minmutreads : minimum number of mutated reads per site. If this level of coverage cannot be obtained, mutations will be dropped.
 \item --ignoresnps: ignores existing non-reference bases at the mutation site, required if the goal is to change a non-reference allele back to reference
 \item --ignoreref: required if the goal is to change a non-reference allele back to reference

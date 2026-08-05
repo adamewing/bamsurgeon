@@ -33,6 +33,7 @@ import pysam
 import bamsurgeon.makevcf as makevcf
 
 from bamsurgeon.aligners import SUPPORTED_ALIGNERS
+from bamsurgeon.copynumber import dup_intervals
 from bamsurgeon.snvindel import cluster_small, resolve_haplosize, run_spikein
 from bamsurgeon.svengine import run_sv_spikein
 from bamsurgeon.varinput import read_variants, sample_read_length, warn_sv_overlap
@@ -62,9 +63,10 @@ def sv_args(args, out_bam):
     )
 
 
-def small_args(args, in_bam, out_bam):
+def small_args(args, in_bam, out_bam, cn_intervals=()):
     ''' the Namespace bamsurgeon.snvindel expects '''
     return Namespace(
+        cn_intervals=list(cn_intervals),
         bamFileName=in_bam, refFasta=args.refFasta, outBamFile=out_bam,
         varFileName=args.varFileName, snvfrac=args.snvfrac,
         mutfrac=args.vaf, numsnvs=0, cnvfile=args.cnvfile,
@@ -131,8 +133,11 @@ def main(args):
         clusters = cluster_small(small, haplosize, read_length)
         logger.info('applying %d small variant(s) in %d cluster(s)'
                     % (len(small), len(clusters)))
-        records += run_spikein(small_args(args, current, args.outBamFile),
-                               clusters, 'bamsurgeon')
+        # a small variant inside a duplication applied above sees depth
+        # multiplied by the duplication, which is not a reason to drop it
+        small_ns = small_args(args, current, args.outBamFile,
+                              cn_intervals=dup_intervals(records))
+        records += run_spikein(small_ns, clusters, 'bamsurgeon')
     elif svs:
         os.rename(intermediate, args.outBamFile)
         intermediate = None

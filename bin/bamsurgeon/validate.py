@@ -18,6 +18,8 @@ from dataclasses import dataclass, field
 
 import pysam
 
+from bamsurgeon.copynumber import dup_depth_scale
+
 FORMAT = '%(levelname)s %(asctime)s %(message)s'
 logging.basicConfig(format=FORMAT)
 logger = logging.getLogger(__name__)
@@ -45,6 +47,11 @@ class Thresholds:
     sv_min_clip: int = 10        # soft-clip length that counts as breakend evidence
     sv_small_bp: int = 50        # at or below this, a DEL/DUP reads as a CIGAR indel
     sv_pass_rate: float = 0.8    # fraction of SV sites that must be OK
+    # fraction of a duplication's predicted excess depth that must be present
+    dup_depth_min: float = 0.5
+    # below this predicted ratio the excess is too small to measure against
+    # flank noise, so the check is direction-only
+    dup_depth_floor: float = 1.5
 
 
 @dataclass
@@ -314,7 +321,7 @@ def _mean_depth(bam, chrom, start, end):
 
 
 def observe_sv(bam, chrom, pos, thresholds, requested_vaf=None,
-               orig_bam=None, svtype=None, end=None, tsdlen=0):
+               orig_bam=None, svtype=None, end=None, tsdlen=0, ndups=None):
     '''
     Locate the breakend by soft-clip peak. If it is not at the requested
     position but is within sv_search_radius, report SHIFTED and the offset --
@@ -382,7 +389,9 @@ def observe_sv(bam, chrom, pos, thresholds, requested_vaf=None,
     # depth corroboration for the two kinds that change copy number; this is
     # the only VAF-sensitive check applied to an SV
     if svtype in ('DEL', 'DUP') and end is not None and orig_bam is not None:
-        note, contradicts = _depth_ratio_note(bam, orig_bam, chrom, pos, end, svtype)
+        note, contradicts = _depth_ratio_note(bam, orig_bam, chrom, pos, end,
+                                              svtype, thresholds,
+                                              requested_vaf, ndups)
         if note:
             obs.note = note
         if contradicts:
@@ -391,15 +400,24 @@ def observe_sv(bam, chrom, pos, thresholds, requested_vaf=None,
     return obs
 
 
-def _depth_ratio_note(bam, orig_bam, chrom, start, end, svtype):
+def _depth_ratio_note(bam, orig_bam, chrom, start, end, svtype,
+                      thresholds=None, vaf=None, ndups=None):
     '''
     Interval depth in the mutant relative to the original, normalised by the
     same ratio in the flanks. > 1 means sequence was added (DUP), < 1 means it
     was removed (DEL).
 
     Returns (note, contradicts). A ratio that moved the wrong way is real
-    evidence the spike-in did not land, so it can fail a site; the magnitude
-    is not checked, since at low VAF the shift is small and noisy.
+    evidence the spike-in did not land, so it can fail a site.
+
+    For a duplication the magnitude is checked too, because VAF and NDUPS
+    together predict it: (1 - vaf) + vaf * (ndups + 1). Direction alone passes
+    a 4-copy duplication that arrived at 1.02x. The bar is a fraction of the
+    predicted *excess* over 1, not of the ratio itself, so it does not get
+    easier as the requested duplication gets larger.
+
+    A deletion is left on direction alone. Its prediction, 1 - vaf, is 0 at
+    VAF 1.0, so there is no excess to take a fraction of.
     '''
     span = max(1, end - start)
     flank = min(2000, max(200, span // 10))
@@ -422,6 +440,16 @@ def _depth_ratio_note(bam, orig_bam, chrom, start, end, svtype):
         return direction + ' (expected < 1 for DEL)', True
     if svtype == 'DUP' and normalised <= 1.0:
         return direction + ' (expected > 1 for DUP)', True
+
+    if svtype == 'DUP' and thresholds is not None and vaf is not None:
+        predicted = dup_depth_scale(vaf, ndups)
+
+        if predicted >= thresholds.dup_depth_floor:
+            floor = 1.0 + (predicted - 1.0) * thresholds.dup_depth_min
+            direction += ' of %.2f predicted' % predicted
+            if normalised < floor:
+                return direction + ' (below %.2f)' % floor, True
+
     return direction, False
 
 
@@ -523,7 +551,8 @@ def validate_vcf(truth_vcf, mutant_bam, ref_fasta, orig_bam=None,
 
                     report.observation = observe_sv(
                         bam, rec.chrom, rec.pos, thresholds, vaf,
-                        orig_bam=orig, svtype=kind, end=end, tsdlen=int(tsdlen))
+                        orig_bam=orig, svtype=kind, end=end, tsdlen=int(tsdlen),
+                        ndups=info_get(rec, 'NDUPS'))
             except ValueError as e:
                 # contig absent from the BAM, or a coordinate off the end of it
                 report.observation = SiteObservation(
