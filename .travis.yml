@@ -39,8 +39,9 @@ install:
     - sudo make -C bcftools
     - sudo mv bcftools/bcftools $WORKDIR/bin
 
+install:
+    - pip install pytest
+
 script:
-    - cd test
-    - ./test_indel.sh ../picard.jar 
-    - ./test_snv.sh ../picard.jar
-    - ./test_sv.sh
+    - export BAMSURGEON_PICARD_JAR=$PWD/picard.jar
+    - python3 -m pytest -v

@@ -104,14 +104,29 @@ the same rule applies: SVs first, then SNVs/indels on the SV output BAM.
   the record that had matched was tracked by following the fetch loop
   variable, so the wrong truth site was marked used and deleted from the
   false-negative set whenever a window returned more than one record.
-- Convert `test/*.sh` to a pytest table asserting via `validate_spikein.py`.
-  `test/test_combined.py` is the seed: it runs the unified entry point on
-  `test_data/test_combined.vcf` and asserts every site validates, and it
-  asserts that a small variant inside an SV survives the ordering above.
-  Four cases reference fixtures absent from the repo (`test_trn.sh`,
-  `test_snv_haplo.sh`, `test_snv_bowtie2.sh`, `test_indel_bowtie2.sh`);
-  `test_snv_avoid.sh` uses one file as both input and output and depends on
-  `test_snv.sh` having run first.
+- ~~Convert `test/*.sh` to a pytest table asserting via
+  `validate_spikein.py`.~~ Done. `test/cases.py` is the matrix,
+  `test/test_spikein.py` runs it, and the shell scripts are gone. Each case
+  gets its own tmp directory, which the shell versions did not: they all wrote
+  into `test_data/` and some only worked if another had run first.
+
+  Four cases were dropped because their fixtures are not in the repo
+  (`test_trn.txt`, `random_snvs_haplopairs.txt`, `testregion_bt2.bam`), and
+  `test_sv_exact.sh` because `--require_exact` no longer exists. The reason
+  for each is recorded in `test/cases.py`.
+
+  `test_sv_coordinates_match_the_request` is the permanent guard on the Stage
+  2 property: output POS equals the requested start and END the requested end,
+  for every non-insertion SV.
+
+### Known limitation: deletions in long reads
+
+`indel_del_ont` is marked xfail. Deleting 100bp from 27-45kb ONT reads
+collapses coverage over the site from ~26x to ~1x on remapping, so every site
+is dropped by `--coverdiff` at any threshold. The insertion equivalent
+(`indel_ins_ont`) works, so this is specific to `makedel` on long reads rather
+than to long reads generally. It runs rather than being skipped, so pytest
+reports XPASS if it is ever fixed.
 - **Remove picard, and with it java.** `bamtofastq()` in `common.py` is
   picard's only use anywhere in the codebase; `check_java()` and the
   `default-jre` package exist solely to support it. Doing this drops a ~200 MB

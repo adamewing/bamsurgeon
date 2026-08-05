@@ -427,32 +427,28 @@ Here are some extended descriptions for additional options not mentioned yet:
 \end{figure}
 
 \section{Testing}
-The \texttt{test/} directory contains scripts useful for testing bamsurgeon's various modes, the primary ones are as follows:
-\subsection{Testing addsnv.py}
-The script {test/test\_snv.sh} may be run with no parameters to display a usage statement:
+The \texttt{test/} directory contains a pytest suite. Run it from the repository
+root:
 \begin{verbatim}
-usage: ./test_snv.sh <number of SNPs> <number of threads> <reference indexed with bwa index>
-\end{verbatim}
-Or for testing with BWA MEM:
-\begin{verbatim}
-./test_snv_bwamem.sh <number of SNPs> <number of threads> <reference indexed with bwa index> <path to picard.jar>
+export BAMSURGEON_PICARD_JAR=/path/to/picard.jar
+python3 -m pytest
 \end{verbatim}
 
-The number of SNPs can be up to 100 and are selected from the file \texttt{test\_data/random\_snvs.txt}, number of threads must be specified, use 1 to run on a single core, and the final argument must be a path to a human genome (GRCh37) reference indexed with \texttt{bwa index -a bwtsw}. The reference \textbf{should not} use the 'chr' prefix on the chromosome names.
+\texttt{test/cases.py} holds the matrix of spike-in configurations and
+\texttt{test/test\_spikein.py} runs each one, then checks the output BAM
+against the truth VCF that run emitted using
+\texttt{scripts/validate\_spikein.py}. Each case gets its own temporary
+directory, so cases do not interfere with one another.
 
-\subsection{Testing addindel.py}
-The script {test/test\_sv.sh} may be run with no parameters to display a usage statement:
-\begin{verbatim}
-usage: ./test_indel.sh <number of threads> <reference indexed with bwa index>
-\end{verbatim}
+Cases naming an aligner that is not installed are skipped rather than failed,
+as are all cases needing picard when \texttt{BAMSURGEON\_PICARD\_JAR} is
+unset. A run reporting only skips is therefore not evidence of anything: check
+that the passed count is what you expect.
 
-\subsection{Testing addsv.py}
-The script {test/test\_sv.sh} may be run with no parameters to display a usage statement:
-\begin{verbatim}
-usage: ./test_sv.sh <number of threads> <reference indexed with bwa index>
-\end{verbatim}
-
-
+\texttt{test/test\_evaluator.py} covers \texttt{scripts/evaluator.py} and needs
+only pysam, so it runs anywhere. \texttt{test/test\_combined.py} exercises the
+unified \texttt{bamsurgeon} entry point on a VCF containing SNVs, indels and
+SVs together.
 
 \section{Other Considerations}
 \subsection{System Requirements}
