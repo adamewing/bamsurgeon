@@ -7,10 +7,13 @@ The implementation lives in bamsurgeon.snvindel, which addindel.py shares.
 '''
 
 import os
+import logging
 import argparse
 
 from bamsurgeon.aligners import SUPPORTED_ALIGNERS
 from bamsurgeon.snvindel import read_snv_targets, resolve_haplosize, run_and_write
+
+logger = logging.getLogger(__name__)
 
 
 def main(args):
@@ -33,7 +36,7 @@ def run():
     parser.add_argument('-d', '--coverdiff', dest='coverdiff', default=0.9, help="allow difference in input and output coverage (default=0.9)")
     parser.add_argument('-z', '--haplosize', default=0, help="haplotype size: sites within this distance are mutated together, or 'auto' for the sampled read length (default = 0)")
     parser.add_argument('-p', '--procs', dest='procs', default=1, help="split into multiple processes (default=1)")
-    parser.add_argument('--picardjar', default=os.environ.get('BAMSURGEON_PICARD_JAR'), help='path to picard.jar, required for most aligners (default: $BAMSURGEON_PICARD_JAR)')
+    parser.add_argument('--picardjar', default=None, help=argparse.SUPPRESS)  # deprecated, no effect
     parser.add_argument('--mindepth', default=10, help='minimum read depth to make mutation (default = 10)')
     parser.add_argument('--maxdepth', default=2000, help='maximum read depth to make mutation (default = 2000)')
     parser.add_argument('--minmutreads', default=3, help='minimum number of mutated reads to output per site')
@@ -57,8 +60,9 @@ def run():
     parser.add_argument('--vcf', default='', help="Path for the output VCF file. If not provided, the file will be saved in the current directory.")
     args = parser.parse_args()
 
-    if args.picardjar is None:
-        parser.error('--picardjar is required, or set BAMSURGEON_PICARD_JAR in the environment')
+    if args.picardjar is not None:
+        logger.warning('--picardjar is deprecated and has no effect: BAM to FASTQ '
+                       'conversion no longer uses picard')
 
     main(args)
 

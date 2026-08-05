@@ -23,7 +23,6 @@ BAMSurgeon requires the following software packages be available:
   \item samtools/wgsim/tabix (\url{http://samtools.sourceforge.net/})
   \item pysam (\url{http://code.google.com/p/pysam/} or \texttt{pip install pysam})
   \item bwa (\url{http://bio-bwa.sourceforge.net/})
-  \item picard (\url{http://http://picard.sourceforge.net/})
 \end{enumerate}
 
 For install instructions please see the included README.md or have a look at the Dockerfile.
@@ -43,8 +42,8 @@ BAMSurgeon is under continuous development driven by suggestions and bug reports
 \begin{verbatim}
 usage: addsnv.py [-h] -v VARFILENAME -f BAMFILENAME -r REFFASTA -o OUTBAMFILE
   [-s SNVFRAC] [-m MUTFRAC] [-n NUMSNVS] [-c CNVFILE]
-  [-d COVERDIFF] [-z HAPLOSIZE] [-p PROCS] --picardjar
-  PICARDJAR [--mindepth MINDEPTH] [--maxdepth MAXDEPTH]
+  [-d COVERDIFF] [-z HAPLOSIZE] [-p PROCS]
+  [--mindepth MINDEPTH] [--maxdepth MAXDEPTH]
   [--minmutreads MINMUTREADS] [--avoidreads AVOIDREADS]
   [--nomut] [--ignoresnps] [--ignoreref] [--force] [--insane]
   [--single] [--maxopen MAXOPEN] [--requirepaired] [--tagreads]
@@ -83,8 +82,6 @@ options:
          haplotype size (default = 0)
 -p PROCS, --procs PROCS
          split into multiple processes (default=1)
---picardjar PICARDJAR
-         path to picard.jar, required for most aligners
 --mindepth MINDEPTH   minimum read depth to make mutation (default = 10)
 --maxdepth MAXDEPTH   maximum read depth to make mutation (default = 2000)
 --minmutreads MINMUTREADS
@@ -166,7 +163,6 @@ Specific bases can also be specified using a fifth input column:
 \item -d/--coverdiff : threshold on output coverage divided by input coverage for mutation sites. Mutations can cause alignments to change, if this is undesired set this high, if this is part of the fun, set this low.
 \item -z/--haplosize : specifies size of haplotype block to consider when adding more than 1 proximal mutation. For instance, if two SNVs are spiked in 10bp apart and --haplosize is 10 or greater, the two SNVs will be on the same haplotype (i.e. share the same reads for reads covering both positions)
 \item -p/--procs : BAMSurgeon programs currently spawn a new process for each spikein, to speed things along the processes can be run concurrently with the number of simultaneous jobs set by this parameter.
-\item --picardjar : path to picard.jar provided by picard tools, this is required for the some aligner options.
 \item --mindepth : minimum depth at sites for mutations, sites with fewer reads in pileup column will be dropped. Default is 10 reads.
 \item --maxdepth : sites with greater than this number of covering reads will be dropped. Default is 2000 reads. (May need to increase for targeted sequencing data)
 \item --minmutreads : minimum number of mutated reads per site. If this level of coverage cannot be obtained, mutations will be dropped.
@@ -192,8 +188,8 @@ Specific bases can also be specified using a fifth input column:
 \begin{verbatim}
 usage: addindel.py [-h] -v VARFILENAME -f BAMFILENAME -r REFFASTA -o
   OUTBAMFILE [-s SNVFRAC] [-m MUTFRAC] [-n NUMSNVS]
-  [-c CNVFILE] [-d COVERDIFF] [-p PROCS] --picardjar
-  PICARDJAR [--mindepth MINDEPTH] [--maxdepth MAXDEPTH]
+  [-c CNVFILE] [-d COVERDIFF] [-p PROCS]
+  [--mindepth MINDEPTH] [--maxdepth MAXDEPTH]
   [--minmutreads MINMUTREADS] [--avoidreads AVOIDREADS]
   [--nomut] [--det] [--force] [--insane] [--single]
   [--maxopen MAXOPEN] [--requirepaired] [--aligner ALIGNER]
@@ -230,8 +226,6 @@ options:
        (default=0.1)
 -p PROCS, --procs PROCS
        split into multiple processes (default=1)
---picardjar PICARDJAR
-       path to picard.jar
 --mindepth MINDEPTH   minimum read depth to make mutation (default = 10)
 --maxdepth MAXDEPTH   maximum read depth to make mutation (default = 2000)
 --minmutreads MINMUTREADS
@@ -401,7 +395,7 @@ Here are some extended descriptions for additional options not mentioned yet:
 \begin{itemize}
 \item -s/--svfrac : equivalent to -m/--mutfrac for addindel.py and addsnv.py
 \item -n : only attempt this many mutations
-\item --ismean/--issd : the mean and standard deviation of the library size should be estimated from the original bam and specified through these arguments. This can be accomplished a number of ways, I suggest CollectInsertSizeMetrics from the picard tools.
+\item --ismean/--issd : the mean and standard deviation of the library size should be estimated from the original bam and specified through these arguments. This can be accomplished a number of ways; \texttt{samtools stats} reports both as \texttt{insert size average} and \texttt{insert size standard deviation}.
 \item --simerr : control sequencing error rate around breakends
 \item --inslib : a FASTA file can be specified and insertions can be tagged with RND instead of a sequence or file. If this is done, a sequence will be chosen at random from the FASTA file specified by --inslib and inserted.
 \item --skipmerge : same meaning as for addsnv/addindel
@@ -430,7 +424,6 @@ Here are some extended descriptions for additional options not mentioned yet:
 The \texttt{test/} directory contains a pytest suite. Run it from the repository
 root:
 \begin{verbatim}
-export BAMSURGEON_PICARD_JAR=/path/to/picard.jar
 python3 -m pytest
 \end{verbatim}
 
@@ -440,10 +433,9 @@ against the truth VCF that run emitted using
 \texttt{scripts/validate\_spikein.py}. Each case gets its own temporary
 directory, so cases do not interfere with one another.
 
-Cases naming an aligner that is not installed are skipped rather than failed,
-as are all cases needing picard when \texttt{BAMSURGEON\_PICARD\_JAR} is
-unset. A run reporting only skips is therefore not evidence of anything: check
-that the passed count is what you expect.
+Cases naming an aligner that is not installed are skipped rather than failed.
+A run reporting only skips is therefore not evidence of anything: check that
+the passed count is what you expect.
 
 \texttt{test/test\_evaluator.py} covers \texttt{scripts/evaluator.py} and needs
 only pysam, so it runs anywhere. \texttt{test/test\_combined.py} exercises the

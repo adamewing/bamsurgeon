@@ -21,15 +21,9 @@ sys.path.insert(0, BIN)
 
 REF = os.path.join(TEST_DATA, 'Homo_sapiens_chr22_assembly19.fasta')
 
-PICARD = os.environ.get('BAMSURGEON_PICARD_JAR')
-
 
 def have(*executables):
     return all(shutil.which(e) for e in executables)
-
-
-def have_picard():
-    return bool(PICARD and os.path.exists(PICARD))
 
 
 def data(name):

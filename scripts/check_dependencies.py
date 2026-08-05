@@ -2,16 +2,6 @@ import sys
 import subprocess
 import re
 
-def check_java():
-    p = subprocess.Popen(['java', '-version'], stderr=subprocess.PIPE)
-    for line in p.stderr:
-        line = line.decode()
-
-        if line.startswith('java version') or line.startswith('openjdk version'):
-            return True
-
-    return False
-
 def check_bwa():
     p = subprocess.Popen(['bwa'], stderr=subprocess.PIPE)
     for line in p.stderr:
@@ -62,7 +52,6 @@ if __name__ == '__main__':
     if not check_bwa(): sys.exit('Dependency problem: bwa >= 0.7.12 not found')
     if not check_samtools(): sys.exit('Dependency problem: samtools >= 1.2 not found')
     if not check_wgsim(): sys.exit('Dependency problem: wgsim not found (required for addsv)')
-    if not check_java(): sys.exit('Dependency problem: java not found')
 
     # TODO: Check pysam version
 

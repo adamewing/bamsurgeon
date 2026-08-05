@@ -70,7 +70,7 @@ def small_args(args, in_bam, out_bam):
         mutfrac=args.vaf, numsnvs=0, cnvfile=args.cnvfile,
         coverdiff=args.coverdiff, indel_coverdiff=args.indel_coverdiff,
         haplosize=args.haplosize, procs=args.procs,
-        picardjar=args.picardjar, mindepth=args.mindepth,
+        mindepth=args.mindepth,
         maxdepth=args.maxdepth, minmutreads=args.minmutreads,
         avoidreads=args.avoidreads, nomut=args.nomut,
         ignoreref=args.ignoreref, ignoresnps=args.ignoresnps,
@@ -178,8 +178,7 @@ def run():
                         help='split into multiple processes (default 1)')
     parser.add_argument('--seed', default=None, type=int,
                         help='seed random number generation')
-    parser.add_argument('--picardjar', default=os.environ.get('BAMSURGEON_PICARD_JAR'),
-                        help='path to picard.jar (default: $BAMSURGEON_PICARD_JAR)')
+    parser.add_argument('--picardjar', default=None, help=argparse.SUPPRESS)  # deprecated, no effect
     parser.add_argument('-c', '--cnvfile', default=None,
                         help='tabix-indexed list of absolute copy number values, used to adjust VAFs')
 
@@ -264,8 +263,9 @@ def run():
     if args.pad is None:
         args.pad = 2 * int(args.maxlibsize)
 
-    if args.picardjar is None:
-        parser.error('--picardjar is required, or set BAMSURGEON_PICARD_JAR in the environment')
+    if args.picardjar is not None:
+        logger.warning('--picardjar is deprecated and has no effect: BAM to FASTQ '
+                       'conversion no longer uses picard')
 
     main(args)
 

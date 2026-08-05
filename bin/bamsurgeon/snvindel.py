@@ -363,7 +363,7 @@ def makemut(args, sites, avoid, alignopts):
 
     remap_bam(args.aligner, tmpoutbamname, args.refFasta, alignopts,
               threads=int(args.alignerthreads), mutid=hapstr,
-              paired=(not args.single), picardjar=args.picardjar)
+              paired=(not args.single))
 
     outbam_muts = pysam.AlignmentFile(tmpoutbamname, reference_filename=args.refFasta)
     coverwindow = 1

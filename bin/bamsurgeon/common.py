@@ -163,37 +163,111 @@ def double_fastq_to_interleaved(fq1, fq2, outfq):
     f_out.close()
 
 
-def bamtofastq(bam, picardjar, threads=1, paired=True, twofastq=False):
-    ''' if twofastq is True output two fastq files instead of interleaved (default) for paired-end'''
+def _fastq_entry(read, suffix=''):
+    '''
+    One FASTQ record for an aligned read, in original sequencing orientation.
+
+    A reverse-strand alignment stores the reverse complement of what the
+    sequencer read, so the sequence has to be complemented back and the
+    quality string reversed alongside it. Getting only one of the two right
+    is silent: the realignment still succeeds, with the qualities attached to
+    the wrong end of the read.
+    '''
+    seq = read.query_sequence
+    if not seq:
+        return None
+
+    quals = read.query_qualities
+    if quals is None:
+        qual = 'I' * len(seq)
+    else:
+        qual = pysam.qualities_to_qualitystring(quals)
+
+    if read.is_reverse:
+        seq = rc(seq)
+        qual = qual[::-1]
+
+    return '@%s%s\n%s\n+\n%s\n' % (read.query_name, suffix, seq, qual)
+
+
+def bamtofastq(bam, paired=True, twofastq=False, fasta_ref=None):
+    '''
+    Convert a BAM to FASTQ. Two files if twofastq, otherwise interleaved.
+
+    This used to shell out to picard SamToFastq, which was the only thing in
+    bamsurgeon that needed java. The BAMs handed to it are per-mutation temp
+    files of at most a few thousand reads, so doing it in-process is both
+    faster and one fewer dependency.
+
+    Secondary and supplementary alignments are excluded, matching picard's
+    INCLUDE_NON_PRIMARY_ALIGNMENTS=false: their sequences are duplicates or
+    hard-clipped fragments, and either would corrupt the read on remapping.
+
+    Record order is first-encounter order of the completing mate, which is
+    deterministic for a given input BAM but is not picard's order, so FASTQ
+    files and the BAMs realigned from them will not be byte-identical to
+    those produced before this change.
+    '''
     assert bam.endswith('.bam')
 
-    outfq = None
-    outfq_pair = None
+    logger.info("converting BAM " + bam + " to FASTQ")
 
-    cmd = ['java', '-XX:ParallelGCThreads=' + str(threads), '-jar', picardjar, 'SamToFastq', 'VALIDATION_STRINGENCY=SILENT', 'INPUT=' + bam]
-    cmd.append('INCLUDE_NON_PRIMARY_ALIGNMENTS=false')  # in case the default ever changes
+    inbam = pysam.AlignmentFile(bam, 'rb', reference_filename=fasta_ref)
 
-    logger.info("converting BAM " + bam + " to FASTQ\n")
-    if paired:
-        if twofastq:  # two-fastq paired end
-            outfq_pair = [sub('bam$', '1.fastq', bam), sub('bam$', '2.fastq', bam)]
-            cmd.append('F=' + outfq_pair[0])
-            cmd.append('F2=' + outfq_pair[1])
-            subprocess.check_call(cmd)
-            assert os.path.exists(outfq_pair[0]) and os.path.exists(outfq_pair[1])
-            return outfq_pair
-        else:  # interleaved paired-end
-            outfq = sub('bam$', 'fastq', bam)
-            cmd.append('FASTQ=' + outfq)
-            cmd.append('INTERLEAVE=true')
-            subprocess.check_call(cmd)
-            assert os.path.exists(outfq)  # conversion failed
-            return [outfq]
-    else:
+    if not paired:
         outfq = sub('bam$', 'fastq', bam)
-        cmd.append('FASTQ=' + outfq)
-        subprocess.check_call(cmd)
+        with open(outfq, 'w') as out:
+            for read in inbam.fetch(until_eof=True):
+                if read.is_secondary or read.is_supplementary:
+                    continue
+                entry = _fastq_entry(read)
+                if entry is not None:
+                    out.write(entry)
+        inbam.close()
         return [outfq]
+
+    if twofastq:
+        outfqs = [sub('bam$', '1.fastq', bam), sub('bam$', '2.fastq', bam)]
+        out1 = open(outfqs[0], 'w')
+        out2 = open(outfqs[1], 'w')
+    else:
+        outfqs = [sub('bam$', 'fastq', bam)]
+        out1 = out2 = open(outfqs[0], 'w')
+
+    # mates can be arbitrarily far apart in a coordinate-sorted BAM, so hold
+    # each until its partner turns up and write the pair together
+    pending = {}
+
+    for read in inbam.fetch(until_eof=True):
+        if read.is_secondary or read.is_supplementary:
+            continue
+
+        mate = pending.pop(read.query_name, None)
+        if mate is None:
+            pending[read.query_name] = read
+            continue
+
+        first, second = (mate, read) if mate.is_read1 else (read, mate)
+
+        entries = (_fastq_entry(first, '/1'), _fastq_entry(second, '/2'))
+        if None in entries:
+            continue
+
+        out1.write(entries[0])
+        out2.write(entries[1])
+
+    out1.close()
+    if out2 is not out1:
+        out2.close()
+    inbam.close()
+
+    if pending:
+        # picard raised on this; there is nothing useful to align a lone mate
+        # against, so report it and carry on rather than losing the mutation
+        logger.warning("%s: %d reads had no mate in the file and were skipped"
+                       % (bam, len(pending)))
+
+    return outfqs
 
 
 def check_min_read_count(bamfile, fasta_ref, min_num_reads=0):

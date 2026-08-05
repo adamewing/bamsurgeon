@@ -14,7 +14,7 @@ log() { printf '\n=== %s ===\n' "$1"; }
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
-APT_PKGS=(samtools bcftools bwa minimap2 tabix build-essential zlib1g-dev default-jre)
+APT_PKGS=(samtools bcftools bwa minimap2 tabix build-essential zlib1g-dev)
 
 missing=()
 for pkg in "${APT_PKGS[@]}"; do
@@ -49,29 +49,11 @@ else
     rm -rf "$tmp"
 fi
 
-# picard is needed by remap_bam() for every aligner that round-trips through
-# FASTQ. Both addsnv and addindel already fall back to $BAMSURGEON_PICARD_JAR.
-PICARD_VERSION=2.27.3
-PICARD_DIR="${BAMSURGEON_PICARD_DIR:-/opt/picard}"
-PICARD_JAR="$PICARD_DIR/picard.jar"
-
-if [ -f "$PICARD_JAR" ]; then
-    log "picard: already at $PICARD_JAR"
-else
-    log "picard: downloading $PICARD_VERSION"
-    $SUDO mkdir -p "$PICARD_DIR"
-    $SUDO curl -fsSL -o "$PICARD_JAR" \
-        "https://github.com/broadinstitute/picard/releases/download/${PICARD_VERSION}/picard.jar"
-fi
+# picard and the JRE it needed are gone: BAM to FASTQ conversion is done in
+# pysam by bamsurgeon.common.bamtofastq(). --picardjar and
+# $BAMSURGEON_PICARD_JAR are still accepted and ignored.
 
 log "verifying"
-export BAMSURGEON_PICARD_JAR="$PICARD_JAR"
 python3 "$(dirname "$0")/check_dependencies.py"
 
-cat <<EOF
-
-Setup complete. Add this to your shell profile (or export it per-session):
-
-    export BAMSURGEON_PICARD_JAR=$PICARD_JAR
-
-EOF
+printf '\nSetup complete.\n\n'

@@ -15,8 +15,7 @@ import pysam
 import pytest
 
 from cases import CASES, Case
-from conftest import (BIN, PICARD, REF, data, have, have_picard,
-                      sort_and_index, truth_vcf_path)
+from conftest import (BIN, REF, data, have, sort_and_index, truth_vcf_path)
 
 from bamsurgeon.validate import validate_vcf, Thresholds, OK  # noqa: E402
 
@@ -33,8 +32,6 @@ def resolve(case):
 def missing_requirements(case):
     if not have(*case.needs):
         return 'needs ' + ', '.join(case.needs)
-    if case.tool != 'addsv' and not have_picard():
-        return 'needs picard (BAMSURGEON_PICARD_JAR)'
     for path in (data(case.varfile), data(case.bam)):
         if not os.path.exists(path):
             return 'missing fixture %s' % os.path.basename(path)
@@ -51,13 +48,7 @@ def run_case(case, workdir):
            '--vcf', workdir + os.sep]
     cmd += resolve(case)
 
-    # addsv realigns from FASTQ and never calls picard
-    if case.tool != 'addsv' and not case.use_env_picard:
-        cmd += ['--picardjar', PICARD]
-
     env = dict(os.environ, PYTHONPATH=BIN)
-    if case.use_env_picard:
-        env['BAMSURGEON_PICARD_JAR'] = PICARD
 
     proc = subprocess.run(cmd, cwd=workdir, env=env,
                           capture_output=True, text=True)
@@ -113,8 +104,8 @@ def test_spikein(case, workdir):
             case.name, passed, len(reports), case.min_pass_rate, failures)
 
 
-@pytest.mark.skipif(not (have('bwa', 'samtools') and have_picard()),
-                    reason='needs bwa, samtools and picard')
+@pytest.mark.skipif(not have('bwa', 'samtools'),
+                    reason='needs bwa and samtools')
 def test_avoidreads(workdir):
     '''
     --avoidreads drops mutations that would touch a listed read.

@@ -91,7 +91,7 @@ allele or the reference allele; VCF cannot say without phasing).
 **This is what the unified CLI does automatically.** Running the tools by hand,
 the same rule applies: SVs first, then SNVs/indels on the SV output BAM.
 
-## Outstanding: Stage 5 — cleanup
+## Stage 5 — done
 
 - ~~Port `scripts/evaluator.py` and `scripts/bamregions_from_vcf.py` off
   PyVCF onto `pysam.VariantFile`.~~ Done. `test/test_evaluator.py` covers it
@@ -127,23 +127,27 @@ is dropped by `--coverdiff` at any threshold. The insertion equivalent
 (`indel_ins_ont`) works, so this is specific to `makedel` on long reads rather
 than to long reads generally. It runs rather than being skipped, so pytest
 reports XPASS if it is ever fixed.
-- **Remove picard, and with it java.** `bamtofastq()` in `common.py` is
-  picard's only use anywhere in the codebase; `check_java()` and the
-  `default-jre` package exist solely to support it. Doing this drops a ~200 MB
-  JRE from the Dockerfile and setup script.
+- ~~**Remove picard, and with it java.**~~ Done. `bamtofastq()` is pysam-native:
+  pairs are collected in a dict keyed by qname and written when the mate
+  arrives, reverse-strand reads are complemented back to original orientation
+  with their quality strings reversed alongside, and secondary and
+  supplementary alignments are excluded — which is what
+  `INCLUDE_NON_PRIMARY_ALIGNMENTS=false` did. Names carry the `/1` and `/2`
+  suffixes picard appended, so read names in realigned output are unchanged.
 
-  Do it pysam-native rather than shelling to `samtools fastq`: the
-  per-mutation temp BAMs are small, so collecting pairs in a dict keyed by
-  qname and emitting in first-encounter order is deterministic, avoids a fork,
-  and works on CRAM. What has to be right is reverse-complementing
-  reverse-strand reads back to original orientation, reversing their quality
-  strings with them, and excluding secondary and supplementary alignments —
-  which is what `INCLUDE_NON_PRIMARY_ALIGNMENTS=false` does today.
+  Checked against picard 2.27.3 on a slice of the test BAM: the two FASTQs
+  are identical record-for-record once sorted. Record *order* differs, so
+  realigned BAMs are not byte-identical to earlier runs — golden checksum
+  comparison across this change does not transfer, and the pytest suite is
+  what validates it.
 
-  Expect FASTQ record order to differ from picard's, so realignment output
-  changes byte-wise. Not a correctness change, but it invalidates golden
-  checksum comparison against earlier runs; validate with
-  `validate_spikein.py` before and after instead.
+  Unpaired reads (a mate excluded by the region slice, or by a filter) are
+  dropped with a warning, which is what picard did silently.
+
+  `--picardjar` and `$BAMSURGEON_PICARD_JAR` are still accepted so existing
+  invocations do not break; the flag is hidden from `--help` and warns that it
+  has no effect. `check_java()` and `default-jre` are gone from the dependency
+  check, setup script and Dockerfile.
 
 ## Scale: what is untested, and where it will bite first
 

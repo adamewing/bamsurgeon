@@ -40,9 +40,10 @@ def _checkoptions(name, options):
         raise ValueError("ERROR unsupported aligner: " + name)
 
 
-def remap_bam(name, bamfn, fastaref, options, mutid='null', threads=1, paired=True, picardjar=None, deltmp=True):
+def remap_bam(name, bamfn, fastaref, options, mutid='null', threads=1, paired=True, deltmp=True):
     ''' remap bam file with supported alignment method. "options" param is a dict of aligner-specific required options '''
-    fastqs = bamtofastq(bamfn, picardjar, threads=threads, paired=paired, twofastq=(name not in INTERLEAVED_FASTQ_ALIGNERS))
+    fastqs = bamtofastq(bamfn, paired=paired, fasta_ref=fastaref,
+                        twofastq=(name not in INTERLEAVED_FASTQ_ALIGNERS))
 
     if len(fastqs) == 2:
         fq1, fq2 = fastqs

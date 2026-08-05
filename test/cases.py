@@ -26,7 +26,6 @@ class Case:
     args: tuple = ()
     expect: str = 'variants'
     needs: tuple = ('bwa', 'samtools')
-    use_env_picard: bool = False   # omit --picardjar, rely on the environment
     # some cases legitimately lose sites; require this fraction to validate
     min_pass_rate: float = 1.0
     # a known limitation: the case should work and does not. Runs anyway, so
@@ -73,10 +72,6 @@ CASES = [
          args=('-n', '5', '-c', 'test_cnvlist.txt.gz', '--skipmerge'),
          expect='skipmerge'),
 
-    Case('snv_env_picard', 'addsnv', 'random_snvs.txt',
-         args=('-n', '5', '-c', 'test_cnvlist.txt.gz'),
-         use_env_picard=True, min_pass_rate=0.8),
-
     Case('snv_ont', 'addsnv', 'test_ont_snvs.txt',
          args=('-n', '5',) + ONT_SNV_ARGS, **ONT),
 
@@ -89,9 +84,6 @@ CASES = [
     Case('indel_maxdepth', 'addindel', 'test_indels.txt',
          args=('-c', 'test_cnvlist.txt.gz', '-p', '2', '--maxdepth', '20'),
          expect='no_variants'),
-
-    Case('indel_env_picard', 'addindel', 'test_indels.txt',
-         use_env_picard=True),
 
     Case('indel_ins_ont', 'addindel', 'test_ont_indel_ins.txt',
          args=('-n', '5',) + ONT_INDEL_ARGS, **ONT),
@@ -147,3 +139,5 @@ CASES = [
 #                          exact by construction, which test_spikein asserts
 #   test_snv_avoid.sh      replaced by test_avoidreads below, which does not
 #                          use one file as both input and output
+#   test_snv_environ.sh    tested the $BAMSURGEON_PICARD_JAR fallback; picard
+#                          is no longer used at all

@@ -5,8 +5,7 @@ Unlike the shell scripts in this directory, these assert. They run a spike-in
 and then check the output BAM against the truth VCF the run emitted, using
 the same validator a user would.
 
-Requires the toolchain from scripts/setup_env.sh and either --picardjar or
-$BAMSURGEON_PICARD_JAR.
+Requires the toolchain from scripts/setup_env.sh.
 '''
 
 import os
@@ -27,13 +26,10 @@ REF = os.path.join(REPO, 'test_data', 'Homo_sapiens_chr22_assembly19.fasta')
 BAM = os.path.join(REPO, 'test_data', 'testregion_realign.bam')
 COMBINED_VCF = os.path.join(REPO, 'test_data', 'test_combined.vcf')
 
-PICARD = os.environ.get('BAMSURGEON_PICARD_JAR')
-
-
 requires_toolchain = pytest.mark.skipif(
-    not (PICARD and os.path.exists(PICARD) and shutil.which('bwa')
-         and shutil.which('samtools') and shutil.which('wgsim')),
-    reason='needs bwa, samtools, wgsim and picard; see scripts/setup_env.sh')
+    not (shutil.which('bwa') and shutil.which('samtools')
+         and shutil.which('wgsim')),
+    reason='needs bwa, samtools and wgsim; see scripts/setup_env.sh')
 
 
 def run_bamsurgeon(varfile, outbam, tmpdir, extra=()):
@@ -43,7 +39,6 @@ def run_bamsurgeon(varfile, outbam, tmpdir, extra=()):
     cmd = [sys.executable, '-m', 'bamsurgeon.cli.main',
            '-v', varfile, '-f', BAM, '-r', REF, '-o', outbam,
            '-p', '4', '--seed', '1234', '--aligner', 'mem',
-           '--picardjar', PICARD,
            '--tmpdir', os.path.join(tmpdir, 'bs.tmp'),
            '--vcf', tmpdir + os.sep]
     cmd.extend(extra)

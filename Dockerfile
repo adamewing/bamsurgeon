@@ -15,17 +15,12 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y \
     libglib2.0-dev \
     libbz2-dev \
     liblzma-dev \
-    default-jre \
     autoconf \
     samtools \
     bwa
 
 
 RUN mkdir $HOME/bin
-
-RUN wget https://github.com/broadinstitute/picard/releases/download/2.27.3/picard.jar
-RUN chmod +x picard.jar
-RUN export BAMSURGEON_PICARD_JAR=$HOME/picard.jar
 
 RUN pip install pysam
 

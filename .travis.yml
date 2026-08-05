@@ -13,11 +13,7 @@ before_install:
 
 install:
     ## Python modules
-    - pip install pysam
-
-    ## Picard
-    - wget https://github.com/broadinstitute/picard/releases/download/2.27.3/picard.jar
-    - chmod +x picard.jar
+    - pip install pysam pytest
 
     ## BWA
     - git clone https://github.com/lh3/bwa.git
@@ -39,9 +35,5 @@ install:
     - sudo make -C bcftools
     - sudo mv bcftools/bcftools $WORKDIR/bin
 
-install:
-    - pip install pytest
-
 script:
-    - export BAMSURGEON_PICARD_JAR=$PWD/picard.jar
     - python3 -m pytest -v
