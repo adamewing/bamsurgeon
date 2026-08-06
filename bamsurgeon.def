@@ -1,0 +1,44 @@
+Bootstrap: docker
+From: ubuntu:20.04
+
+# This definition file will allow to create a Singularity image, similar to Dockerfile
+
+%environment
+    export BAMSURGEON_PICARD_JAR=/picard.jar
+    export PATH=/app/bin:$PATH  # Force /app/bin to stay within the container
+
+%post
+    # To avoids interactive prompts during build)
+    export DEBIAN_FRONTEND=noninteractive
+
+    # Preconfigure tzdata
+    echo "tzdata tzdata/Areas select US" | debconf-set-selections
+    echo "tzdata tzdata/Zones/US select Eastern" | debconf-set-selections
+    
+    # Install dependencies
+    apt-get update && apt-get upgrade -y
+    apt-get install -y python3 python3-pip git wget build-essential libz-dev \
+        libglib2.0-dev libbz2-dev liblzma-dev default-jre autoconf samtools bwa
+
+    mkdir -p /app/bin  # Create a custom directory for binaries
+    wget https://github.com/dzerbino/velvet/archive/refs/tags/v1.2.10.tar.gz
+    tar -xvzf v1.2.10.tar.gz
+    cd velvet-1.2.10
+    make
+    cp velvetg /app/bin
+    cp velveth /app/bin
+
+    git clone https://github.com/adamewing/exonerate.git
+    cd exonerate
+    autoreconf -fi
+    ./configure
+    make
+    make install
+
+    wget https://github.com/broadinstitute/picard/releases/download/2.27.3/picard.jar -O /picard.jar
+
+    # Install python dependencies : pysam, pandas
+    pip install pysam pandas
+
+    # Bamsurgeon
+    git clone https://github.com/adamewing/bamsurgeon.git
