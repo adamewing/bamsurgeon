@@ -142,6 +142,7 @@ def replace_reads(origbamfile, mutbamfile, outbamfile, fasta_ref, nameprefix=Non
     used = set() # set of used reads
     prog = 0
     ignored_target = 0 # number of supplemental / secondary reads in original
+    orphaned_mate = 0 # number of reads whose mate was replaced but this read wasn't (kept original)
 
     for read in targetbam.fetch(until_eof=True):
         if read.is_secondary or read.is_supplementary:
@@ -161,11 +162,17 @@ def replace_reads(origbamfile, mutbamfile, outbamfile, fasta_ref, nameprefix=Non
         newReads = []
         if extqname in rdict:
             newRead = rdict[extqname][0 if read.is_read1 else 1 if read.is_read2 else 2]
-            if keepqual:
-                newRead.qual = read.qual
-            newReads = [newRead]
-            used.add(extqname)
-            recount += 1
+            if newRead is None:
+                # donor bam had this qname (from the other mate) but not this read itself
+                # (e.g. mate fell outside the mutation window) -- keep the original read
+                orphaned_mate += 1
+                newReads = [read]
+            else:
+                if keepqual:
+                    newRead.qual = read.qual
+                newReads = [newRead]
+                used.add(extqname)
+                recount += 1
         if keepsecondary and extqname in secondary:
                 newReads.extend(secondary[extqname])
                 used.add(extqname)
@@ -185,7 +192,8 @@ def replace_reads(origbamfile, mutbamfile, outbamfile, fasta_ref, nameprefix=Non
         logger.info("replaced " + str(recount) + " reads (" + str(excount) + " excluded )\n")
         logger.info("kept " + str(sum([len(v) for k,v in secondary.items()])) + " secondary reads.\n")
         logger.info("kept " + str(sum([len(v) for k,v in supplementary.items()])) + " supplementary reads.\n") 
-        logger.info("ignored %d non-primary reads in target BAM.\n" % ignored_target) 
+        logger.info("ignored %d non-primary reads in target BAM.\n" % ignored_target)
+        logger.info("kept %d orphaned reads whose mate was replaced but which had no donor read of its own.\n" % orphaned_mate)
 
     nadded = 0
     # dump the unused reads from the donor if requested with --all
